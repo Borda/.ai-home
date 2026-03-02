@@ -175,7 +175,7 @@ Read the module and ask:
 grep -n "__all__" src/mypackage/__init__.py
 
 # What is importable but not in __all__? (requires package installed: uv run python -c ... if needed)
-python -c "import mypackage; print([x for x in dir(mypackage) if not x.startswith('_')])"
+uv run python -c "import mypackage; print([x for x in dir(mypackage) if not x.startswith('_')])"
 ```
 
 Missing `__all__` = accidental API leakage. Everything importable becomes a contract.

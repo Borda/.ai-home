@@ -265,7 +265,7 @@ Callers use `uses: ./.github/workflows/reusable-test.yml` with `python-version` 
 
 ## Trusted Publishing to PyPI
 
-See `oss-maintainer` agent for setup steps, the pre/post-release checklist, and the full OIDC configuration.
+See `oss-maintainer` agent for setup steps and the pre/post-release checklist.
 
 \</reusable_workflows>
 

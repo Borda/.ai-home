@@ -28,7 +28,9 @@ Audit code for security vulnerabilities. Focus on issues that are exploitable by
 
 ## Step 2: Parallel audit lanes
 
-Launch three independent subagents simultaneously using the Task tool. Each agent receives the attack surface from Step 1 and audits its domain in isolation.
+Launch three independent subagents simultaneously using the Task tool. Each agent receives the attack surface from Step 1 and audits its domain in isolation. End every agent prompt with:
+
+> "End your response with: `## Confidence` / `**Score**: 0.N` (high ≥0.9 / moderate 0.7–0.9 / low \<0.7) / `**Gaps**: what limited your analysis (e.g., no runtime traces, partial file coverage, dependency scan not run).`"
 
 **Agent 1 — Python vulnerability scan**: Scan for dangerous deserialization (`pickle.loads`, `yaml.load` without `Loader=`), code execution sinks (`eval`, `exec`, `shell=True`, `os.system`), path traversal (unvalidated `open()` paths), and insecure temp files (`tempfile.mktemp`, hardcoded `/tmp/`).
 
@@ -74,6 +76,13 @@ Results: [paste output or "clean"]
 - Model sources: [trusted/untrusted]
 - Pickle usage: [none/flagged locations]
 - Input validation: [present/missing]
+
+### Agent Confidence
+| Agent | Score | Gaps |
+|---|---|---|
+| Python vulnerability scan | [score] | [gaps] |
+| OWASP Top 10 | [score] | [gaps] |
+| ML Security | [score] | [gaps] |
 ```
 
 After printing the report above, write the full content to `tasks/output-security-$(date +%Y-%m-%d).md` using the Write tool and notify: `→ saved to tasks/output-security-$(date +%Y-%m-%d).md`

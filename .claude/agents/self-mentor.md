@@ -69,7 +69,7 @@ Over budget: <N agents> | Broken refs: <N> | Duplicates found: <N>
 ### Agent Lengths
 | Agent          | Lines | vs peers | Status |
 |----------------|-------|----------|--------|
-| ci-guardian    | NNN   | typical  | ✅ / ⚠️ |
+| ci-guardian    | NNN   | typical  | pass / warn |
 ...
 
 ### Issues (priority-ordered)

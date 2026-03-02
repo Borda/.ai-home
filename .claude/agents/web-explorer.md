@@ -60,11 +60,11 @@ When checking if docs match code:
 ## Finding Docs Pages
 
 ```bash
-# Check installed library version
-pip show <library> | grep Version
+# Check installed library version (prefer uv pip show in uv-managed projects)
+uv pip show <library> | grep Version
 
 # Find library's docs URL (Home-page deprecated in pip 22+; Project-URLs is the replacement)
-pip show <library> | grep -E "Home-page|Project-URLs"
+uv pip show <library> | grep -E "Home-page|Project-URLs"
 
 # Check pyproject.toml for version constraints
 grep -A 5 'dependencies' pyproject.toml
@@ -155,8 +155,10 @@ Description of return value.
 ## PyPI Release Tracking
 When checking if a dependency has a new release:
 ```bash
-# Check latest version on PyPI
+# Check latest version on PyPI (pip index is experimental; prefer: uv pip index versions <package>)
 pip index versions <package> 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -5
+# Or with uv (preferred in uv-managed projects):
+# uv pip index versions <package>
 
 # Compare with project's pinned version
 grep '<package>' pyproject.toml requirements*.txt uv.lock 2>/dev/null

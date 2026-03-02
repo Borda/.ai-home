@@ -124,6 +124,10 @@ Output a structured report:
 
 ### Follow-up
 - [any related issues or code that should be reviewed]
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g., could not reproduce locally, partial traceback only, fix not runtime-tested]
 ```
 
 </workflow>

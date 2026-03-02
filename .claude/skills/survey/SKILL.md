@@ -49,10 +49,12 @@ Include a ## Confidence block at the end.
 
 ### 2b: Check for existing implementations (main context)
 
-```bash
-# Search the codebase for any existing related code
-grep -rF "$ARGUMENTS" "$(git rev-parse --show-toplevel)" --include="*.py" -l 2>/dev/null | head -10
-```
+Use the Grep tool to search the codebase for any existing related code:
+
+- Pattern: `$ARGUMENTS` (literal)
+- Glob: `**/*.py`
+- Output mode: `files_with_matches`
+- Limit to 10 results
 
 ## Step 3: Report
 

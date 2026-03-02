@@ -142,7 +142,7 @@ nvitop
 
 ## DataLoader Optimization
 
-See `data-steward` agent for split integrity and seed config (`drop_last`, `worker_init_fn`, `collate_fn`).
+See `data-steward` agent for DataLoader reproducibility patterns (`seed`, `worker_init_fn`, `collate_fn`, `drop_last`).
 Quick throughput checklist: `num_workers > 0`, `pin_memory=True`, `persistent_workers=True`, `prefetch_factor=2`.
 
 ## Mixed Precision (torch.amp — PyTorch 2.0+)

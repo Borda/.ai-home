@@ -167,6 +167,10 @@ Output a structured report:
 
 ### Follow-up
 - [any remaining items that need manual review]
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g., characterization tests incomplete, edge cases not covered, coverage tool unavailable]
 ```
 
 </workflow>

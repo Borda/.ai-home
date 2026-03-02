@@ -65,7 +65,7 @@ From `$ARGUMENTS`, determine:
 
 ## Step 2: Generate synthetic problems
 
-For each target, spawn a **general-purpose** problem-generator agent:
+For each target, spawn a **general-purpose** problem-generator agent (built-in Claude Code subagent type, not a named project agent):
 
 ```
 Generate N synthetic calibration problems for <target> targeting <domain>.
@@ -107,7 +107,7 @@ For **skill targets**: create a temporary synthetic config or file, point the sk
 
 ## Step 4: Score each response
 
-For each (problem, agent_response) pair, spawn a **general-purpose** scorer agent:
+For each (problem, agent_response) pair, spawn a **general-purpose** scorer agent (built-in Claude Code subagent type):
 
 ```
 Ground truth issues:

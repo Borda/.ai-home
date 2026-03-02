@@ -45,11 +45,14 @@ HOME_CODEX="$HOME_EXPANDED/.codex"
 
 ## Step 2: Dry-run — show what would change
 
-Run all three checks and collect output before printing anything.
+Each bash block must be self-contained (redeclare variables at the top). Do not rely on variables from a previous tool call.
 
 **`.claude/` files** (excluding `settings.json`):
 
 ```bash
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CLAUDE="$HOME_EXPANDED/.claude"
 git -C "$PROJECT" ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
   | sed 's|^\.claude/||' \
@@ -58,23 +61,46 @@ git -C "$PROJECT" ls-files .claude/ \
 
 rsync prints only files that would change; identical files are silently skipped.
 
-**`settings.json`** — transform then compare:
+**`settings.json`** — transform then compare (self-contained):
 
 ```bash
-SETTINGS_TMP="$(mktemp "${TMPDIR:-/tmp}/settings_xfm.XXXXXX.json")"
-trap 'rm -f "$SETTINGS_TMP"' EXIT
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CLAUDE="$HOME_EXPANDED/.claude"
+SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
 sed "s|node .claude/hooks/|node $HOME_EXPANDED/.claude/hooks/|g" \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
-
-diff -q "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" > /dev/null 2>&1
+CHANGED=$(rsync --checksum --itemize-changes --dry-run \
+  "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" 2>&1)
+if [ -z "$CHANGED" ]; then
+  echo "✓ IDENTICAL settings.json"
+else
+  echo "DIFFERS — semantic summary:"
+  # Permissions added (in project, not in home)
+  comm -23 \
+    <(jq -r '.permissions.allow[]' "$SETTINGS_TMP" | sort) \
+    <(jq -r '.permissions.allow[]' "$HOME_CLAUDE/settings.json" | sort) \
+    | sed 's/^/  + /'
+  # Permissions removed (in home, not in project)
+  comm -13 \
+    <(jq -r '.permissions.allow[]' "$SETTINGS_TMP" | sort) \
+    <(jq -r '.permissions.allow[]' "$HOME_CLAUDE/settings.json" | sort) \
+    | sed 's/^/  - /'
+  # Hook matcher changes
+  diff \
+    <(jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[].matcher // "")"' "$SETTINGS_TMP" 2>/dev/null | sort) \
+    <(jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[].matcher // "")"' "$HOME_CLAUDE/settings.json" 2>/dev/null | sort) \
+    | grep '^[<>]' | sed 's/^< /  project: /' | sed 's/^> /  home:    /'
+fi
+rm -f "$SETTINGS_TMP"
 ```
-
-- **Identical** → emit `✓ IDENTICAL settings.json`
-- **Differs** → read both `"$SETTINGS_TMP"` and `~/.claude/settings.json`; produce a human-readable semantic summary: which permissions were added, which removed, any model/hook/config key changes. Do not output raw diff as the final report.
 
 **`.codex/` files**:
 
 ```bash
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CODEX="$HOME_EXPANDED/.codex"
 git -C "$PROJECT" ls-files .codex/ \
   | sed 's|^\.codex/||' \
   | rsync -av --dry-run --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
@@ -84,40 +110,53 @@ If `$ARGUMENTS` is empty: print the combined dry-run output and offer `/sync app
 
 ## Step 3: Apply (only when $ARGUMENTS == "apply")
 
+Each bash block must be self-contained (redeclare variables at the top).
+
 **`.claude/` files** (excluding `settings.json`):
 
 ```bash
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CLAUDE="$HOME_EXPANDED/.claude"
 git -C "$PROJECT" ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
   | sed 's|^\.claude/||' \
   | rsync -av --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"
 ```
 
-**`settings.json`** — write only if different:
+**`settings.json`** — transform and apply (self-contained, content-based comparison):
 
 ```bash
-SETTINGS_TMP="$(mktemp "${TMPDIR:-/tmp}/settings_xfm.XXXXXX.json")"
-trap 'rm -f "$SETTINGS_TMP"' EXIT
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CLAUDE="$HOME_EXPANDED/.claude"
+SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
 sed "s|node .claude/hooks/|node $HOME_EXPANDED/.claude/hooks/|g" \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
-
-if ! diff -q "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" > /dev/null 2>&1; then
-  cp "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json"
+CHANGED=$(rsync --checksum --itemize-changes \
+  "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" 2>&1)
+rm -f "$SETTINGS_TMP"
+if [ -n "$CHANGED" ]; then
   echo "merged   settings.json"
 else
   echo "✓ unchanged settings.json"
 fi
 ```
 
+`rsync --checksum` compares file content (not mtime), so it transfers only when content actually differs.
+
 **`.codex/` files**:
 
 ```bash
+PROJECT="$(git rev-parse --show-toplevel)"
+HOME_EXPANDED="$(eval echo ~)"
+HOME_CODEX="$HOME_EXPANDED/.codex"
 git -C "$PROJECT" ls-files .codex/ \
   | sed 's|^\.codex/||' \
   | rsync -av --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
 ```
 
-## Step 4: Verify and report outcome
+## Step 4: Verify and report outcome (apply mode only)
 
 ```bash
 # JSON validity

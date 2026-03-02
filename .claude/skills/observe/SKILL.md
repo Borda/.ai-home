@@ -118,6 +118,10 @@ For each candidate agent/skill:
 
 ### No Action Needed
 [pattern]: already handled by [existing agent/skill]
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g., git history too shallow, task files not present, descriptions too generic to compare]
 ```
 
 ## Decision Criteria

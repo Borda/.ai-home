@@ -76,6 +76,10 @@ time python "$ARGUMENTS"
 
 ### Remaining Opportunities
 - [next bottleneck to address]
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g., benchmark environment noisy, no profiler available, GPU not accessible]
 ```
 
 ## Step 5: Delegate documentation follow-up (optional)

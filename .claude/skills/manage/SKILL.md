@@ -82,7 +82,7 @@ python3 -c "import json,sys; d=json.load(open('.claude/settings.json')); sys.exi
 
 If validation fails, report the error and stop.
 
-**For perm operations**: skip Steps 2, 3, 5, 6, 7, 8 — go directly from Step 1 → Step 4 → Step 9.
+**For perm operations**: skip Steps 2, 3, 5, 6, 7, 8, 9 — go directly from Step 1 → Step 4 → Step 10.
 
 ## Step 2: Overlap review (create only)
 
@@ -375,8 +375,8 @@ The README tables are self-documenting — keep descriptions concise (one line) 
 Confirm no broken references remain:
 
 ```bash
-# Extract all agent/skill names referenced in .claude/ files
-grep -rohE '[a-z]+-[a-z]+(-[a-z]+)*' .claude/agents/*.md \
+# Extract all backtick-quoted agent/skill name references in .claude/ files
+grep -rohE '`[a-z]+(-[a-z]+)+`' .claude/agents/*.md \
   .claude/skills/*/SKILL.md | sort -u
 
 # Compare against actual files on disk
@@ -416,6 +416,11 @@ Output a structured report containing:
 - **Current Roster**: agents (N) and skills (N) with comma-separated names (n/a for perm operations)
 - **Audit Result**: audit findings (pass / issues found) (n/a for perm operations)
 - **Follow-up**: run `/sync apply` to propagate to `~/.claude/`; for `create` review generated content; for perm operations confirm both `settings.json` and `permissions-guide.md` are updated
+
+## Confidence
+
+**Score**: [0.N]
+**Gaps**: [e.g., cross-refs not fully verified, README row format uncertain, settings.json validation skipped]
 
 </workflow>
 

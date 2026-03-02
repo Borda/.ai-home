@@ -142,7 +142,7 @@ A good `good first issue` must have:
 
 ## Deprecation Discipline
 
-Use [pyDeprecate](https://pypi.org/project/pyDeprecate/) (Borda's own package) — handles warning emission, argument forwarding, and "warn once" behaviour automatically:
+Use [pyDeprecate](https://pypi.org/project/pyDeprecate/) <!-- verified: pypi.org/project/pyDeprecate/ --> (Borda's own package) — handles warning emission, argument forwarding, and "warn once" behaviour automatically:
 
 ```python
 from deprecate import deprecated
@@ -158,7 +158,7 @@ def old_function(x, legacy_arg=None):
     """
 ```
 
-Install: `pip install pyDeprecate` (zero dependencies — check https://pypi.org/project/pyDeprecate/ for current version).
+Install: `pip install pyDeprecate` (zero dependencies — check https://pypi.org/project/pyDeprecate/ <!-- verified: pypi.org/project/pyDeprecate/ --> for current version).
 
 **Deprecation lifecycle**: deprecate in minor release → keep for ≥1 minor cycle → remove in next major.
 **Also**: add `.. deprecated:: X.Y.Z` Sphinx directive in the docstring so docs generators render a deprecation notice automatically.

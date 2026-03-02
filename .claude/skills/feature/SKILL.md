@@ -251,6 +251,10 @@ Output a structured summary:
 
 ### Follow-up
 - [any deferred items, known limitations, or suggested next steps]
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g., review cycle incomplete, edge cases not fully explored, integration tests not run]
 ```
 
 </workflow>
@@ -262,6 +266,7 @@ Output a structured summary:
 - **Reuse over reinvent**: Step 1 analysis is mandatory to find existing patterns; duplicating code is a review failure
 - **Never skip the review cycle**: `/review` is not optional — it catches what TDD misses (API design, security, performance)
 - **Fix loop is bounded**: after 3 cycles without reaching clean review, pause and re-scope with the user — the feature may need architectural rethinking
+- **`disable-model-invocation: true`**: Claude will not auto-invoke this skill; you must type `/feature <description>` explicitly. Once invoked, the parent model executes all workflow steps — this flag only prevents automatic background triggering.
 - Related agents: `sw-engineer` (analysis + implementation), `doc-scribe` (documentation), `linting-expert` (type safety + style) — `qa-specialist` is invoked indirectly via `/review`, not spawned directly by this skill
 - Follow-up chains:
   - Feature changes public API → `/release` to prepare CHANGELOG entry and migration guide

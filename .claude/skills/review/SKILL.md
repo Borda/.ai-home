@@ -95,7 +95,7 @@ git diff HEAD~1 HEAD -- "src/**/__init__.py"
 git diff HEAD~1 HEAD -- CHANGELOG.md CHANGES.md
 ```
 
-## Step 4: Cross-validate critical and high findings
+## Step 4: Cross-validate critical/blocking findings
 
 Before consolidating, for any finding classified as `CRITICAL` or `[blocking]` from Step 2, spawn a second independent agent to verify. Use the **same agent type** that raised the finding (e.g., sw-engineer verifies sw-engineer's critical finding):
 

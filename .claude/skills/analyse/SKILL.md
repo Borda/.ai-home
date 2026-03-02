@@ -93,7 +93,7 @@ For the top hypothesis, trace through relevant code:
 
 [draft reply — or "close as duplicate of #X"]
 
-\[Use Markdown formatting: wrap function/class/method names in backticks (`func_name`), wrap code samples in fenced blocks with language tag (`py ... `)\]
+[Use Markdown formatting: wrap function/class/method names in backticks (`func_name`), wrap code samples in fenced blocks with language tag]
 
 ### Priority
 
