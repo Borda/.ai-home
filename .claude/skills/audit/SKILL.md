@@ -28,7 +28,14 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
 
 <workflow>
 
-**Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase. Mark in_progress/completed throughout. On loop retry or scope change, create a new task.
+**Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase and mark status live so the user can see progress in real time:
+
+- Phase 1: system-wide checks (Steps 1–4) → mark in_progress when starting, completed when all checks done
+- Phase 2: per-file self-mentor spawns (Step 3) → mark in_progress when agents launch, completed when all reports received
+- Phase 3: aggregate + fix + re-audit (Steps 5–9) → mark in_progress, then completed before the final report
+- On loop retry or scope change → create a new task; do not reuse the completed task
+
+Surface progress to the user at natural milestones: after system-wide checks ("✓ Checks 1-9 complete, N findings so far — spawning per-file audits"), after agent reports ("Agent reports received — N medium, N low findings"), and before each fix batch ("Fixing N medium findings in parallel").
 
 ## Pre-flight checks
 
@@ -182,11 +189,11 @@ Flag any drift between MEMORY.md, README.md, settings.json, and actual disk stat
 
 Three capability tiers define the expected model assignment for each agent:
 
-| Tier                | Profile                                                     | Current mapping |
-| ------------------- | ----------------------------------------------------------- | --------------- |
-| `plan-gated`        | Long-horizon reasoning, plan mode, governance               | `opusplan`      |
-| `deep-reasoning`    | Complex implementation, multi-file code gen, judgment calls | `opus`          |
-| `focused-execution` | Pattern matching, structured output, rule application       | `sonnet`        |
+| Tier                | Profile                                                     | Current mapping     |
+| ------------------- | ----------------------------------------------------------- | ------------------- |
+| `plan-gated`        | Long-horizon reasoning, plan mode, governance               | `opusplan`          |
+| `deep-reasoning`    | Complex implementation, multi-file code gen, judgment calls | `opus`              |
+| `focused-execution` | Pattern matching, structured output, rule application       | `sonnet` or `haiku` |
 
 Extract declared models with Bash:
 
@@ -206,6 +213,9 @@ Using model reasoning, classify each agent into a tier based on its `<role>`, `d
 - `focused-execution` agent using `opus` or `opusplan` → **medium** (potential overkill — may increase latency and cost without quality gain)
 - `deep-reasoning` agent using `sonnet` → **high** (likely underpowered for multi-file code gen or complex judgment)
 - `plan-gated` agent using `sonnet` → **high** (plan mode requires strong long-horizon reasoning)
+- `focused-execution` agent using `haiku` → **not a finding** — haiku is acceptable and economical for narrow/rule-based tasks
+
+**Important**: CLAUDE.md's `## Agent Teams` section specifies models for team-mode spawn instructions to the lead — it is NOT a mandate for agent frontmatter. Frontmatter `model:` governs standalone use. Do NOT flag frontmatter models as violations because they differ from CLAUDE.md's team-mode model spec.
 
 **Report only** — never auto-fix. Model assignments may be intentional trade-offs (e.g., cost sensitivity, latency constraints). Flag mismatches with rationale so the user can decide.
 

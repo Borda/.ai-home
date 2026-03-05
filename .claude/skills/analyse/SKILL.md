@@ -2,7 +2,7 @@
 name: analyse
 description: Analyze GitHub issues, PRs, and repo health for an OSS project. Summarizes long threads, assesses PR readiness, detects duplicates, extracts reproduction steps, and generates repo health stats. Uses gh CLI for GitHub API access. Complements oss-maintainer agent.
 argument-hint: <number|health|dupes [keyword]|contributors|ecosystem>
-allowed-tools: Read, Write, Bash, Grep, Glob, Agent
+allowed-tools: Read, Write, Bash, Grep, Glob
 context: fork
 ---
 

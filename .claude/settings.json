@@ -4,6 +4,10 @@
   "effortLevel": "high",
   "fastMode": true,
   "autoCompactThreshold": 0.7,
+  "teammateMode": "in-process",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "statusLine": {
     "type": "command",
     "command": "node .claude/hooks/statusline.js"
@@ -34,6 +38,16 @@
     "SubagentStop": [
       {
         "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js" }]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [{ "type": "command", "command": "node .claude/hooks/teammate-quality.js" }]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [{ "type": "command", "command": "node .claude/hooks/teammate-quality.js" }]
       }
     ]
   },

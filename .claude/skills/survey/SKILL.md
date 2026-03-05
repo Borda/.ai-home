@@ -104,6 +104,32 @@ After printing the report above, write the full content to `tasks/output-survey-
 
 End your response with a `## Confidence` block per CLAUDE.md output standards.
 
+## Team Mode
+
+Use when the topic warrants exploring multiple competing method families with adversarial cross-evaluation. Skip for focused topics with a clear winning approach — the default single ai-researcher is sufficient.
+
+When to trigger: 3+ distinct method families exist for the topic AND adversarial cross-evaluation would meaningfully improve the recommendation confidence.
+
+**Workflow with team:**
+
+1. Lead completes Step 1 (codebase context) as normal
+2. Spawn 2–3 **ai-researcher** teammates, each assigned a distinct method cluster
+3. Broadcast constraints to all: `broadcast {topic: <topic>, constraints: <framework/compute/dataset from Step 1>}`
+4. Each teammate researches independently, reports with `deltaT# HOOK:verify` and a compressed comparison table
+5. Lead routes key findings from one researcher to others for cross-challenge: `@AR2: AR1 found [finding] — does it hold under [condition]?`
+6. Lead synthesizes into the Step 3 report, noting where researchers agreed or diverged
+
+**Spawn prompt template:**
+
+```
+You are an ai-researcher teammate surveying: [topic].
+Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Your cluster: [method family N] (e.g., "attention-free architectures" vs "linear attention variants").
+Survey the top 3 methods in your cluster: comparison table + recommendation given constraints.
+Include ## Confidence block. Report completion with deltaT# HOOK:verify.
+Compact Instructions: preserve paper titles, benchmarks, code links. Discard protocol handshakes.
+```
+
 </workflow>
 
 <notes>

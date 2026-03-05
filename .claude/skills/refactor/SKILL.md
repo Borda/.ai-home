@@ -25,6 +25,8 @@ Safely refactor code by enforcing a test-first discipline. Before any logic chan
 
 **Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase. Mark in_progress/completed throughout. On loop retry or scope change, create a new task.
 
+**Scope heuristic**: Single file → use this default workflow. Directory or cross-module scope → consider team mode: spawn **sw-engineer** and **qa-specialist** as teammates working in parallel on separate files — sw-engineer refactors while qa-specialist writes characterization tests concurrently. Requires file locking (see `.claude/TEAM_PROTOCOL.md`) to avoid conflicts.
+
 ## Step 1: Scope and understand
 
 Read the target code and build a mental model before touching anything:
@@ -177,7 +179,7 @@ Output a structured report:
 ## Confidence
 **Score**: [0.N]
 **Gaps**: [e.g., characterization tests incomplete, edge cases not covered, coverage tool unavailable]
-**Refinements**: 0 passes
+**Refinements**: [N passes]
 ```
 
 </workflow>

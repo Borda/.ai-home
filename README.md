@@ -318,6 +318,43 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 </details>
 
+### Agent Teams
+
+Claude Code's experimental Agent Teams feature is enabled. Teams are always **user-invoked** — nothing auto-spawns. You use `/fix --team`, `/feature --team`, etc. explicitly.
+
+**Enable**: Already active via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `settings.json`.
+
+#### When to use teams vs subagents
+
+| Signal                                              | Use Team | Use Subagents |
+| --------------------------------------------------- | -------- | ------------- |
+| Competing root-cause hypotheses                     | ✓        |               |
+| Cross-layer feature: impl + QA + docs in parallel   | ✓        |               |
+| SOTA survey: multiple competing method clusters     | ✓        |               |
+| Adversarial review (teammates challenge each other) | ✓        |               |
+| Sequential pipeline (fix → test → lint)             |          | ✓             |
+| Independent parallel review dimensions              |          | ✓             |
+| Single file / single module scope                   |          | ✓             |
+| Routine tasks (sync, observe, release)              |          | ✓             |
+
+#### Skills with team support
+
+| Skill             | Mode          | When to use                                              |
+| ----------------- | ------------- | -------------------------------------------------------- |
+| `/fix --team`     | `--team` flag | Bug spans modules; competing root-cause hypotheses       |
+| `/feature --team` | `--team` flag | Cross-layer feature needing impl + QA + docs in parallel |
+| `/survey --team`  | `--team` flag | Multiple competing method families to evaluate           |
+| `/optimize`       | heuristic     | Directory or system-wide scope → Claude proposes team    |
+| `/refactor`       | heuristic     | Directory or system-wide scope → Claude proposes team    |
+
+**Model tiering**: Lead uses `opusplan`/`opus`. Deep reasoning teammates (`sw-engineer`, `qa-specialist`, `ai-researcher`, `perf-optimizer`) use `opus`. Execution teammates (`doc-scribe`, `linting-expert`, `ci-guardian`) use `sonnet`. Keep teams to 3–5 teammates (~7× token cost vs single session).
+
+**Communication protocol**: Inter-agent messages use the AgentSpeak v2 compressed syntax defined in `.claude/TEAM_PROTOCOL.md` (~60% token savings vs natural language). Lead-to-human communication uses normal English.
+
+**Security in teams**: No standalone security agent. `qa-specialist` automatically embeds OWASP Top 10 security checks when operating as a teammate on code touching auth, payment flows, or user data.
+
+**Quality hooks**: `hooks/teammate-quality.js` handles `TeammateIdle` (redirects to pending tasks if any exist) and `TaskCompleted` (reserved for future quality gates).
+
 ### Status Line
 
 A lightweight hook (`hooks/statusline.js`) adds a persistent status bar to every Claude Code session:

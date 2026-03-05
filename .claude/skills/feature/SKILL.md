@@ -258,6 +258,35 @@ Output a structured summary:
 **Gaps**: [e.g., review cycle incomplete, edge cases not fully explored, integration tests not run]
 ```
 
+## Team Mode (--team)
+
+Use for cross-layer features where implementation, testing, and documentation can run in parallel and benefit from adversarial challenge. Skip for single-module features — use the default workflow above.
+
+When to trigger: feature spans 3+ modules, OR changes a public API, OR involves auth/payment/data scope.
+
+**Teammate assignments:**
+
+- **Teammate 1 (sw-engineer)**: implements the feature (Steps 2–3)
+- **Teammate 2 (qa-specialist)**: writes TDD tests in parallel + security checks for auth/payment/data scope
+- **Teammate 3 (doc-scribe)**: prepares documentation structure in parallel (Step 4)
+
+**Coordination protocol:**
+
+1. Lead broadcasts Step 1 analysis to all teammates: `broadcast {feature: <desc>, scope: <modules>, API: <proposed signature>}`
+2. **QA challenges SW's API design first** — lead routes QA's challenge back to SW before implementation starts; SW adjusts if needed
+3. SW shares implementation details with QA so tests stay accurate; lead routes key design decisions
+4. Lead synthesizes outputs in Steps 4–8 as normal
+
+**Spawn prompt template:**
+
+```
+You are a [role] teammate implementing: [feature].
+Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Your task: [specific responsibility].
+[If QA]: include security checks for any auth/payment/data-handling code.
+Compact Instructions: preserve file paths, test results, API signatures. Discard verbose tool output.
+```
+
 </workflow>
 
 <notes>

@@ -135,6 +135,30 @@ Output a structured report:
 **Gaps**: [e.g., could not reproduce locally, partial traceback only, fix not runtime-tested]
 ```
 
+## Team Mode (--team)
+
+Use when the bug has competing root-cause hypotheses or spans multiple modules. Skip for single-file bugs — use the default workflow above.
+
+When to trigger: root cause is unclear after Step 1, OR the bug manifests across 3+ modules.
+
+**Workflow with --team:**
+
+1. Lead spawns 2–3 **sw-engineer** teammates, each investigating a distinct hypothesis
+2. Broadcast current evidence to all teammates: `broadcast {bug: <description>, traceback: <key lines>}`
+3. Each teammate investigates independently — announces with `alpha PROTO:v2.0` and claims a hypothesis
+4. Teammates report findings via lead (hub-and-spoke); lead facilitates cross-challenge between competing analyses
+5. Lead synthesizes the consensus root cause, then proceeds with Steps 2–5 above (regression test, fix, lint, report) — all in lead context
+
+**Spawn prompt template:**
+
+```
+You are a sw-engineer teammate debugging: [bug description].
+Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
+Report findings to @lead using deltaT# or epsilonT# codes.
+Compact Instructions: preserve file paths, errors, line numbers. Discard verbose tool output.
+```
+
 </workflow>
 
 <notes>

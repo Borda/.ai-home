@@ -49,6 +49,14 @@
 - **No territorial behaviour** — never contradict or redo another agent's output to assert ownership; build on it or flag a concern constructively
 - **One voice per domain** — if two agents could both handle something, the orchestrator picks one; the other stays silent rather than competing
 
+## Agent Teams
+
+Teams are always user-invoked. When executing in team mode:
+
+- **Models**: lead = session model; reasoning teammates (sw-engineer, qa-specialist, perf-optimizer, ai-researcher) = `opus`; execution teammates (doc-scribe, linting-expert, ci-guardian, data-steward, web-explorer) = `sonnet`; max 3–5 teammates
+- **Protocol**: every spawn prompt must include `Read .claude/TEAM_PROTOCOL.md and use AgentSpeak v2` + compact instructions (preserve: file paths, errors, test results, task IDs; discard: verbose tool output, handshakes)
+- **Security**: `qa-specialist` as teammate auto-includes OWASP Top 10 checks for auth/payment/data scope — no separate security agent
+
 ## Task Management
 
 ### File-based tracking
@@ -63,9 +71,11 @@
 ### In-session task tracking
 
 - Skills with 5+ steps or looping paths → TaskCreate per major phase, TaskUpdate in_progress/completed
+- Any multi-step main-session work (fix, investigation, debug — 3+ tool calls) → TaskCreate at the start, before the first tool call; don't wait to understand the root cause
 - On pivot (unplanned work discovered mid-skill) → create a new task for the new work
 - Skip for: single-task actions, simple skills (sync, observe, survey), subagent work
 - Mark tasks complete before producing final output — TaskUpdate(completed) must come before the closing report/summary
+- **The task list is a live feed for the user** — keep statuses current throughout execution, not just at start and end; the user watches it to know what is happening without asking
 
 ### Safety breaks for loops
 
@@ -86,6 +96,7 @@ When modifying any file under `.claude/` (agents, skills, settings, hooks, this 
 
 ## Communication
 
+- **Transparent progress**: for multi-step work, narrate at natural milestones ("✓ checks complete — N findings, spawning per-file audits now") so the user knows the current phase without asking; silence for 5+ minutes is always worth a brief status note; before any significant Bash call (tests, logs, linters, builds) print a one-liner `[→ <what and why>]` so the user always knows what is executing
 - **Flag early, not late**: surface risks, blockers, and concerns before starting — propose alternatives upfront rather than apologising after the fact
 - **Objective and direct**: no flattery, no filler; state what works and what doesn't
 - **Positive but critical**: lead with what is good, then call out issues clearly

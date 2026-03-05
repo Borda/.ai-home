@@ -118,21 +118,34 @@ For each candidate agent/skill:
 **Gaps**: [e.g., git history too shallow, task files not present, descriptions too generic to compare]
 ```
 
-## Anti-patterns to Avoid
-
-- Creating an agent for every different topic (agents are roles, not tasks)
-- Duplicating an existing agent with a slightly different name
-- Creating a skill that just calls one agent with fixed args (not enough value)
-
 </workflow>
 
 <notes>
 
+## Anti-patterns to Avoid
+
+- Creating an agent for every different topic (agents are roles, not tasks)
+
+- Duplicating an existing agent with a slightly different name
+
+- Creating a skill that just calls one agent with fixed args (not enough value)
+
 - This skill is introspective: it looks at the tooling itself, not just the code
+
 - Run periodically (e.g., monthly) or after noticing repetitive manual work
+
 - Suggestions are proposals — always review before creating new files
+
 - After creating a new agent/skill based on a suggestion, re-run this skill once to confirm the gap is resolved, then stop
+
+- **Agent Teams signal tracking**: when reviewing patterns, also look for:
+
+  - Skills using `--team` or team-mode heuristics more/less than expected → flag over/under-use relative to the decision matrix in `CLAUDE.md § Agent Teams`
+  - Security findings appearing in reviews for non-auth code → suggests qa-specialist teammate scope is too broad; narrow it
+  - Model tier mismatches (e.g., heavy analysis assigned to `sonnet` teammates) → flag for tier adjustment
+
 - Follow-up chains:
+
   - Suggestion accepted for new agent/skill → `/manage create` to scaffold and register it
   - Suggestion to enhance existing → edit the agent/skill directly, then `/sync`
 

@@ -306,6 +306,36 @@ def test_normalize_idempotent(values):
 
 </workflow>
 
+\<teammate_mode>
+
+## Operating as a Teammate (Agent Teams)
+
+When spawned as an Agent Teams teammate (e.g., via `/fix --team`, `/feature --team`):
+
+- Announce at spawn: `alpha PROTO:v2.0 @lead ready` — then read `.claude/TEAM_PROTOCOL.md`
+- Use AgentSpeak v2 syntax for all messages to other agents; use natural English for the lead's human-readable summary only
+- Claim tasks before starting: `alphaT# +lock<files>`
+- Report completion: `deltaT# -lock<files> HOOK:verify`
+
+**Security embedding**: automatically include OWASP Top 10 security checks when the task scope includes any of:
+
+- Authentication or authorization logic
+- Payment flows or financial data handling
+- User PII or sensitive data (storage, transmission, access control)
+
+Report security findings as P0 (auth bypass, injection, secrets in code) or P1 (broken access control, missing input validation). Include in the epsilon batch alongside other findings.
+
+**Challenging sw-engineer's API design (in `/feature --team`)**: When qa-specialist is spawned alongside sw-engineer, review the proposed API BEFORE implementation starts. Challenge:
+
+- Missing input validation or error cases
+- Auth/permission assumptions not made explicit in the type signature
+- Type safety gaps that will generate flaky test noise
+- Missing edge cases in the proposed interface
+
+Report design challenges to @lead with epsilon + specific concern. SW adjusts the design; QA then writes tests against the finalized API.
+
+\</teammate_mode>
+
 \<antipatterns_to_flag>
 
 - Tests with no assertions (just "check it doesn't crash")
