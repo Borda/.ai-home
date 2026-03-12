@@ -89,7 +89,7 @@ Anti-pattern checklist — reject the candidate if any apply:
 
 1. **Role vs task confusion**: agents are roles, not tasks. Do not create an agent for every different topic.
 2. **Near-duplicate**: the candidate duplicates an existing agent with a slightly different name. Enhance the existing one instead.
-3. **Thin wrapper**: the candidate skill just calls one agent with fixed args. That is not enough value to justify a new skill file.
+3. **Thin wrapper**: the candidate skill just calls one agent with fixed args. That is not enough value to justify a new skill file. Exception: skills that add measure-first/measure-after bookends, multi-mode dispatch across 3+ agents, or safety breaks (retry limits, validation gates) justify the wrapper even if only one agent executes for a given invocation.
 
 ## Step 5: Report
 

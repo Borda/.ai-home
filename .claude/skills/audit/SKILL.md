@@ -169,7 +169,7 @@ else
   # Guide entries orphaned (not in allow list)
   grep '^| `' .claude/permissions-guide.md 2>/dev/null | awk -F'`' '{print $2}' | \
   while IFS= read -r perm; do
-    jq -e --arg p "$perm" '.permissions.allow | contains([$p])' .claude/settings.json > /dev/null 2>&1 \
+    jq -e --arg p "$perm" '(.permissions.allow // []) + (.permissions.deny // []) | contains([$p])' .claude/settings.json > /dev/null 2>&1 \
       || printf "${YEL}⚠ ORPHANED in guide${NC}: %s\n" "$perm"
   done
 fi
@@ -553,11 +553,11 @@ Run `/sync apply` to propagate clean config to ~/.claude/
 - **Bash error logging**: if a bash block in Pre-flight checks or Step 4 fails unexpectedly, append a JSONL line to `.claude/logs/audit-errors.jsonl` (`{"ts":"<ISO>","check":"<N>","error":"<message>"}`) for post-mortem — do not swallow errors silently.
 - **Execution order tip**: Steps 1–2 and Step 4 bash checks are fast (seconds); Step 3 (self-mentor spawns) is expensive (seconds per file). For early signal on system-wide issues, run Steps 1–2 + Step 4 first, then spawn Step 3 agents in parallel with any Step 4 analysis that doesn't depend on per-file results.
 - **Token cost**: Step 3 (self-mentor spawns) is the most expensive part of the audit. For a quick structural scan where you mainly need cross-reference and inventory validation, the system-wide checks in Step 4 are often sufficient on their own. Consider running `/audit agents` or `/audit skills` to scope the sweep, or skip Step 3 entirely for a fast pass when you already trust per-file quality.
-- **Skill-creator complement**: for testing whether skill trigger descriptions fire correctly (trigger accuracy, A/B description testing), see the official `skill-creator` from `github.com/anthropics/skills`. `/audit` checks structural quality; `skill-creator` validates that the right skill is selected by Claude Code's dispatcher when the user types a command.
+- **Skill-creator complement**: for testing whether skill trigger descriptions fire correctly (trigger accuracy, A/B description testing), see the official `skill-creator` from `github.com/anthropics/skills` <!-- verify at use time -->. `/audit` checks structural quality; `skill-creator` validates that the right skill is selected by Claude Code's dispatcher when the user types a command.
 - Follow-up chains:
   - Audit clean → `/sync apply` to propagate verified config to `~/.claude/`
   - Audit found structural issues → review flagged files manually before syncing
-  - Audit found many low items → run `/audit fix all` to auto-fix them, or schedule a dedicated `/refactor`-style cleanup pass
+  - Audit found many low items → run `/audit fix all` to auto-fix them, or run `/refactor` for a targeted cleanup pass
   - After fixing agent instructions (from audit findings) → `/calibrate <agent>` to verify the fix improved recall and confidence calibration
 
 </notes>

@@ -250,15 +250,17 @@ OldName = NewName  # deprecated alias
 
 <workflow>
 
-1. Read and understand the existing code structure before writing anything
-2. Identify what already exists vs what needs to be created
-3. Map edge cases and failure modes before writing any code (use the `\<edge_case_analysis>` checklist)
-4. Write or identify failing tests that cover both happy paths and edge cases
-5. Implement the solution — handle edge cases inline, not as an afterthought
-6. Check for diagnostics: run `uv run ruff check . --fix && uv run mypy src/`
-7. Review for SOLID violations, naming clarity, and completeness
-8. Verify: does the change break any existing tests? Does it introduce new debt?
-9. Apply the Internal Quality Loop (CLAUDE.md → Output Standards). End with a `## Confidence` block for all analysis, diagnostics, code review, and debt-assessment tasks. Scoring note: do not penalise confidence for absence of a test suite or caller context when bugs are statically evident — gaps must require genuine runtime or integration context to count.
+01. Read and understand the existing code structure before writing anything
+02. Identify what already exists vs what needs to be created
+03. Map edge cases and failure modes before writing any code (use the `\<edge_case_analysis>` checklist)
+04. Write or identify failing tests that cover both happy paths and edge cases
+05. Implement the solution — handle edge cases inline, not as an afterthought
+06. Check for diagnostics: run `uv run ruff check . --fix && uv run mypy src/`
+07. Review for SOLID violations, naming clarity, and completeness
+08. Verify: does the change break any existing tests? Does it introduce new debt?
+09. Hand off to `qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to the user.
+10. After `qa-specialist` completes step 9, hand off to `linting-expert` to sanitize and validate the code — these steps are sequential, not parallel; linting runs after QA to catch issues in any test code QA may have added.
+11. Apply the Internal Quality Loop (CLAUDE.md → Output Standards). End with a `## Confidence` block for all analysis, diagnostics, code review, and debt-assessment tasks. Scoring note: do not penalise confidence for absence of a test suite or caller context when bugs are statically evident — gaps must require genuine runtime or integration context to count.
 
 </workflow>
 
@@ -301,6 +303,6 @@ OldName = NewName  # deprecated alias
 
 \<notes>
 
-**Scope boundary**: `sw-engineer` owns implementation correctness, type safety, SOLID structure, and test-driven development. For adjacent concerns: `linting-expert` for ruff/mypy rule configuration and pre-commit setup; `qa-specialist` for test coverage gaps and edge-case matrix; `solution-architect` for API surface design, ADRs, and breaking-change strategy; `perf-optimizer` for profiling-first performance work.
+**Scope boundary**: `sw-engineer` owns implementation correctness, type safety, SOLID structure, and test-driven development. For adjacent concerns: `linting-expert` for ruff/mypy rule configuration, pre-commit setup, and **mandatory final code validation before handover to user**; `qa-specialist` for **mandatory test coverage and edge-case review before handover to user**; `solution-architect` for API surface design, ADRs, and breaking-change strategy; `perf-optimizer` for profiling-first performance work.
 
 \</notes>

@@ -45,8 +45,6 @@ Spawn a **sw-engineer** agent to analyze the code and identify:
 - Code smells relevant to the stated goal
 - Dependencies and coupling between modules
 
-End your response with a `## Confidence` block per CLAUDE.md output standards.
-
 ## Step 2: Audit test coverage
 
 Find existing tests for the target code:
@@ -76,8 +74,6 @@ For every **uncovered** or **partially covered** public API, spawn a **qa-specia
 - Use `pytest.mark.parametrize` for multiple input/output pairs
 - For side-effectful code: mock external dependencies, assert call patterns
 - Name tests `test_<function>_characterization_*` so they're easy to identify later
-
-End your response with a `## Confidence` block per CLAUDE.md output standards.
 
 ```bash
 # Run the new tests to confirm they pass against current code

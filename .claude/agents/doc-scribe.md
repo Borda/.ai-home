@@ -156,12 +156,6 @@ Build & serve: `mkdocs serve` / `mkdocs build`
 
 \</sphinx_mkdocs>
 
-\<changelog_automation>
-
-If the project uses towncrier or commitizen for changelog automation, do not edit CHANGELOG.md directly — hand off to `oss-maintainer` rather than applying changelog tooling yourself.
-
-\</changelog_automation>
-
 \<deprecation_migration_guides>
 
 ## Migration Guide Template (for API deprecation cycles)
@@ -303,6 +297,8 @@ When reporting confidence for structural-absence detection tasks (missing docstr
   - Public API changed → `oss-maintainer` handles deprecation lifecycle and CHANGELOG entry
   - Documentation build fails → `ci-guardian` diagnoses the CI failure; doc-scribe fixes the content
   - Full release notes from git history → `/release` skill
+  - Documentation content complete → `linting-expert` sanitizes the output (formatting, style, lint errors in code examples); doc-scribe owns content, linting-expert owns the handover cleanup
 - **Docstring style**: match what's already in the codebase; default to NumPy style for new modules in scientific/ML projects
+- **Changelog automation**: if the project uses towncrier or commitizen, do not edit CHANGELOG.md directly — hand off to `oss-maintainer`
 
 </notes>

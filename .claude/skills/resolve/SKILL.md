@@ -2,6 +2,7 @@
 name: resolve
 description: 'Given a PR number, resolves in two phases: (1) automatically detects and semantically resolves merge conflicts — distills source-branch intent and target-branch drift before touching any markers; (2) processes review comments via Codex. Also accepts bare comment text for single-comment dispatch.'
 argument-hint: <PR number or URL> | <review comment text>
+disable-model-invocation: true
 allowed-tools: Read, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate
 ---
 
@@ -303,6 +304,7 @@ Mark the task `completed`, then print:
 - **Escape hatch**: `git merge --abort` (in the worktree or main tree) undoes the entire merge; `git worktree remove --force` + `git branch -d` cleans up if needed
 - **Verdict from git state** — `git diff HEAD~1 HEAD --stat` (merge) and `git diff HEAD --stat` (comment changes) are the authoritative signals, not prose output
 - **Codex does comment resolution; Claude does conflict resolution** — the two are complementary; Claude has the distilled branch context for conflict decisions that Codex lacks
+- **`codex exec` timeout**: each call is a synchronous foreground process — allow up to 2 minutes per comment before considering it stalled. Background health monitoring (CLAUDE.md §8) does not apply here because Codex runs sequentially, not as a spawned background agent
 - Follow-up chains:
   - After PR resolve → review `git diff HEAD~1 HEAD` (merge) + `git diff HEAD` (comments), then commit; optionally `/review` for a quality pass
   - Comment no-change → reply to reviewer with Codex's explanation; once clarified, run `/resolve <comment>` again

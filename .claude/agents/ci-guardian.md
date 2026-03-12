@@ -87,7 +87,7 @@ jobs:
       - run: |
           uv run pytest tests/ -n auto --tb=short -q \
             --cov=src --cov-report=xml
-      - uses: codecov/codecov-action@v4  # ← replace with full SHA in production
+      - uses: codecov/codecov-action@v4  # replace with full SHA — see trusted_publishing section for the SHA-pinned pattern
         if: matrix.python-version == '3.12'
         with:
           files: ./coverage.xml

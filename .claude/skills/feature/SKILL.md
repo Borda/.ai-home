@@ -296,8 +296,8 @@ Compact Instructions: preserve file paths, test results, API signatures. Discard
 - **Reuse over reinvent**: Step 1 analysis is mandatory to find existing patterns; duplicating code is a review failure
 - **Never skip the review cycle**: `/review` is not optional — it catches what TDD misses (API design, security, performance)
 - **Fix loop is bounded**: after 3 cycles without reaching clean review, pause and re-scope with the user — the feature may need architectural rethinking
-- **`disable-model-invocation: true`**: Claude will not auto-invoke this skill; you must type `/feature <description>` explicitly. Once invoked, the parent model executes all workflow steps — this flag only prevents automatic background triggering.
-- Related agents: `sw-engineer` (analysis + implementation), `doc-scribe` (documentation), `linting-expert` (type safety + style) — `qa-specialist` is invoked indirectly via `/review`, not spawned directly by this skill
+- **`disable-model-invocation: true`**: Claude will not auto-invoke this skill — you must type `/feature <description>` explicitly. Once invoked, the parent model executes all workflow steps.
+- Related agents: `sw-engineer` (analysis + implementation), `doc-scribe` (documentation), `linting-expert` (type safety + style) — `qa-specialist` is invoked indirectly via `/review` in default mode; in Team Mode it is spawned directly as Teammate 2
 - Follow-up chains:
   - Feature changes public API → `/release` to prepare CHANGELOG entry and migration guide
   - Feature is performance-sensitive → `/optimize` for baseline + bottleneck analysis

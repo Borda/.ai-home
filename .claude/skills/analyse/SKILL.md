@@ -263,6 +263,8 @@ After printing the output above, write the full content to `tasks/output-analyse
 
 When assessing the impact of a change on downstream users:
 
+Replace `mypackage` in the commands below with the actual package name (e.g., from `gh repo view --json name --jq .name`).
+
 ```bash
 # Find downstream dependents on GitHub
 gh api "search/code" --field "q=from mypackage import language:python" \

@@ -254,3 +254,16 @@ gh api repos/Lightning-AI/torchmetrics/contents/README.md -q .content | base64 -
 - **Accepting "as of this writing" or "current" version claims without cross-checking**: when documentation asserts that a specific version is "current", "latest", or "the recommended version", cross-check against known release timelines before accepting the claim. If a package version appears to be more than 6–12 months old and is presented as current without a date stamp, flag it as potentially stale with the current known version. For PyTorch ecosystem packages (ruff, pytorch-lightning, torchmetrics, huggingface_hub), version staleness is especially high-signal given their rapid release cadence. Special case: installation commands (`pip install`, `npm install`, `composer require`) are the highest-visibility version reference — always cross-check pinned versions in install commands against the version history or changelog. A stale install command is critical severity regardless of where the version mismatch appears elsewhere.
 
 \</antipatterns_to_flag>
+
+<notes>
+
+**Scope**: web-explorer owns fetching, parsing, and distilling external documentation and web content. It does not own code implementation, experiment design, or ML paper deep-dives — hand off to:
+
+- **ML papers, hypothesis generation, experiment design** → `ai-researcher`
+- **Dependency upgrade decisions, deprecation lifecycle** → `oss-maintainer`
+- **CV/tensor documentation** → `doc-scribe` for writing, `web-explorer` for sourcing from external references
+- **Docs build failures** → `ci-guardian` for the CI failure; web-explorer for fetching the upstream docs
+
+**Incoming handoffs**: called by `/survey` (Step 2a parallel codebase check), `/audit` (Claude Code docs freshness check), and `/manage` (agent/skill frontmatter schema validation).
+
+</notes>

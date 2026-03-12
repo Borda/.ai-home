@@ -232,7 +232,7 @@ Trusted Publishing uses GitHub OIDC — no `API_TOKEN` or `TWINE_PASSWORD` secre
 
 ## Downstream / Ecosystem CI
 
-Run `nightly.yml` on `schedule: cron: '0 4 * * *'` with `continue-on-error: true`. See `ci-guardian` agent for the full nightly YAML pattern. When nightly fails: check PyTorch release notes, file upstream issue with minimal reproducer, use `@pytest.mark.xfail` with issue link.
+Run `nightly.yml` on `schedule: cron: '0 4 * * *'` with `continue-on-error: true`. See `ci-guardian` agent for the full nightly YAML pattern. When nightly fails, follow the xfail policy and upstream issue protocol in `ci-guardian` (`<ecosystem_nightly_ci>` section).
 
 ### Downstream Impact Assessment
 

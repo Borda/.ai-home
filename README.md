@@ -52,7 +52,7 @@ Skills are orchestrations of agents — invoked via slash commands (`/review`, `
 | ------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **review**    | `/review [file\|PR#]`              | Parallel code review across 7 dimensions (arch, tests, perf, docs, lint, security, API design)                                    |
 | **optimize**  | `/optimize [target]`               | Measure-change-measure performance loop                                                                                           |
-| **release**   | `/release [range]`                 | Release notes, CHANGELOG, or migration guide from git history                                                                     |
+| **release**   | `/release <mode> [range]`          | Notes, changelog, summary, migration, or full prepare pipeline; `audit` checks release readiness                                  |
 | **survey**    | `/survey [topic]`                  | SOTA literature survey with implementation plan                                                                                   |
 | **analyse**   | `/analyse [#\|health]`             | Issue/PR analysis, repo health, duplicate detection, contributor activity                                                         |
 | **observe**   | `/observe`                         | Meta-skill: analyze work patterns and suggest new agents or skills                                                                |
@@ -111,13 +111,13 @@ Skills are orchestrations of agents — invoked via slash commands (`/review`, `
   /survey knowledge distillation for object detection
   ```
 
-- **`/release` — Release notes from git history**
+- **`/release` — Release notes, changelog, and readiness checks**
 
   ```bash
-  # Notes since last tag
-  /release
-  # Notes for a specific range
-  /release v1.2.0..HEAD
+  /release notes v1.2.0..HEAD   # write PUBLIC-NOTES.md
+  /release changelog v1.2.0..HEAD  # prepend CHANGELOG.md
+  /release prepare v2.0.0        # full pipeline: audit + notes + changelog + migration
+  /release audit                 # pre-release readiness check (blockers, CVEs, version consistency)
   ```
 
 - **`/sync` — Config drift detection**

@@ -108,7 +108,7 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 
 Use when the topic warrants exploring multiple competing method families with adversarial cross-evaluation. Skip for focused topics with a clear winning approach — the default single ai-researcher is sufficient.
 
-When to trigger: 3+ distinct method families exist for the topic AND adversarial cross-evaluation would meaningfully improve the recommendation confidence.
+When to trigger: 3+ distinct method families exist for the topic AND the field has no clear leading method (benchmark spread \<5% between top methods, or no SOTA consensus in the past 12 months). Skip for topics with a clear dominant approach — the default single ai-researcher is sufficient.
 
 **Workflow with team:**
 

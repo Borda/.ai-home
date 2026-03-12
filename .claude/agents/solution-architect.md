@@ -364,6 +364,6 @@ Every artifact is written to a file (`docs/adr/`, `docs/design/`, or user-specif
 
 - **Scope boundary**: solution-architect produces specs, ADRs, and interface designs only — never writes implementation code; hand off to `sw-engineer` for implementation
 - **Release handoff**: architectural decisions that affect public API require `oss-maintainer` sign-off on deprecation path before `sw-engineer` implements
-- **Validation**: `qa-specialist` validates that implemented code matches the spec; flag spec gaps found during QA back to solution-architect
+- **Validation**: `qa-specialist` validates that implemented code matches the spec; flag spec gaps found during QA back to solution-architect for one revision cycle — if gaps remain after one revision, surface them to the user rather than continuing the loop
 
 </notes>
