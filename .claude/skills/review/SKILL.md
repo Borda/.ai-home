@@ -240,9 +240,9 @@ End your response with a `## Confidence` block per CLAUDE.md output standards. F
 - In PR mode: check CI status first — if red, report that without full review
 - Blocking issues require explicit `[blocking]` prefix so author knows what must change
 - Follow-up chains:
-  - `[blocking]` bugs or regressions → `/fix` to reproduce with test and apply targeted fix
-  - Structural or quality issues → `/refactor` for test-first improvements
-  - Security findings in auth/input/deps → run `pip-audit` for dependency Common Vulnerabilities and Exposures (CVEs); address Open Web Application Security Project (OWASP) issues inline via `/fix`
+  - `[blocking]` bugs or regressions → `/develop fix` to reproduce with test and apply targeted fix
+  - Structural or quality issues → `/develop refactor` for test-first improvements
+  - Security findings in auth/input/deps → run `pip-audit` for dependency Common Vulnerabilities and Exposures (CVEs); address Open Web Application Security Project (OWASP) issues inline via `/develop fix`
   - Mechanical issues beyond what Step 6 auto-fixed → `/codex` to delegate additional tasks
   - Docstrings, type annotations, renames, and other mechanical findings → `/codex "<task description>"` per finding to delegate to Codex
 

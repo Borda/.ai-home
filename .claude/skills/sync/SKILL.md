@@ -26,7 +26,7 @@ Project always wins: files in home that have no counterpart in the project are l
 - PROJECT root: `$(git rev-parse --show-toplevel)`
 - HOME_EXPANDED: `$(eval echo ~)`
 - File manifest: `git ls-files .claude/` and `git ls-files .codex/` — git-tracked only; gitignored paths (state/, logs/, settings.local.json, auth.json) excluded automatically
-- settings.json transform: replace `node .claude/hooks/` with `node $HOME_EXPANDED/.claude/hooks/` (absolute). Covers all hook entries — statusLine, task-log, and future additions.
+- settings.json transform: replace `node .claude/hooks/` with `node $HOME/.claude/hooks/` (portable — avoids hardcoded usernames). Covers all hook entries — statusLine, task-log, and future additions.
 - Never synced: `settings.local.json`, `.codex/auth.json` — not git-tracked, excluded automatically
 - No `context: fork` — sync reads files from both project and home then writes decisions; forking would give the skill an isolated context with no access to the home directory state it needs to compare against
 
@@ -68,7 +68,7 @@ PROJECT="$(git rev-parse --show-toplevel)"
 HOME_EXPANDED="$(eval echo ~)"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
-sed "s|node \\.claude/hooks/|node $HOME_EXPANDED/.claude/hooks/|g" \
+sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
 CHANGED=$(rsync --checksum --itemize-changes --dry-run \
   "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" 2>&1)
@@ -133,7 +133,7 @@ PROJECT="$(git rev-parse --show-toplevel)"
 HOME_EXPANDED="$(eval echo ~)"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
-sed "s|node \\.claude/hooks/|node $HOME_EXPANDED/.claude/hooks/|g" \
+sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
 CHANGED=$(rsync --checksum --itemize-changes \
   "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" 2>&1)
@@ -188,7 +188,7 @@ echo ".codex files:  $(cd "$PROJECT" && git ls-files .codex/  | wc -l | tr -d ' 
 
 - File manifest from `git ls-files` — adding a new agent, skill, hook, or codex agent to git automatically includes it in future syncs; no skill edits needed
 - `settings.local.json` and `.codex/auth.json` are never synced — gitignored, excluded automatically
-- All `node .claude/hooks/` paths in settings.json are rewritten to absolute — relative paths fail when hooks fire outside this project directory
+- All `node .claude/hooks/` paths in settings.json are rewritten to `node $HOME/.claude/hooks/` — avoids hardcoded usernames; `$HOME` is expanded by the shell when hooks fire
 - Project owns what it tracks; home-only files are never touched or deleted
 - rsync skips identical files — only changed files are transferred, making repeated runs cheap
 - Run `/sync` (dry-run) first, then `/sync apply` once the report looks correct

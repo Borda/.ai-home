@@ -23,6 +23,15 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rm -f .claude/state/session-context.md",
+            "async": true
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -180,7 +189,18 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:developers.openai.com)",
       "WebFetch(domain:platform.openai.com)",
-      "WebFetch(domain:openai.com)"
+      "WebFetch(domain:openai.com)",
+      "Bash(claude:*)",
+      "Bash(node:*)",
+      "Bash(python3:*)",
+      "Bash(gh api:*)",
+      "Bash(open:*)",
+      "Bash(npm show:*)",
+      "WebFetch(domain:support.claude.com)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:github.blog)",
+      "Skill(sync)",
+      "Skill(calibrate)"
     ]
   }
 }

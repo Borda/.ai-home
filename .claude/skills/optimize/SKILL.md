@@ -94,7 +94,7 @@ After confirming improvements, inspect the applied changes (`git diff HEAD --sta
 - Optimized code uses non-obvious techniques (pre-allocation, vectorized ops, batched I/O) that need inline explanation — read the code first, then describe the technique and why it is faster
 - A function signature changed due to optimization (e.g., added `batch_size` or `device` parameter) and the docstring no longer matches the actual contract
 - Tests for the optimized path where coverage is thin — describe the input ranges and expected output behaviour precisely
-- ruff or mypy errors introduced by the optimization — read each error, delegate `linting-expert` with a precise description of what to fix
+- ruff or mypy errors introduced by the optimization — read each error, use Codex to delegate to `linting-expert` with a precise description of what to fix
 
 **Do not delegate:**
 
@@ -116,7 +116,7 @@ End your complete response with a `## Confidence` block per CLAUDE.md output sta
 - Never skip the baseline measurement — unmeasured optimization is guessing
 - For ML-specific optimization (DataLoader, mixed precision, torch.compile), the perf-optimizer agent has dedicated sections
 - Follow-up chains:
-  - Bottleneck is architectural (not just a hot loop) → `/refactor` for structural changes with test safety net
+  - Bottleneck is architectural (not just a hot loop) → `/develop refactor` for structural changes with test safety net
   - Optimization changes non-trivial code paths → `/review` for quality validation
   - Optimized code needs documentation updates → Step 5 auto-delegates to Codex
 

@@ -224,9 +224,9 @@ OldName = NewName  # deprecated alias
 01. Read and understand the existing code structure before writing anything
 02. Identify what already exists vs what needs to be created
 03. Map edge cases and failure modes before writing any code (use the `\<edge_case_analysis>` checklist)
-04. Write or identify failing tests that cover both happy paths and edge cases
+04. Write or identify failing tests as pytest cases (pre-authorized to run) — not standalone scripts
 05. Implement the solution — handle edge cases inline, not as an afterthought
-06. Check for diagnostics: run `uv run ruff check . --fix && uv run mypy src/`
+06. Check for diagnostics: run `uv run ruff check . --fix && uv run mypy src/` — these are pre-authorized, run without asking
 07. Review for SOLID violations, naming clarity, and completeness
 08. Verify: does the change break any existing tests? Does it introduce new debt?
 09. Hand off to `qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to the user.

@@ -46,7 +46,7 @@ Specialist roles with deep domain knowledge. You can request a specific agent by
 
 ### Skills
 
-Skills are orchestrations of agents — invoked via slash commands (`/review`, `/fix`, etc.). A single skill typically composes multiple agents in parallel and consolidates their output. Think of agents as specialists you can talk to, and skills as predefined workflows that coordinate them.
+Skills are orchestrations of agents — invoked via slash commands (`/review`, `/develop fix`, etc.). A single skill typically composes multiple agents in parallel and consolidates their output. Think of agents as specialists you can talk to, and skills as predefined workflows that coordinate them.
 
 | Skill         | Command                                     | What It Does                                                                                                                                                                                              |
 | ------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,9 +59,7 @@ Skills are orchestrations of agents — invoked via slash commands (`/review`, `
 | **audit**     | `/audit [fix [high\|medium\|all]\|upgrade]` | Full-sweep config audit: broken refs, dead loops, inventory drift, docs freshness + upgrade proposals; `upgrade` applies docs-sourced improvements (config: correctness check, capability: calibrate A/B) |
 | **sync**      | `/sync [apply]`                             | Drift-detect project `.claude/` vs home `~/.claude/`; `apply` performs the sync                                                                                                                           |
 | **manage**    | `/manage <op> <type>`                       | Create, update, or delete agents/skills with cross-ref propagation                                                                                                                                        |
-| **feature**   | `/feature <desc>`                           | TDD-first feature dev: codebase analysis, demo doctest, TDD loop, docs + QA + review cycle                                                                                                                |
-| **refactor**  | `/refactor <target>`                        | Test-first refactoring: ensure coverage exists, add characterization tests, then refactor                                                                                                                 |
-| **fix**       | `/fix <bug>`                                | Reproduce-first bug fixing: regression test, targeted fix, lint and quality checks                                                                                                                        |
+| **develop**   | `/develop feature\|fix\|refactor`           | Unified development orchestrator: TDD-first feature dev, reproduce-first bug fixing, or test-first refactoring                                                                                            |
 | **calibrate** | `/calibrate [target] [fast\|full]`          | Agent calibration: synthetic problems with known outcomes, measures recall vs confidence bias                                                                                                             |
 | **codex**     | `/codex <task> [target]`                    | Delegate mechanical coding tasks to Codex CLI — Claude orchestrates, Codex executes                                                                                                                       |
 | **resolve**   | `/resolve <PR#\|comment>`                   | Resolve a PR: auto-detects merge conflicts first (semantic resolution with branch intent), then applies review comments via Codex                                                                         |
@@ -155,35 +153,22 @@ Skills are orchestrations of agents — invoked via slash commands (`/review`, `
   /audit skills fix
   ```
 
-- **`/refactor` — Test-first refactoring**
+- **`/develop` — Unified development orchestrator**
 
   ```bash
-  # Refactor a module with a specific goal
-  /refactor src/mypackage/transforms.py "replace manual loops with vectorized ops"
-  # General quality pass on a directory
-  /refactor src/mypackage/utils/
-  ```
+  # TDD-first feature development
+  /develop feature 87
+  /develop feature "add batched predict() method to Classifier"
+  /develop feature "add batched predict() method to Classifier" "src/classifier"
 
-- **`/fix` — Bug fixing**
+  # Reproduce-first bug fixing
+  /develop fix 42
+  /develop fix "TypeError when passing None to transform()"
+  /develop fix tests/test_transforms.py::test_none_input
 
-  ```bash
-  # Fix a bug described in a GitHub issue
-  /fix 42
-  # Fix a specific error
-  /fix "TypeError when passing None to transform()"
-  # Fix a failing test
-  /fix tests/test_transforms.py::test_none_input
-  ```
-
-- **`/feature` — TDD-first feature development**
-
-  ```bash
-  # Implement a feature from a GitHub issue
-  /feature 87
-  # Implement a feature described in plain text
-  /feature "add batched predict() method to Classifier"
-  # Scope analysis to a specific module
-  /feature "add batched predict() method to Classifier" "src/classifier"
+  # Test-first refactoring
+  /develop refactor src/mypackage/transforms.py "replace manual loops with vectorized ops"
+  /develop refactor src/mypackage/utils/
   ```
 
 - **`/codex` — Delegate mechanical work to Codex**
@@ -220,7 +205,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /analyse 42            # understand the issue, extract root cause hypotheses
-/fix 42                # reproduce with test, apply targeted fix
+/develop fix 42        # reproduce with test, apply targeted fix
 /review                # validate the fix meets quality standards
 ```
 
@@ -231,7 +216,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /optimize src/mypackage/dataloader.py   # profile and fix top bottleneck
-/refactor src/mypackage/dataloader.py "extract caching layer"  # structural improvement
+/develop refactor src/mypackage/dataloader.py "extract caching layer"  # structural improvement
 /review                                 # full quality pass on changes
 ```
 
@@ -242,7 +227,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /review 55             # parallel review across 7 dimensions
-/fix "race condition in cache invalidation"  # fix blocking issue from review
+/develop fix "race condition in cache invalidation"  # fix blocking issue from review
 /review 55             # re-review after fix
 ```
 
@@ -253,7 +238,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /analyse 87            # understand the issue, clarify acceptance criteria
-/feature 87            # codebase analysis, demo test, TDD, docs, review
+/develop feature 87    # codebase analysis, demo test, TDD, docs, review
 /release               # generate CHANGELOG entry and release notes
 ```
 
@@ -264,7 +249,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /survey "efficient attention for long sequences"  # find SOTA methods
-/feature "implement FlashAttention in encoder"    # TDD-first implementation
+/develop feature "implement FlashAttention in encoder"    # TDD-first implementation
 /review                                           # validate implementation
 ```
 
@@ -338,7 +323,7 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ### Agent Teams
 
-Claude Code's experimental Agent Teams feature is enabled. Teams are always **user-invoked** — nothing auto-spawns. You use `/fix --team`, `/feature --team`, etc. explicitly.
+Claude Code's experimental Agent Teams feature is enabled. Teams are always **user-invoked** — nothing auto-spawns. You use `/develop fix --team`, `/develop feature --team`, etc. explicitly.
 
 **Enable**: Already active via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `settings.json`.
 
@@ -357,13 +342,13 @@ Claude Code's experimental Agent Teams feature is enabled. Teams are always **us
 
 #### Skills with team support
 
-| Skill             | Mode          | When to use                                              |
-| ----------------- | ------------- | -------------------------------------------------------- |
-| `/fix --team`     | `--team` flag | Bug spans modules; competing root-cause hypotheses       |
-| `/feature --team` | `--team` flag | Cross-layer feature needing impl + QA + docs in parallel |
-| `/survey --team`  | `--team` flag | Multiple competing method families to evaluate           |
-| `/optimize`       | heuristic     | Directory or system-wide scope → Claude proposes team    |
-| `/refactor`       | heuristic     | Directory or system-wide scope → Claude proposes team    |
+| Skill                     | Mode          | When to use                                              |
+| ------------------------- | ------------- | -------------------------------------------------------- |
+| `/develop fix --team`     | `--team` flag | Bug spans modules; competing root-cause hypotheses       |
+| `/develop feature --team` | `--team` flag | Cross-layer feature needing impl + QA + docs in parallel |
+| `/survey --team`          | `--team` flag | Multiple competing method families to evaluate           |
+| `/optimize`               | heuristic     | Directory or system-wide scope → Claude proposes team    |
+| `/develop refactor`       | heuristic     | Directory or system-wide scope → Claude proposes team    |
 
 **Model tiering**: Lead uses `opusplan`/`opus`. Deep reasoning teammates (`sw-engineer`, `qa-specialist`, `ai-researcher`, `perf-optimizer`) use `opus`. Execution teammates (`doc-scribe`, `linting-expert`, `ci-guardian`) use `sonnet`. Keep teams to 3–5 teammates (~7× token cost vs single session).
 

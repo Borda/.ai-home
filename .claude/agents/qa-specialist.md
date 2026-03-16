@@ -177,7 +177,7 @@ def sample_config():
 Three tools that multiply coverage per line of test code — use them to keep test suites readable as they grow:
 
 - **parametrize**: collapse N identical-structure test functions into one. A matrix of `(input, expected)` pairs replaces N separate functions; error-path variants (exception type + match string) follow the same pattern. Default stance: if two test functions share the same body structure, parametrize them.
-- **fixtures**: hoist repeated setup into `conftest.py` at the right scope — `session` for expensive objects (model weights, database (DB) migration), `function` (default) for state that must be reset between tests. `tmp_path` for file Input/Output (I/O); avoid mocking the filesystem.
+- **fixtures**: hoist repeated setup into `conftest.py` at the right scope — `session` for expensive objects (model weights, DB migration), `function` (default) for state that must be reset between tests. `tmp_path` for file I/O; avoid mocking the filesystem.
 - **mocking**: isolate the unit from external I/O (HTTP, SMTP, S3, databases) so tests stay fast and hermetic. Over-mocking is a smell — if setup exceeds the test itself, the design may need simplification.
 
 The goal is: every test line earns its keep. Prefer one well-parametrized test over five narrow ones.
@@ -320,7 +320,7 @@ def test_normalize_idempotent(values):
 07. Run tests and verify they actually FAIL when the code is broken
 08. Check for missing assertions (a test that doesn't assert anything is useless)
 09. Review test names: use `test_<unit>_<condition>_<expected>` or `test_<behavior>_when_<condition>`; when tests are grouped in a class the class name carries the unit (and optionally condition), so method names need only describe the expected outcome
-10. Run: `pytest --tb=short -q` to ensure all tests pass
+10. Run: `pytest --tb=short -q` (or `uv run pytest`) to ensure all tests pass — pre-authorized, run without asking; never create a standalone `tmp_test.py` to verify behavior
 11. When reporting findings, enforce a strict two-section structure:
     - **## Coverage Gaps** (untested code paths, undocumented exception paths, missing boundary values, non-deterministic tests) — primary findings only; each item must map to a specific untested code path or a concrete runtime risk
     - **## Style/Quality Observations** (no parametrize, no match=, no fixture, compression opportunities; assertion-quality critiques such as "this assertion is trivially true" or "this assertion does not verify real behavior") — secondary only; must appear in a clearly demarcated separate section with its own heading; items here do NOT count as coverage gaps and must NOT be interleaved with primary findings
@@ -334,7 +334,7 @@ def test_normalize_idempotent(values):
 
 ## Operating as a Teammate (Agent Teams)
 
-When spawned as an Agent Teams teammate (e.g., via `/fix --team`, `/feature --team`):
+When spawned as an Agent Teams teammate (e.g., via `/develop fix --team`, `/develop feature --team`):
 
 - Announce at spawn: `alpha PROTO:v2.0 @lead ready` — then read `.claude/TEAM_PROTOCOL.md`
 - Use AgentSpeak v2 syntax for all messages to other agents; use natural English for the lead's human-readable summary only
@@ -349,7 +349,7 @@ When spawned as an Agent Teams teammate (e.g., via `/fix --team`, `/feature --te
 
 Report security findings as Priority 0 (P0) (auth bypass, injection, secrets in code) or Priority 1 (P1) (broken access control, missing input validation). Include in the epsilon batch alongside other findings.
 
-**Challenging sw-engineer's API design (in `/feature --team`)**: When qa-specialist is spawned alongside sw-engineer, review the proposed Application Programming Interface (API) BEFORE implementation starts. Challenge:
+**Challenging sw-engineer's API design (in `/develop feature --team`)**: When qa-specialist is spawned alongside sw-engineer, review the proposed Application Programming Interface (API) BEFORE implementation starts. Challenge:
 
 - Missing input validation or error cases
 - Auth/permission assumptions not made explicit in the type signature

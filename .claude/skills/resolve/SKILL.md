@@ -215,9 +215,13 @@ Print an interim report:
 gh pr view <PR#> --comments
 ```
 
-Filter out non-actionable items: "LGTM", "nice catch", "looks good", emoji-only, and any already-closed/resolved threads.
+Classify each comment thread:
 
-> **Guard**: If actionable comments > 10: process the first 10, report the remaining count, and ask the user whether to continue. This prevents runaway execution on large PRs.
+- **Already resolved on GitHub** (`state: RESOLVED`) — include in table with `✓ Already resolved` marker; skip Codex dispatch
+- **Non-actionable** ("LGTM", "nice catch", emoji-only) — omit from table entirely
+- **Actionable** — dispatch to Codex
+
+> **Guard**: If actionable (unresolved) comments > 10: process the first 10, report the remaining count, and ask the user whether to continue. This prevents runaway execution on large PRs.
 
 For each actionable comment:
 
@@ -239,11 +243,16 @@ Mark the task `completed`, then print:
 
 ### Review Comments
 
-| # | Comment | Action | Result |
-|---|---------|--------|--------|
-| 1 | <30-char summary> | Applied / No change | <Codex reason if no change> |
+| # | Comment | Status | Action | Result |
+|---|---------|--------|--------|--------|
+| 1 | <30-char summary> | ✓ Resolved | — | — |
+| 2 | <30-char summary> | Open | Applied / No change | <Codex reason if no change> |
 
 **Next**: `git diff HEAD~1 HEAD` for merge changes + `git diff HEAD` for comment changes → commit when satisfied; or `git merge --abort` to undo the merge.
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g. conflict strategy ambiguity, unresolved comments, Codex partial completion]
 ```
 
 ______________________________________________________________________
@@ -293,6 +302,10 @@ Mark the task `completed`, then print:
 **Verdict**: ✓ resolved | ⊘ no change — <Codex's reason>
 
 **Next**: review diff and commit | reply to reviewer: <Codex's reason>
+
+## Confidence
+**Score**: [0.N]
+**Gaps**: [e.g. Codex partial completion, ambiguous comment intent]
 ```
 
 </workflow>

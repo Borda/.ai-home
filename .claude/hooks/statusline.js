@@ -62,25 +62,33 @@ process.stdin.on("end", () => {
       parts.push(`\x1b[${color}m${bar} ${Math.round(pct)}%\x1b[0m`);
     }
 
-    // Active subagents indicator — populated by SubagentStart/SubagentStop hooks in task-log.js
+    // Active subagents indicator — one file per agent in .claude/state/agents/ (task-log.js)
     try {
-      const stateFile = path.join(workspace?.current_dir || process.cwd(), ".claude/state/agents.json");
-      const allAgents = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+      const agentsDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/agents");
+      const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith(".json"));
       // Safety-net: drop agents stuck > 10 min (SubagentStop didn't fire — crash or hang)
       const MAX_AGE_MS = 10 * 60 * 1000;
       const now = Date.now();
+      const allAgents = files.flatMap((f) => {
+        try {
+          return [JSON.parse(fs.readFileSync(path.join(agentsDir, f), "utf8"))];
+        } catch (_) {
+          return [];
+        }
+      });
       const agents = allAgents.filter((a) => !a.since || now - new Date(a.since).getTime() < MAX_AGE_MS);
       if (agents.length > 0) {
         const counts = agents.reduce((acc, a) => {
           acc[a.type] = (acc[a.type] || 0) + 1;
           return acc;
         }, {});
-        const types = Object.entries(counts)
-          .map(([t, n]) => (n > 1 ? `${t} ×${n}` : t))
-          .join(", ");
-        parts.push(`\x1b[35m⚡ ${agents.length} agent${agents.length > 1 ? "s" : ""} (${types})\x1b[0m`);
+        const typeEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const shown = typeEntries.slice(0, 3).map(([t, n]) => (n > 1 ? `${t} ×${n}` : t));
+        const hiddenCount = typeEntries.slice(3).reduce((s, [, n]) => s + n, 0);
+        if (hiddenCount > 0) shown.push(`+${hiddenCount} more`);
+        parts.push(`\x1b[35m⚡ ${agents.length} agent${agents.length > 1 ? "s" : ""} (${shown.join(", ")})\x1b[0m`);
       }
-    } catch (_) {} // file missing = no active agents
+    } catch (_) {} // directory missing = no active agents
 
     process.stdout.write(parts.join(" \x1b[2m│\x1b[0m "));
   } catch (_) {

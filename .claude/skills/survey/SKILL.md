@@ -105,7 +105,7 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 
 ## Team Mode
 
-Use when the topic warrants exploring multiple competing method families with adversarial cross-evaluation. Skip for focused topics with a clear winning approach — the default single ai-researcher is sufficient.
+Use when the topic warrants exploring multiple competing method families with adversarial cross-evaluation.
 
 When to trigger: 3+ distinct method families exist for the topic AND the field has no clear leading method (benchmark spread \<5% between top methods, or no SOTA consensus in the past 12 months). Skip for topics with a clear dominant approach — the default single ai-researcher is sufficient.
 
@@ -136,8 +136,8 @@ Compact Instructions: preserve paper titles, benchmarks, code links. Discard pro
 - This skill orchestrates — it gathers context and delegates research to `ai-researcher`. For direct hypothesis/experiment work, use the agent directly.
 - **Link integrity**: All URLs cited in the survey report must be fetched and verified before inclusion. Use WebFetch to confirm each URL exists and says what you claim.
 - Follow-up chains:
-  - Survey recommends a method for implementation → `/feature` for Test-Driven Development (TDD)-first implementation of the chosen approach
-  - Survey integrates into existing code → `/refactor` first to prepare the module, then `/feature`
+  - Survey recommends a method for implementation → `/develop feature` for Test-Driven Development (TDD)-first implementation of the chosen approach
+  - Survey integrates into existing code → `/develop refactor` first to prepare the module, then `/develop feature`
   - Survey reveals security concerns with a dependency → run `pip-audit` or `uv run pip-audit` for a Common Vulnerabilities and Exposures (CVE) scan
 
 </notes>

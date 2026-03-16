@@ -135,7 +135,7 @@ After applying the guidelines above to polish the output, write to disk per mode
 
 ## Step 5: Publish (after writing notes)
 
-Use project-level tooling to create the GitHub release. Refer to the project's CLAUDE.md or `oss-maintainer` agent for the specific commands.
+**Human gate** — stop here and hand off to the user: the GitHub release must be created with project-level tooling (e.g. `gh release create`). Refer to the project's CLAUDE.md or `oss-maintainer` agent for the exact command. Resume after the release is live.
 
 ## Mode: prepare
 

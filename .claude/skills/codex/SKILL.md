@@ -29,7 +29,7 @@ Poor candidates: architectural decisions, novel logic, anything requiring deep c
 
 **Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase. Mark in_progress/completed throughout. On loop retry or scope change, create a new task.
 
-## Pre-flight: Logging setup
+## Step 0: Initialise log path
 
 Before any other step, initialise the log path:
 
@@ -89,7 +89,7 @@ Assess task complexity:
 
 - **Simple** — mechanical, clearly bounded, affects ≤ 5 files: proceed to Step 3
 - **Medium** — well-defined but touches more files or requires consistent judgment calls: proceed with a more explicit prompt
-- **Too broad** — architectural, ambiguous, or touches > 20 files: log a `skipped` entry, do not delegate. Implement directly using the appropriate skill (`/feature`, `/refactor`, etc.) and report why delegation was skipped.
+- **Too broad** — architectural, ambiguous, or touches > 20 files: log a `skipped` entry, do not delegate. Implement directly using the appropriate skill (`/develop feature`, `/develop refactor`, etc.) and report why delegation was skipped.
 
 ```bash
 printf '{"ts":"%s","status":"skipped","reason":"task too broad for delegation","prompt":"%s","target":"%s"}\n' \
@@ -285,11 +285,10 @@ jq -r '[.ts, .status, .agent, .prompt[:60]] | @tsv' .codex/logs/delegations.json
 - **Validate before capturing**: lint + tests run against the live working tree; only a passing result gets saved as a patch
 - **Patch files are parallel-safe**: each subagent writes a uniquely named file — no shared git state, no stash index races
 - **Parent applies patches**: when running as a subagent, stop after saving the patch; never apply it yourself — the parent serialises application
-- **sandbox: workspace-write**: Codex can read and write files in the workspace but cannot execute arbitrary shell commands outside it
 - **`disable-model-invocation: true`**: Claude will not auto-invoke this skill; you must type `/codex <task>` explicitly. Once invoked, the parent model executes all workflow steps — this flag only prevents automatic background triggering.
 - Related agents: `sw-engineer` (fallback for direct implementation), `linting-expert` (validation), `qa-specialist` (test validation)
 - Follow-up chains:
   - Codex changes pass but need architectural review → `/review` for full multi-agent quality validation
-  - Task was too broad for delegation → `/feature` or `/refactor` for full orchestrated workflow
+  - Task was too broad for delegation → `/develop feature` or `/develop refactor` for full orchestrated workflow
 
 </notes>

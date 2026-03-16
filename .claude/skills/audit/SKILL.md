@@ -107,12 +107,6 @@ Beyond per-file analysis, run cross-file checks that self-mentor cannot do alone
 
 Run the following checks. For file-listing steps use Glob; for content-search steps use Grep. Bash is only needed for the pipeline comparisons and the `printf`/`jq` blocks below.
 
-```bash
-# Redeclare color helpers per Bash tool call — shell env does not persist across calls; CYN (agent name/fix hint) is added here and absent from the pre-flight block.
-RED='\033[1;31m'; YEL='\033[1;33m'; GRN='\033[0;32m'; CYN='\033[0;36m'; NC='\033[0m'
-# RED → breaking / critical  |  YELLOW → warning / medium  |  GREEN → pass  |  CYAN → agent name / source
-```
-
 **Check 1 — Inventory drift (MEMORY.md vs disk)**
 Use Glob (`agents/*.md`, path `.claude/`) to list agent files; extract basenames and sort, then write to `/tmp/agents_disk.txt` via Bash:
 
@@ -132,7 +126,7 @@ Use Grep tool (pattern `gh |python -m|ruff|mypy|pytest`, glob `skills/*/SKILL.md
 Use Grep tool (pattern `` `/[a-z-]*` ``, glob `skills/*/SKILL.md`, path `.claude/`, output mode `content`) to find skill-name references; compare against disk inventory.
 
 **Check 5 — Hardcoded user paths**
-Use Grep tool (pattern `/Users/|/home/`, glob `{agents/*.md,skills/*/SKILL.md}`, path `.claude/`, output mode `content`) to flag non-portable paths.
+Use Grep tool (pattern `/Users/|/home/`, glob `{agents/*.md,skills/*/SKILL.md}`, path `.claude/`, output mode `content`) to flag non-portable paths in agent and skill files. Then run a second Grep directly on `.claude/settings.json` with the same pattern to catch absolute hook paths in the settings file.
 
 **Important**: run this check on every file regardless of whether critical or high findings were already found — path portability issues are orthogonal to other severity classes and must not be deprioritized due to presence of more serious findings in the same file.
 
@@ -166,6 +160,7 @@ fi
 **Check 7 — Skill frontmatter conflicts** — `context:fork + disable-model-invocation:true` is a broken combination: a forked skill has no model to coordinate agents or synthesize results.
 
 ```bash
+RED='\033[1;31m'; YEL='\033[1;33m'; GRN='\033[0;32m'; CYN='\033[0;36m'; NC='\033[0m'
 for f in .claude/skills/*/SKILL.md; do
   name=$(basename "$(dirname "$f")")
   if awk '/^---$/{c++} c<2' "$f" 2>/dev/null | grep -q 'context: fork' && \
@@ -230,6 +225,7 @@ For each agent and skill, validate that declared tools match actual usage — no
 **Mechanical check** — for each skill, cross-reference `allowed-tools:` frontmatter against tool names referenced in the workflow body:
 
 ```bash
+RED='\033[1;31m'; YEL='\033[1;33m'; GRN='\033[0;32m'; CYN='\033[0;36m'; NC='\033[0m'
 for f in .claude/skills/*/SKILL.md; do
   name=$(basename "$(dirname "$f")")
   declared=$(awk '/^---$/{c++; if(c==2)exit} c==1 && /^allowed-tools:/{sub(/^allowed-tools: /,""); print}' "$f")
@@ -620,7 +616,7 @@ Run `/sync apply` automatically after all proposals are processed.
 - **Dead loops need human judgment**: a cycle in follow-up chains might be intentional (e.g., refactor → review → fix → refactor) — flag and explain, don't auto-remove
 - **Max 2 re-audit cycles**: if fixes don't converge after 2 loops, surface the remaining issues to the user rather than spinning
 - **Relationship to self-mentor**: `self-mentor` is a single-file reactive audit; `/audit` is the system-wide sweep that runs self-mentor at scale and adds cross-file checks
-- **Paths must be portable**: `.claude/` for project-relative paths, `~/` for home paths — never `/Users/<name>/` or `/home/<name>/`; this rule applies to ALL skill and agent files
+- **Paths must be portable**: `.claude/` for project-relative paths, `~/` or `$HOME/` for home paths — never `/Users/<name>/` or `/home/<name>/`; this rule applies to ALL config files including `settings.json`
 - Pre-flight for `/sync` — run clean before `/sync apply`.
 - **Bash error logging**: if a bash block in Pre-flight checks or Step 4 fails unexpectedly, append a JSONL line to `.claude/logs/audit-errors.jsonl` (`{"ts":"<ISO>","check":"<N>","error":"<message>"}`) for post-mortem — do not swallow errors silently.
 - **Execution order tip**: Steps 1–2 and Step 4 bash checks are fast (seconds); Step 3 (self-mentor spawns) is expensive (seconds per file). For early signal on system-wide issues, run Steps 1–2 + Step 4 first, then spawn Step 3 agents in parallel with any Step 4 analysis that doesn't depend on per-file results.
@@ -629,7 +625,7 @@ Run `/sync apply` automatically after all proposals are processed.
 - Follow-up chains:
   - Audit clean → `/sync apply` to propagate verified config to `~/.claude/`
   - Audit found structural issues → review flagged files manually before syncing
-  - Audit found many low items → run `/audit fix all` to auto-fix them, or run `/refactor` for a targeted cleanup pass
+  - Audit found many low items → run `/audit fix all` to auto-fix them, or run `/develop refactor` for a targeted cleanup pass
   - After fixing agent instructions (from audit findings) → `/calibrate <agent>` to verify the fix improved recall and confidence calibration
   - Audit surfaced upgrade proposals → `/audit upgrade` to apply with correctness checks and calibrate A/B evidence for capability changes
   - `/audit upgrade` reverted a capability change → run `/calibrate <agent> full` for deeper signal (N=10 vs N=3 used in upgrade mode)

@@ -66,8 +66,9 @@ ______________________________________________________________________
 
 | Permission                | Description                                    | Typical use case                                                          |
 | ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `Bash(gh api:*)`          | Call the GitHub REST or GraphQL API directly   | Ecosystem impact checks, code search, repository metadata queries         |
 | `Bash(gh auth status:*)`  | Check GitHub CLI authentication state          | Pre-flight check in `/resolve` and any skill that requires `gh` auth      |
-| `Bash(gh pr view:*)`      | Inspect PR metadata, body, and review status   | Used by `/review` and `/fix` to understand the PR under review            |
+| `Bash(gh pr view:*)`      | Inspect PR metadata, body, and review status   | Used by `/review` and `/develop fix` to understand the PR under review    |
 | `Bash(gh pr checkout:*)`  | Check out a PR branch locally                  | `/resolve` uses this to enter the PR branch state before applying changes |
 | `Bash(gh pr diff:*)`      | Fetch the full diff of a PR                    | `/review` fetches the diff for static analysis                            |
 | `Bash(gh pr list:*)`      | List open or merged PRs                        | `/analyse health` and duplicate-detection modes                           |
@@ -75,7 +76,7 @@ ______________________________________________________________________
 | `Bash(gh repo view:*)`    | Fetch repository metadata (name, owner)        | `/resolve` detects owner/repo slug for constructing API call paths        |
 | `Bash(gh run list:*)`     | List recent workflow runs                      | `/ci-guardian` diagnosis: find the failing run                            |
 | `Bash(gh run view:*)`     | View logs and status of a specific CI run      | Read error output from a failed job                                       |
-| `Bash(gh issue view:*)`   | Read issue body, labels, and comments          | `/analyse` and `/fix` read the issue before starting work                 |
+| `Bash(gh issue view:*)`   | Read issue body, labels, and comments          | `/analyse` and `/develop fix` read the issue before starting work         |
 | `Bash(gh issue list:*)`   | List issues                                    | `/analyse dupes` and health overview                                      |
 | `Bash(gh release view:*)` | Inspect an existing release's notes and assets | `/release` uses this to read the previous release as a baseline           |
 | `Bash(gh release list:*)` | List releases                                  | Find the most recent tag to set a changelog range                         |
@@ -118,41 +119,49 @@ ______________________________________________________________________
 
 ## Python toolchain
 
-| Permission                          | Description                                     | Typical use case                                                 |
-| ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| `Bash(pytest:*)`                    | Run the test suite via the `pytest` entry point | Quick test run during TDD loop in `/feature` and `/fix`          |
-| `Bash(pre-commit run:*)`            | Run pre-commit hooks on staged or all files     | Verify formatting and linting before marking a task done         |
-| `Bash(python -m pytest:*)`          | Run tests via the module interface              | Environment-safe alternative when `pytest` binary is not on PATH |
-| `Bash(python -m doctest:*)`         | Execute doctests embedded in a module           | Validate inline usage examples in docstrings                     |
-| `Bash(python -m pre_commit run:*)`  | Run pre-commit via module interface             | Alternative invocation inside virtual environments               |
-| `Bash(python -m cProfile:*)`        | Profile a script and output timing data         | `/optimize` Step 1 baseline measurement                          |
-| `Bash(ruff:*)`                      | Lint and auto-fix Python source                 | Run after edits; `check` for diagnostics, `format` for style     |
-| `Bash(mypy:*)`                      | Static type-checking                            | Validate type annotations on a module or package                 |
-| `Bash(pip show:*)`                  | Display metadata for an installed package       | Check installed version, confirm dependency is present           |
-| `Bash(pip list:*)`                  | List all installed packages and their versions  | Dependency audit, environment snapshot                           |
-| `Bash(pip index:*)`                 | Query PyPI for available versions of a package  | Check whether a newer release is available                       |
-| `Bash(pip-audit:*)`                 | Scan installed packages for known CVEs          | Pre-release dependency CVE scan                                  |
-| `Bash(uv run pytest:*)`             | Run tests via uv-managed pytest                 | Same as `pytest:*` but uses the project's uv-managed environment |
-| `Bash(uv run python -m pytest:*)`   | Run tests via uv python module interface        | Environment-safe pytest invocation through uv                    |
-| `Bash(uv run python -m doctest:*)`  | Execute doctests via uv python                  | Validate inline usage examples via uv-managed interpreter        |
-| `Bash(uv run python -m cProfile:*)` | Profile a script via uv python                  | `/optimize` baseline measurement through uv-managed interpreter  |
-| `Bash(uv run ruff:*)`               | Lint and auto-fix Python source via uv          | Run ruff through uv to ensure project venv rules apply           |
-| `Bash(uv run mypy:*)`               | Static type-checking via uv                     | Run mypy through uv to use project-pinned version                |
-| `Bash(uv run pre-commit run:*)`     | Run pre-commit hooks via uv                     | Verify formatting/linting via uv-managed pre-commit              |
-| `Bash(uv run pip-audit:*)`          | Scan packages for CVEs via uv                   | Pre-release CVE scan through uv-managed environment              |
-| `Bash(uv pip show:*)`               | Display metadata for an installed package       | Check installed version in the uv-managed environment            |
-| `Bash(uv pip list:*)`               | List all packages installed via uv              | Dependency audit of a uv-managed environment                     |
-| `Bash(uv pip check:*)`              | Verify package compatibility in uv environment  | Detect dependency conflicts without installing anything          |
-| `Bash(uv tree:*)`                   | Show dependency tree for the project            | Visualize transitive deps; identify why a package is installed   |
+| Permission                          | Description                                     | Typical use case                                                          |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `Bash(python3:*)`                   | Run Python 3 scripts directly                   | Execute helper scripts, one-off data transforms, quick interpreter checks |
+| `Bash(pytest:*)`                    | Run the test suite via the `pytest` entry point | Quick test run during TDD loop in `/develop feature` and `/develop fix`   |
+| `Bash(pre-commit run:*)`            | Run pre-commit hooks on staged or all files     | Verify formatting and linting before marking a task done                  |
+| `Bash(python -m pytest:*)`          | Run tests via the module interface              | Environment-safe alternative when `pytest` binary is not on PATH          |
+| `Bash(python -m doctest:*)`         | Execute doctests embedded in a module           | Validate inline usage examples in docstrings                              |
+| `Bash(python -m pre_commit run:*)`  | Run pre-commit via module interface             | Alternative invocation inside virtual environments                        |
+| `Bash(python -m cProfile:*)`        | Profile a script and output timing data         | `/optimize` Step 1 baseline measurement                                   |
+| `Bash(ruff:*)`                      | Lint and auto-fix Python source                 | Run after edits; `check` for diagnostics, `format` for style              |
+| `Bash(mypy:*)`                      | Static type-checking                            | Validate type annotations on a module or package                          |
+| `Bash(pip show:*)`                  | Display metadata for an installed package       | Check installed version, confirm dependency is present                    |
+| `Bash(pip list:*)`                  | List all installed packages and their versions  | Dependency audit, environment snapshot                                    |
+| `Bash(pip index:*)`                 | Query PyPI for available versions of a package  | Check whether a newer release is available                                |
+| `Bash(pip3 show:*)`                 | `pip3` variant of pip show                      | Explicit Python 3 pip metadata check                                      |
+| `Bash(pip3 list:*)`                 | `pip3` variant of pip list                      | Explicit Python 3 dependency audit                                        |
+| `Bash(pip3 index:*)`                | `pip3` variant of pip index                     | Explicit Python 3 PyPI version query                                      |
+| `Bash(pip-audit:*)`                 | Scan installed packages for known CVEs          | Pre-release dependency CVE scan                                           |
+| `Bash(uv run pytest:*)`             | Run tests via uv-managed pytest                 | Same as `pytest:*` but uses the project's uv-managed environment          |
+| `Bash(uv run python -m pytest:*)`   | Run tests via uv python module interface        | Environment-safe pytest invocation through uv                             |
+| `Bash(uv run python -m doctest:*)`  | Execute doctests via uv python                  | Validate inline usage examples via uv-managed interpreter                 |
+| `Bash(uv run python -m cProfile:*)` | Profile a script via uv python                  | `/optimize` baseline measurement through uv-managed interpreter           |
+| `Bash(uv run ruff:*)`               | Lint and auto-fix Python source via uv          | Run ruff through uv to ensure project venv rules apply                    |
+| `Bash(uv run mypy:*)`               | Static type-checking via uv                     | Run mypy through uv to use project-pinned version                         |
+| `Bash(uv run pre-commit run:*)`     | Run pre-commit hooks via uv                     | Verify formatting/linting via uv-managed pre-commit                       |
+| `Bash(uv run pip-audit:*)`          | Scan packages for CVEs via uv                   | Pre-release CVE scan through uv-managed environment                       |
+| `Bash(uv pip show:*)`               | Display metadata for an installed package       | Check installed version in the uv-managed environment                     |
+| `Bash(uv pip list:*)`               | List all packages installed via uv              | Dependency audit of a uv-managed environment                              |
+| `Bash(uv pip check:*)`              | Verify package compatibility in uv environment  | Detect dependency conflicts without installing anything                   |
+| `Bash(uv tree:*)`                   | Show dependency tree for the project            | Visualize transitive deps; identify why a package is installed            |
 
 ______________________________________________________________________
 
 ## macOS / ecosystem
 
-| Permission          | Description                                                   | Typical use case                                           |
-| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
-| `Bash(brew info:*)` | Check whether a Homebrew formula is installed and its version | Verify a tool dependency (e.g. `codex`, `gh`) is available |
-| `Bash(codex:*)`     | Invoke the OpenAI Codex CLI                                   | `/codex` skill delegates mechanical coding tasks to Codex  |
+| Permission          | Description                                                   | Typical use case                                                                |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `Bash(brew info:*)` | Check whether a Homebrew formula is installed and its version | Verify a tool dependency (e.g. `codex`, `gh`) is available                      |
+| `Bash(codex:*)`     | Invoke the OpenAI Codex CLI                                   | `/codex` skill delegates mechanical coding tasks to Codex                       |
+| `Bash(claude:*)`    | Invoke the Claude Code CLI                                    | SessionStart hook runs `claude auth status` to cache plan info                  |
+| `Bash(node:*)`      | Run Node.js scripts                                           | Hooks (`task-log.js`, `statusline.js`) are Node scripts executed by Claude Code |
+| `Bash(npm show:*)`  | Fetch npm package metadata                                    | Check latest version of a Node package without installing it                    |
+| `Bash(open:*)`      | Open a file or URL with the default macOS application         | Open a browser, Finder, or app from a workflow step                             |
 
 ______________________________________________________________________
 
@@ -174,3 +183,15 @@ ______________________________________________________________________
 | `WebFetch(domain:developers.openai.com)`     | OpenAI developer documentation           | Codex CLI docs, API reference                                                                |
 | `WebFetch(domain:platform.openai.com)`       | OpenAI platform and API reference        | Model capabilities, pricing, endpoint docs                                                   |
 | `WebFetch(domain:openai.com)`                | OpenAI blog and model release notes      | Track new model releases                                                                     |
+| `WebFetch(domain:www.anthropic.com)`         | Anthropic main site                      | Research blog posts, model announcements, policy pages                                       |
+| `WebFetch(domain:support.claude.com)`        | Anthropic support and help centre        | Lookup Claude feature behaviour, plan limits, billing FAQs                                   |
+| `WebFetch(domain:github.blog)`               | GitHub official blog                     | Track new GitHub Actions features, changelog entries, ecosystem news                         |
+
+______________________________________________________________________
+
+## Skills — pre-approved invocations
+
+| Permission         | Description                                        | Typical use case                                              |
+| ------------------ | -------------------------------------------------- | ------------------------------------------------------------- |
+| `Skill(sync)`      | Invoke the `/sync` skill without user confirmation | Called from hooks and automation flows that need drift checks |
+| `Skill(calibrate)` | Invoke the `/calibrate` skill without confirmation | Agent quality benchmarking in CI or post-fix verification     |

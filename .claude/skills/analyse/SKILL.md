@@ -311,9 +311,9 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - Don't post responses without explicit user instruction — only draft them
 - **Forked context**: this skill runs with `context: fork` — it operates without access to the current conversation history. All required context (PR number, issue URL, branch name) must be provided as the skill argument or in your prompt.
 - Follow-up chains:
-  - Issue with confirmed bug → `/fix` to diagnose, reproduce with test, and apply targeted fix
-  - Issue is a feature request → `/feature` for TDD-first implementation
-  - Issue with code smell or structural problem → `/refactor` for test-first improvements
+  - Issue with confirmed bug → `/develop fix` to diagnose, reproduce with test, and apply targeted fix
+  - Issue is a feature request → `/develop feature` for TDD-first implementation
+  - Issue with code smell or structural problem → `/develop refactor` for test-first improvements
   - PR with quality concerns → `/review` for comprehensive multi-agent code review
 
 </notes>
