@@ -10,7 +10,7 @@
 ci:
   autofix_prs: true
   autoupdate_commit_msg: "[pre-commit.ci] bump ⬆ suggestions"
-  autoupdate_schedule: quarterly
+  autoupdate_schedule: monthly
   # submodules: true
 
 repos:
@@ -27,6 +27,11 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=100", "--enforce-all"]
       - id: detect-private-key
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: pretty-format-json
+        args: ["--autofix"]
 
   - repo: https://github.com/JoC0de/pre-commit-prettier
     rev: v3.8.1 # using tag; previously pinned SHA when tags were not persistent
@@ -37,7 +42,7 @@ repos:
         args: ["--print-width=120"]
 
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.21.0
+    rev: v10.0.3
     hooks:
       - id: eslint
         additional_dependencies:
@@ -46,7 +51,7 @@ repos:
           - "@eslint/js@9.21.0"
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         args: ["--write-changes"]

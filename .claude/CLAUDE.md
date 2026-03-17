@@ -88,7 +88,7 @@ Teams are always user-invoked. When executing in team mode:
 ### In-session task tracking
 
 - **Skills with a predefined multi-step workflow**: create TaskCreate entries for **all known steps immediately at skill start** — before any tool calls, before any analysis. The task list is the user's first view of the plan. Steps may be renamed or new ones added as the work evolves; the list must always reflect the current plan.
-- Any multi-step main-session work (fix, investigation, debug — 3+ tool calls) → TaskCreate at the start, before the first tool call; don't wait to understand the root cause
+- Any multi-step main-session work (fix, investigation, debug — 3+ tool calls, or a message with 2+ distinct instructions) → TaskCreate at the start, before the first tool call; don't wait to understand the root cause
 - **Plan-mode exit → task-list entry**: when exiting plan mode after user approval, the first action is always TaskCreate for each major phase — never start implementation without the task list in place
 - On pivot (unplanned work discovered mid-skill) → create a new task for the new work; rename existing tasks with TaskUpdate if scope changed
 - Skip for: single-task actions, simple skills (sync, observe), subagent work

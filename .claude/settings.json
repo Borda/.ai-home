@@ -1,92 +1,118 @@
 {
-  "ordering": "auto",
-  "model": "opusplan",
-  "effortLevel": "high",
-  "autoUpdatesChannel": "stable",
-  "fastMode": true,
   "autoCompactThreshold": 0.7,
-  "teammateMode": "in-process",
+  "autoUpdatesChannel": "stable",
+  "effortLevel": "high",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
-  "statusLine": {
-    "type": "command",
-    "command": "node .claude/hooks/statusline.js"
-  },
+  "fastMode": true,
   "hooks": {
-    "SessionStart": [
+    "PreCompact": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "mkdir -p ~/.claude/state && claude auth status > ~/.claude/state/subscription.json 2>/dev/null",
-            "async": true
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "rm -f .claude/state/session-context.md",
-            "async": true
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js" }]
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "mkdir -p ~/.claude/state && claude auth status > ~/.claude/state/subscription.json 2>/dev/null",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "rm -f .claude/state/session-context.md",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SubagentStart": [
       {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js", "statusMessage": "Tracking agent" }]
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "statusMessage": "Tracking agent",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SubagentStop": [
       {
         "hooks": [
-          { "type": "command", "command": "node .claude/hooks/task-log.js", "statusMessage": "Completing agent" }
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "statusMessage": "Completing agent",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/teammate-quality.js",
+            "type": "command"
+          }
         ]
       }
     ],
     "TeammateIdle": [
       {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/teammate-quality.js" }]
-      }
-    ],
-    "TaskCompleted": [
-      {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/teammate-quality.js" }]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js" }]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js" }]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/task-log.js" }]
+        "hooks": [
+          {
+            "command": "node .claude/hooks/teammate-quality.js",
+            "type": "command"
+          }
+        ]
       }
     ]
   },
+  "model": "opusplan",
+  "ordering": "auto",
   "permissions": {
-    "deny": [
-      "Bash(git push:*)",
-      "Bash(git branch -D:*)",
-      "Bash(git branch -d:*)",
-      "Bash(git tag -d:*)",
-      "Bash(git remote:*)",
-      "Bash(git clean:*)",
-      "Bash(git restore:*)"
-    ],
     "allow": [
       "WebSearch",
       "Bash(curl:*)",
@@ -209,6 +235,20 @@
       "WebFetch(domain:app.codecov.io)",
       "Skill(sync)",
       "Skill(calibrate)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git branch -d:*)",
+      "Bash(git tag -d:*)",
+      "Bash(git remote:*)",
+      "Bash(git clean:*)",
+      "Bash(git restore:*)"
     ]
-  }
+  },
+  "statusLine": {
+    "command": "node .claude/hooks/statusline.js",
+    "type": "command"
+  },
+  "teammateMode": "in-process"
 }

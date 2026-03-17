@@ -132,8 +132,19 @@ process.stdin.on("end", () => {
           fs.writeFileSync(path.join(stateDir, "session-context.md"), lines.join("\n") + "\n");
         } catch (_) {}
       }
-    } else if (hook_event_name === "Stop" || hook_event_name === "SessionEnd") {
-      // Session finished — clear all per-agent and per-tool files so the status line resets cleanly
+    } else if (hook_event_name === "Stop") {
+      // End of turn — clear tool activity only (tools are per-turn; agents persist across turns
+      // while subagents are running and must NOT be wiped here or they disappear from statusline)
+      try {
+        const files = fs.readdirSync(toolsDir);
+        for (const f of files) {
+          try {
+            fs.unlinkSync(path.join(toolsDir, f));
+          } catch (_) {}
+        }
+      } catch (_) {}
+    } else if (hook_event_name === "SessionEnd") {
+      // Full session teardown — clear both agents and tools
       for (const dir of [agentsDir, toolsDir]) {
         try {
           const files = fs.readdirSync(dir);
