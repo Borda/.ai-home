@@ -2,6 +2,7 @@
 name: review
 description: Multi-agent code review covering architecture, tests, performance, docs, lint, security, and Application Programming Interface (API) design.
 argument-hint: '[file, directory, or PR number] [--reply]'
+disable-model-invocation: true
 allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 context: fork
 ---

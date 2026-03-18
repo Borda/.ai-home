@@ -209,7 +209,7 @@ If the Agent tool is unavailable (nested subagent context), implement the change
 
 #### Phase 3 — Verify files changed
 
-`git diff --stat`. If no files changed (no-op): append to JSONL with `status: no-op`, skip to Phase 7 (log), continue loop.
+`git diff --stat`. If no files changed (no-op): append to JSONL with `status: no-op`, skip to Phase 8 (log), continue loop.
 
 #### Phase 4 — Commit
 
@@ -237,11 +237,11 @@ For `--colab`: route through `mcp__colab-mcp__runtime_execute_code` instead of l
 
 If timeout expires: append `status: timeout`, revert via `git revert HEAD --no-edit`, continue loop.
 
-#### Phase 5b — Guard
+#### Phase 6 — Guard
 
 Run `guard_cmd` (exit-code check only). Record pass or fail.
 
-#### Phase 6 — Decide
+#### Phase 7 — Decide
 
 | Condition                                             | Action                                                                                                           |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -252,7 +252,7 @@ Run `guard_cmd` (exit-code check only). Record pass or fail.
 
 `git revert HEAD --no-edit` — never `git reset --hard` (preserves history, not in deny list).
 
-#### Phase 7 — Log
+#### Phase 8 — Log
 
 Append one JSONL record to `experiments.jsonl`:
 
@@ -274,7 +274,7 @@ Append one JSONL record to `experiments.jsonl`:
 
 Update `state.json`: `iteration = i`, `status = running`.
 
-#### Phase 8 — Progress checks
+#### Phase 9 — Progress checks
 
 - **Summary every SUMMARY_INTERVAL iterations**: print compact table (iteration, metric, delta, status) for the last N iterations.
 - **Stuck detection**: if last `STUCK_THRESHOLD` entries all have `status: reverted|no-op|hook-blocked`, trigger escalation (see `<constants>`). Log escalation action.

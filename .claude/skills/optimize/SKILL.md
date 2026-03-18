@@ -22,7 +22,7 @@ Orchestrate a performance investigation using the perf-optimizer agent. This ski
 
 **Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase. Mark in_progress/completed throughout. On loop retry or scope change, create a new task.
 
-**Scope heuristic**: Single file or function → use this default workflow. Directory or system-wide scope → consider team mode: spawn 2 **perf-optimizer** teammates each profiling different subsystems, then converge findings in the Step 4 report. Each teammate follows the same baseline → bottleneck → profile loop independently and uses AgentSpeak v2 (see `.claude/TEAM_PROTOCOL.md`) for coordination.
+**Scope heuristic**: Single file or function → use this default workflow. Directory or system-wide scope → consider team mode: spawn 2 **perf-optimizer** teammates each profiling different subsystems, then converge findings in the Step 5 report. Each teammate follows the same baseline → bottleneck → profile loop independently and uses AgentSpeak v2 (see `.claude/TEAM_PROTOCOL.md`) for coordination.
 
 ## Step 1: Establish baseline
 
@@ -70,7 +70,7 @@ time python "$ARGUMENTS"
 
 **Accept** if improvement > 10% (adjust threshold for your workload — GPU benchmarks may need 20%+ to clear noise; hot-path latency may justify 2%). **Revert** if not measurable or < noise floor.
 
-**Safety break**: max 3 optimization-verification cycles. After 3 perf-optimizer changes, proceed to Step 4 (report). Ask the user whether to run another round.
+**Safety break**: max 3 optimization-verification cycles. After 3 perf-optimizer changes, proceed to Step 5 (report). Ask the user whether to run another round.
 
 ## Step 5: Report
 
@@ -91,7 +91,7 @@ time python "$ARGUMENTS"
 - [next bottleneck to address]
 ```
 
-## Step 5: Delegate follow-up (optional)
+## Step 6: Delegate follow-up (optional)
 
 After confirming improvements, inspect the applied changes (`git diff HEAD --stat`) and identify tasks Codex can complete from the categories below.
 

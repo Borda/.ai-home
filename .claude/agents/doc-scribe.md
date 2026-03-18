@@ -184,7 +184,7 @@ When the task prompt explicitly restricts the audit category (e.g. "identify mis
 ## Docstring Audit
 
 - Every public function/class/module has a docstring
-- Parameters, Returns/Raises documented with types (NumPy) or inline (Google)
+- Parameters, Returns/Raises documented with types and descriptions (Google style)
 - At least one `Examples` section per public function
 - Raises are documented if the function raises user-visible exceptions
 - Deprecated APIs have `.. deprecated::` directive with version and replacement

@@ -119,7 +119,7 @@ Write the full report to `tasks/output-analyse-issue-$ARGUMENTS-$(date +%Y-%m-%d
 
 Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **Issue Summary** template. Replace `[skill-specific path]` with `tasks/output-analyse-issue-$ARGUMENTS-$(date +%Y-%m-%d).md`.
 
-**STOP CHECK — `REPLY_MODE=true`**: your response is **incomplete** until you have executed "Draft contributor reply" below and written the reply file. Do not add a Confidence block or end your response here.
+**⛔ DO NOT STOP — `REPLY_MODE=true`**: Skip the Confidence block entirely. Proceed **immediately** to the "Draft contributor reply" section. Your response is not complete until you have spawned oss-maintainer and written the reply file.
 
 ## Mode: PR Analysis
 
@@ -184,7 +184,7 @@ Write the full report to `tasks/output-analyse-pr-$ARGUMENTS-$(date +%Y-%m-%d).m
 
 Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **PR Summary** template. Replace `[entity-line]` with `PR #$ARGUMENTS — [title]` and replace `[skill-specific path]` with `tasks/output-analyse-pr-$ARGUMENTS-$(date +%Y-%m-%d).md`.
 
-**STOP CHECK — `REPLY_MODE=true`**: your response is **incomplete** until you have executed "Draft contributor reply" below and written the reply file. Do not add a Confidence block or end your response here.
+**⛔ DO NOT STOP — `REPLY_MODE=true`**: Skip the Confidence block entirely. Proceed **immediately** to the "Draft contributor reply" section. Your response is not complete until you have spawned oss-maintainer and written the reply file.
 
 ## Mode: Discussion Analysis
 
@@ -256,7 +256,7 @@ Write the full report to `tasks/output-analyse-discussion-$DISC_NUM-$(date +%Y-%
 
 Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **Discussion Summary** template. Replace `[skill-specific path]` with `tasks/output-analyse-discussion-$DISC_NUM-$(date +%Y-%m-%d).md`.
 
-**STOP CHECK — `REPLY_MODE=true`**: your response is **incomplete** until you have executed "Draft contributor reply" below and written the reply file. Do not add a Confidence block or end your response here.
+**⛔ DO NOT STOP — `REPLY_MODE=true`**: Skip the Confidence block entirely. Proceed **immediately** to the "Draft contributor reply" section. Your response is not complete until you have spawned oss-maintainer and written the reply file.
 
 ## Mode: Repo Health Overview
 
@@ -444,7 +444,7 @@ Decision:
 - The report file path
 - The item number and contributor handle (from the analysis data)
 - **For PR mode** — prompt: "Read the report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block: (1) overall PR comment in GitHub Markdown (full MD: headers, bullets, code blocks, `> blockquotes`, links) — `@handle` open, scope line, one prose paragraph per blocking/high issue; items also in the inline table get one clause only, not a full paragraph; nit/low items as a single 'Minor:' line only; decisive close; (2) inline comments table with columns `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; ordered high → medium → low, then most confident first within each tier; nit/low items omitted from the table entirely. Use all blocking and high findings. No column-width line-wrapping in prose."
-- **For issue/discussion mode** — prompt: "Read the report at `<path>`. Draft a contributor-facing reply: open with what's confirmed or asked, state clearly what you need from them or what the next step is, and close decisively. Warm and direct — one short comment, no inline table needed."
+- **For issue/discussion mode** — prompt: "Read the report at `<path>` for context, then fetch the full thread (`gh issue view <number> --comments` or equivalent GraphQL for discussions) and read every comment. Write your reply as a participant who has followed this thread from the start — not as an outsider summarising it. Rules: (1) If someone in the thread already gave the correct answer, credit them by @handle and build on what they said; do not re-explain what they already covered clearly — add only what is genuinely missing. (2) If a newer version fixes the issue, that is the resolution — state it directly and do not list workarounds alongside it; workarounds only belong in a reply when no fix exists. (3) Be constructive: acknowledge the reporter's situation and validate what is correct in their understanding. (4) Be resolute: if the issue is resolved, explained, or a duplicate, say so plainly and close it — do not hedge or leave it open-ended. (5) One short comment in plain GitHub Markdown; no inline table."
 
 Write oss-maintainer's output to `tasks/output-reply-<type>-<number>-$(date +%Y-%m-%d).md` — **do not print the full content to terminal**.
 
@@ -458,7 +458,7 @@ Print compact terminal summary:
   Reply:  tasks/output-reply-<type>-<number>-<date>.md
 ```
 
-End your response with a `## Confidence` block per CLAUDE.md output standards — this is always the very last thing, whether or not `--reply` was used.
+End your response with a `## Confidence` block per CLAUDE.md output standards — this is always the **absolute last thing**. If `REPLY_MODE=true`, place this block **after** completing the reply step above, never after the analysis alone.
 
 </workflow>
 

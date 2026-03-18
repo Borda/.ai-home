@@ -86,7 +86,7 @@ mypy src/ --strict
 > **Alternative type checkers**:
 >
 > - [basedpyright](https://github.com/DetachHead/basedpyright) # verify at use time: fork of Pyright with stricter rules and better VS Code integration. `pip install basedpyright && basedpyright src/`.
-> - [pyrefly](https://github.com/facebook/pyrefly) # verify at use time: Meta's type checker (Rust-based, fast). Early-stage (active development, known issues as of 2026) — evaluate cautiously; not recommended for CI until stable.
+> - [pyrefly](https://github.com/facebook/pyrefly) # verify at use time: Meta's type checker (Rust-based, fast). Early-stage (active development, known issues) — evaluate cautiously; not recommended for CI until stable.
 
 ## Rule Selection Rationale
 

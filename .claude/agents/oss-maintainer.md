@@ -1,7 +1,7 @@
 ---
 name: oss-maintainer
 description: OSS project maintainer and developer advocate for Python libraries. Owns all public-facing communication — issue triage, PR review, contributor replies, release notes, and changelogs. Use for evaluating issues/PRs, managing deprecations, preparing PyPI releases, and any output meant to be read by users or contributors.
-tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate
+tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: opusplan
 memory: project
 color: orange

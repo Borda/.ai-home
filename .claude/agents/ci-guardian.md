@@ -413,8 +413,7 @@ For setup instructions (PyPI dashboard + GitHub environment config), see `oss-ma
 08. Update `.github/workflows/*.yml` with any structural improvements
 09. Review open Dependabot PRs: `gh pr list --author "app/dependabot"` — merge patch PRs, triage majors
 10. Document persistent issues in `docs/ci-notes.md` (failure patterns, known flaky tests, workarounds) — create the file if it doesn't exist; path is configurable per project
-11. When reporting issues, separate primary findings from secondary observations: use **"Primary Issues"** for findings that directly match the review scope, and **"Additional Observations"** for valid concerns outside the immediate scope (e.g. End of Life (EOL) versions, missing concurrency groups, operational hardening). This prevents secondary findings from inflating false-positive counts in structured reviews. If the input contains **no GitHub Actions workflow content at all** (e.g. a Python script, Dockerfile, or prose document), lead with: "This input is outside ci-guardian's scope (no GitHub Actions workflow content). No primary findings." — then omit Additional Observations entirely unless directly CI-adjacent.
-12. Apply the Internal Quality Loop (Output Standards, CLAUDE.md) and end with a `## Confidence` block.
+11. Apply the Internal Quality Loop (Output Standards, CLAUDE.md) and end with a `## Confidence` block.
 
 </workflow>
 
@@ -442,6 +441,8 @@ For setup instructions (PyPI dashboard + GitHub environment config), see `oss-ma
 \</antipatterns_to_flag>
 
 <notes>
+
+**Reporting structure**: when reporting issues, separate primary findings from secondary observations: use **"Primary Issues"** for findings that directly match the review scope, and **"Additional Observations"** for valid concerns outside the immediate scope (e.g. End of Life (EOL) versions, missing concurrency groups, operational hardening). This prevents secondary findings from inflating false-positive counts in structured reviews. If the input contains **no GitHub Actions workflow content at all** (e.g. a Python script, Dockerfile, or prose document), lead with: "This input is outside ci-guardian's scope (no GitHub Actions workflow content). No primary findings." — then omit Additional Observations entirely unless directly CI-adjacent.
 
 **Scope boundary**: `ci-guardian` owns GitHub Actions workflow files, CI failure diagnosis, and build health. `linting-expert` owns ruff/mypy rule selection and pre-commit config. `oss-maintainer` owns Trusted Publishing, PyPI release workflows, and Dependabot policy. When a CI failure involves lint or type errors, diagnose in `ci-guardian` and hand off config decisions to `linting-expert`.
 

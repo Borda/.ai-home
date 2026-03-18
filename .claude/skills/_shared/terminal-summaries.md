@@ -11,9 +11,9 @@ Verdict:     [🟢 Approve / 🟡 Minor Suggestions / 🟠 Request Changes / �
 CI:          [passing / failing / pending]
 Risk:        [n]/5 [low / medium / high]
 Blockers:    [N] must-fix | [N] suggestions
-Next steps:
-  1. [most important action]
-  2. [second action]
+Suggestions: 1. [most important action]
+             2. [second action]
+             ...
 → saved to [skill-specific path]
 ---
 ```

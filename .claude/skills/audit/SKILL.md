@@ -3,7 +3,7 @@ name: audit
 description: Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness, and upgrade proposals. Reports by severity; auto-fixes at the requested level — 'fix high' (critical+high), 'fix medium' (critical+high+medium), 'fix all' (all findings including low); 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes.
 argument-hint: '[agents|skills] [fix [high|medium|all]] | upgrade'
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, WebFetch, WebSearch
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, WebFetch
 ---
 
 <objective>
@@ -93,13 +93,27 @@ Record the full file list — this becomes the audit scope for Steps 3–4. Cros
 
 ## Step 3: Per-file audit via self-mentor
 
-Spawn one **self-mentor** agent per file (or batch into groups of up to 10 for efficiency). Each invocation prompt must end with:
+**Context management** — with 12+ agents and 14+ skills, accumulating full self-mentor responses in context causes overflow before aggregation. Use file-based findings to keep the main context lean.
 
-> "End your response with a `## Confidence` block per CLAUDE.md output standards."
+Set up the run directory once before spawning any agents:
 
-Read the self-mentor prompt template from .claude/skills/audit/templates/self-mentor-prompt.md and include its content in each self-mentor invocation prompt.
+```bash
+RUN_DIR="/tmp/audit-$(date +%s)"
+mkdir -p "$RUN_DIR"
+echo "Run dir: $RUN_DIR"
+```
 
-Collect all findings from each self-mentor response into a structured list keyed by file path.
+Spawn one **self-mentor** agent per file (or batch into groups of up to 10 for efficiency). The spawn prompt for each agent must:
+
+1. Include the content from `.claude/skills/audit/templates/self-mentor-prompt.md`
+2. Include the disk inventory from Step 2 (agent/skill list for cross-reference validation)
+3. End with:
+
+> "Write your FULL findings (all severity levels, Confidence block) to `<RUN_DIR>/<file-basename>.md` using the Write tool — where `<file-basename>` is the filename only (e.g. `oss-maintainer.md`, `audit-SKILL.md`). Then return to the caller ONLY a one-line summary: `<filename>: N critical, N high, N medium, N low [confidence 0.N]` — nothing else in your response."
+
+Replace `<RUN_DIR>` with the actual directory path and `<file-basename>` with just the filename.
+
+After all spawns complete, you will have a list of short summaries in context. Use these to identify which files have findings. The full content is in the run directory files.
 
 ## Step 4: System-wide checks
 
@@ -402,15 +416,15 @@ MEMORY.md has a 200-line truncation limit. Noise accumulates silently over time 
 
 ```bash
 # Find lines with semver pins or "as of" staleness markers in MEMORY.md
-MEMORY_FILE=$(find . -path "*/memory/MEMORY.md" | head -1)
-[ -n "$MEMORY_FILE" ] && grep -nE '(v[0-9]+\.[0-9]+\.[0-9]+|as of [A-Z][a-z]+ 20[0-9]{2})' "$MEMORY_FILE" || true
+MEMORY_FILE="$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|/|-|g')/memory/MEMORY.md"
+[ -f "$MEMORY_FILE" ] && grep -nE '(v[0-9]+\.[0-9]+\.[0-9]+|as of [A-Z][a-z]+ 20[0-9]{2})' "$MEMORY_FILE" || true
 ```
 
 **11c — Absorbed feedback files**: List all `feedback_*.md` files in the memory directory. For each, read its content and check whether the rule it documents is already present in MEMORY.md or in the relevant agent/skill file. If yes, flag as **low** (delete the feedback file — the lesson is absorbed).
 
 ```bash
-MEMORY_DIR=$(find . -path "*/memory" -type d | head -1)
-[ -n "$MEMORY_DIR" ] && ls "$MEMORY_DIR"/feedback_*.md 2>/dev/null || true
+MEMORY_DIR="$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|/|-|g')/memory"
+[ -d "$MEMORY_DIR" ] && ls "$MEMORY_DIR"/feedback_*.md 2>/dev/null || true
 ```
 
 All three sub-checks produce only **low** findings — auto-fixed under `/audit fix all`; reported only under `/audit fix` or lower. Fix action: remove the duplicate section, drop the version pin (keep the surrounding rule), delete the absorbed feedback file.
@@ -419,7 +433,9 @@ All three sub-checks produce only **low** findings — auto-fixed under `/audit 
 
 **Antipatterns that indicate severity under-classification**: see antipatterns section in `.claude/skills/audit/severity-table.md`.
 
-Group all findings from Steps 1–4 into a severity table. Read the severity classification table from `.claude/skills/audit/severity-table.md`.
+Read findings files from the run directory set in Step 3 — for each file that had any findings (based on the one-line summaries), use the Read tool on `<RUN_DIR>/<file-basename>.md`. Files with `0 critical, 0 high, 0 medium, 0 low` in their summary can be skipped.
+
+Group all findings from the Step 3 files and from Steps 1–4 (system-wide checks) into a severity table. Read the severity classification table from `.claude/skills/audit/severity-table.md`.
 
 **One finding per issue, not per field**: when a single field or location has multiple distinct problems at *different* severities, emit one finding entry per problem — never merge them into a single finding at the lower severity. Example: a `model:` field with both a deprecated ID (medium) and a tier mismatch (high) must produce two separate table rows, each with its own severity. The higher-severity concern must be visible in the findings table, not buried in prose.
 
@@ -473,7 +489,12 @@ If no fix level was passed, stop here and present the report.
 
 ## Step 8: Delegate fixes to subagents
 
-Spawn one **sw-engineer** subagent per affected file, batching all findings for that file into a single subagent prompt. Issue **all spawns in a single response** for parallelism.
+Choose the fix agent based on file type:
+
+- **`.claude/agents/*.md` and `.claude/skills/*/SKILL.md`** → spawn **self-mentor** — it has domain expertise in config quality and has `Write`/`Edit` tools
+- **Code files** (`.py`, `.js`, `.ts`, etc.) → spawn **sw-engineer**
+
+Spawn one agent per affected file, batching all findings for that file into a single subagent prompt. Issue **all spawns in a single response** for parallelism.
 
 Each subagent prompt template: Read the fix prompt template from .claude/skills/audit/templates/fix-prompt.md and use it, filling in `<file path>` and the list of findings.
 
@@ -498,17 +519,14 @@ Treat any findings as additional issues entering Step 9's re-audit scope. Skip i
 
 ## Step 9: Re-audit modified files + confidence check
 
-For every file changed in Step 8, spawn **self-mentor** again to confirm:
-
-- The fix resolved the finding
-- No new issues were introduced by the edit
+For every file changed in Step 8, spawn **self-mentor** again to confirm the fix resolved the finding and no new issues were introduced. Use the same file-based approach as Step 3 — write full re-audit findings to `<RUN_DIR>/<file-basename>-reaudit.md` and return only a one-line summary.
 
 ```bash
 # Spot-check: confirm the previously broken reference no longer appears
 grep -n "<broken-name>" <fixed-file>
 ```
 
-**Confidence re-run**: after collecting all self-mentor responses from Steps 3 and 9, parse each confidence score. For any file where **Score < 0.7**:
+**Confidence re-run**: parse each confidence score from the one-line summaries (Step 3) and re-audit summaries (Step 9). For any file where **Score < 0.7**:
 
 1. Re-spawn self-mentor on that file with the specific gap from the `Gaps:` field addressed in the prompt (e.g., "pay special attention to async error paths — previous pass flagged this as a gap")
 2. If confidence is still < 0.7 after one retry: flag to user with ⚠ and include the gap in the final report — do not silently drop it
@@ -670,7 +688,7 @@ Run `/sync apply` automatically after all proposals are processed.
 - **Max 2 re-audit cycles**: if fixes don't converge after 2 loops, surface the remaining issues to the user rather than spinning
 - **Relationship to self-mentor**: `self-mentor` is a single-file reactive audit; `/audit` is the system-wide sweep that runs self-mentor at scale and adds cross-file checks
 - `general-purpose` is a Claude Code built-in agent type (no `.claude/agents/general-purpose.md` file needed) — it provides a baseline Claude instance with access to all tools but no custom system prompt.
-- **Paths must be portable**: `.claude/` for project-relative paths, `~/` or `$HOME/` for home paths — never `/Users/<name>/` or `/home/<name>/`; this rule applies to ALL config files including `settings.json`
+- **Paths must be portable**: `.claude/` for project-relative paths, `~/` or `$HOME/` for home paths — never a literal `/Users/` or `/home/` path; this rule applies to ALL config files including `settings.json`
 - Pre-flight for `/sync` — run clean before `/sync apply`.
 - **Bash error logging**: if a bash block in Pre-flight checks or Step 4 fails unexpectedly, append a JSONL line to `.claude/logs/audit-errors.jsonl` (`{"ts":"<ISO>","check":"<N>","error":"<message>"}`) for post-mortem — do not swallow errors silently.
 - **Execution order tip**: Steps 1–2 and Step 4 bash checks are fast (seconds); Step 3 (self-mentor spawns) is expensive (seconds per file). For early signal on system-wide issues, run Steps 1–2 + Step 4 first, then spawn Step 3 agents in parallel with any Step 4 analysis that doesn't depend on per-file results.

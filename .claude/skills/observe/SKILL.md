@@ -1,7 +1,7 @@
 ---
 name: observe
 description: Analyzes ongoing work patterns and the existing agent/skill roster to suggest creating new agents or skills for specialized or repetitive tasks. Continuously monitors what tasks are being done repeatedly or where specialist knowledge would help. Avoids recommending duplicates.
-argument-hint: '[review | "<recurring task description>"]'
+argument-hint: '[review | prune | "<recurring task description>"]'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -14,9 +14,10 @@ Analyze how Claude Code is being used in this project and suggest new agents or 
 
 <inputs>
 
-- **$ARGUMENTS**: optional. Three modes:
+- **$ARGUMENTS**: optional. Four modes:
   - Omitted — analyze the project's existing patterns and agents to generate suggestions proactively.
   - `review` — review the existing agent/skill roster for quality and gaps without suggesting new additions.
+  - `prune` — evaluate the project memory file for stale, redundant, or verbose entries and apply a trimmed version.
   - Description of a recurring task — use the description as context when generating suggestions (e.g. "I keep doing X manually").
 
 </inputs>
@@ -30,6 +31,8 @@ Use the Glob tool to enumerate agents (pattern `agents/*.md`, path `.claude/`) a
 For each agent/skill found, extract: name, description, tools, purpose.
 
 ## Step 2: Analyze work patterns
+
+**If `$ARGUMENTS` is `prune`**: skip Steps 2–5 entirely and go to "Mode: Memory Pruning" below.
 
 **If `$ARGUMENTS` is `review`**: skip the git analysis below and go directly to Step 3 (Gap analysis). Use the agent/skill descriptions from Step 1 as the sole input — the goal is to assess quality and coverage of the existing roster, not to look for new patterns in recent work. In Step 5, suppress all "Recommend: New Agent/Skill" sections and output only "Existing Coverage", "Recommend: Enhance Existing", and "No Action Needed" entries.
 
@@ -123,6 +126,40 @@ Anti-pattern checklist — reject the candidate if any apply:
 **Gaps**: [e.g., git history too shallow, task files not present, descriptions too generic to compare]
 **Refinements**: N passes. [Pass 1: <what improved>. Pass 2: <what improved>.] — omit if 0 passes
 ```
+
+## Mode: Memory Pruning (prune)
+
+Locate, evaluate, and trim the project memory file.
+
+**Find the memory file:**
+
+```bash
+PROJECT="$(git rev-parse --show-toplevel)"
+MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|/|-|g')/memory/MEMORY.md"
+echo "$MEMORY_FILE"
+```
+
+Read the memory file with the Read tool. Also read `.claude/CLAUDE.md` to identify overlap — anything already covered in CLAUDE.md does not need to live in memory.
+
+**Evaluate each section against these criteria:**
+
+- **Drop**: content that is no longer accurate (removed features, resolved one-time issues, superseded decisions), or fully duplicated in CLAUDE.md
+- **Trim**: sections still accurate but containing implementation history or rationale no longer needed day-to-day — keep operational facts (what/where), drop the why-it-was-built backstory
+- **Keep**: rules actively applied every session; project-specific facts absent from CLAUDE.md; anything the model needs to act correctly
+
+Apply changes with the Edit tool — targeted replacements for trimmed sections, full section removal for dropped ones.
+
+Print a compact summary:
+
+```
+Pruned MEMORY.md — <date>
+  Dropped: N sections — [names]
+  Trimmed: N sections — [names]
+  Kept:    N sections unchanged
+  Saved:   ~N lines
+```
+
+End your response with a `## Confidence` block per CLAUDE.md output standards.
 
 </workflow>
 
