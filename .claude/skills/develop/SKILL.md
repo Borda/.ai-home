@@ -108,6 +108,7 @@ Read `.claude/skills/_shared/codex-prepass.md` and apply it to the current diff:
    ```bash
    codex exec "Review the staged diff (git diff HEAD). Flag bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns. Apply minimal targeted fixes — do not make architectural changes. Skip cosmetic nits." --sandbox workspace-write
    ```
+   > **Sandbox note**: `--sandbox workspace-write` allows Codex to write source files in the workdir and `/tmp`, but blocks `.git/` paths (e.g. `.git/index.lock`) — so Codex can fix files but cannot stage or commit them; use `git diff HEAD` to capture what it changed.
 4. **Validate**: if Codex made changes, re-run the quality stack on affected files only:
    ```bash
    CODEX_CHANGED=$(git diff HEAD --name-only | grep '\.py$' | tr '\n' ' ')
@@ -116,6 +117,7 @@ Read `.claude/skills/_shared/codex-prepass.md` and apply it to the current diff:
    - Tests pass → accept Codex corrections
    - Tests fail → revert Codex changes (`git restore .`) and note in final report
 5. **Collect findings**: build `CODEX_FINDINGS` — a bullet list of every applied fix and every flagged-but-not-fixed issue. If nothing was found or the step was skipped, set `CODEX_FINDINGS=""`.
+6. **Co-authorship rule**: add `Co-Authored-By: OpenAI Codex <codex@openai.com>` to the commit when Codex made an intellectual contribution — correctly identifying a bug or issue and producing the right fix — regardless of whether its bytes landed in the file directly or were applied by Claude. The bar is the reasoning and the patch content, not file I/O mechanics. Do NOT add it when Codex found no issues or was skipped.
 
 Include a `### Codex Pre-pass` section in the final report:
 

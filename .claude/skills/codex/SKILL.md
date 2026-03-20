@@ -157,10 +157,20 @@ The `--sandbox workspace-write` flag allows Codex to read and write files in the
 
 ## Step 4: Monitor and handle responses
 
-Evaluate the Codex exit code and output:
+**First: check actual git state — do not rely on Codex's claimed outcome alone.**
 
-- **Success with changes**: Codex reports edits made → proceed to Step 5
-- **Success, no changes needed**: Codex reports task was already done → report and stop
+```bash
+DIFF_STAT=$(git diff HEAD --stat)
+DIFF_CONTENT=$(git diff HEAD)
+```
+
+Route based on this ground truth:
+
+- **`$DIFF_CONTENT` is non-empty**: Codex wrote changes to the working tree → proceed to Step 5
+- **`$DIFF_CONTENT` is empty AND Codex output says "no changes needed" / task was already done**: report and stop (legitimate no-op)
+- **`$DIFF_CONTENT` is empty AND Codex output claims changes were made**: this is a contradiction — Codex printed a patch or described changes but nothing reached the filesystem. Stop and report explicitly:
+  > `! Codex claimed changes but git diff HEAD is empty — no files were modified. Sandbox may have blocked writes. Do not stage anything. Rerun interactively with codex "<task>" to diagnose.`
+- **Codex output contains "permission denied", "Operation not permitted", "cannot write", or "sandbox denied"** alongside a claim that changes ARE in the working tree: treat this as a contradiction requiring manual verification — pause and surface the contradiction to the user before proceeding
 - **Partial completion**: Codex stopped partway (token limit, ambiguity) → resume the session with a clarifying follow-up (max 2 additional attempts):
   ```bash
   codex exec resume --last "<specific clarification or continuation instruction>" --sandbox workspace-write  # verify 'resume --last' flag: codex exec --help
@@ -172,10 +182,10 @@ Evaluate the Codex exit code and output:
 
 ## Step 5: Validate and capture
 
-Validate first while Codex's changes are still in the working tree:
+`git diff HEAD` already ran in Step 4 — use it. Proceed with lint and tests against the same live working tree:
 
 ```bash
-git diff HEAD --stat        # what Codex changed
+echo "$DIFF_STAT"           # already captured in Step 4 — print for the log
 uv run ruff check <changed_files>
 uv run mypy <changed_files> --no-error-summary 2>&1 | head -20
 python -m pytest <test_dir> -v --tb=short -q 2>&1 | tail -20

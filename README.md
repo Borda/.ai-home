@@ -160,6 +160,12 @@ Skills are orchestrations of agents — invoked via slash commands (`/review`, `
 
 - **`/develop` — Unified development orchestrator**
 
+  Each mode enforces a validation gate *before* writing implementation code:
+
+  - `feature` — TDD demo validation before writing code; catches scope creep early
+  - `fix` — reproduction test before touching anything; prevents fixes that don't actually fix
+  - `refactor` — coverage audit before changing structure; prevents regressions
+
   ```bash
   # TDD-first feature development
   /develop feature 87
