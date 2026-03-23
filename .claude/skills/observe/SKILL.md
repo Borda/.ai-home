@@ -133,6 +133,8 @@ Locate, evaluate, and trim the project memory file.
 
 **Find the memory file:**
 
+<!-- Note: this slug derivation is also used in audit/SKILL.md Check 11. If the auto-memory path convention changes, update both files. -->
+
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
 MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|/|-|g')/memory/MEMORY.md"

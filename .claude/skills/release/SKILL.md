@@ -147,7 +147,7 @@ After applying the guidelines above to polish the output, write to disk per mode
 **Purpose**: Full release preparation pipeline — audit readiness first, then generate and write all artifacts. Use this when cutting a release; use individual modes (`notes`, `changelog`, `summary`) for drafting.
 
 ```bash
-VERSION=$(echo "$ARGUMENTS" | awk '{print $2}')
+VERSION="${REST%% *}"
 [[ "$VERSION" != v* ]] && VERSION="v$VERSION"
 DATE=$(date +%Y-%m-%d)
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)

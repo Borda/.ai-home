@@ -22,6 +22,8 @@ This skill is NOT for doing research or designing experiments — use the `ai-re
 
 <workflow>
 
+**Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase — paper collection, ai-researcher analysis, and report generation. Mark in_progress/completed throughout.
+
 ## Step 1: Understand the codebase context
 
 Before searching, read the current project to extract constraints:
@@ -130,7 +132,7 @@ When to trigger: 3+ distinct method families exist for the topic AND the field h
 1. Lead completes Step 1 (codebase context) as normal
 2. Spawn 2–3 **ai-researcher** teammates, each assigned a distinct method cluster
 3. Broadcast constraints to all: `broadcast {topic: <topic>, constraints: <framework/compute/dataset from Step 1>}`
-4. Each teammate researches independently, reports with `deltaT# HOOK:verify` and a compressed comparison table
+4. Each teammate researches independently, reports with `deltaT# HOOK:verify` (AgentSpeak v2 completion signal — see TEAM_PROTOCOL.md) and a compressed comparison table
 5. Lead routes key findings from one researcher to others for cross-challenge: `@AR2: AR1 found [finding] — does it hold under [condition]?`
 6. Lead synthesizes into the Step 3 report, noting where researchers agreed or diverged
 

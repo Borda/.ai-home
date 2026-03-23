@@ -10,6 +10,8 @@
 
 - Missing input validation on external HTTP input (not MEDIUM)
 - Non-atomic registry/store update: in-memory index + filesystem op without temp-then-rename pattern. Look for: `save_index()` + `shutil.copytree()`, `delete from dict` + `os.remove()`, or any two-phase commit without temp-then-rename
+- PR linked to issue but code changes don't address the identified root cause — root cause misalignment
+- PR description diverges from linked issue's stated problem — scope divergence (solving something different than reported)
 
 ## Consolidation Rules
 

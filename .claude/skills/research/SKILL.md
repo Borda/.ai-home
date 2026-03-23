@@ -54,7 +54,7 @@ STATE_DIR:                  .claude/state/research/
 
 **Stuck escalation sequence** (at STUCK_THRESHOLD consecutive discards):
 
-1. Switch to a different agent type (rotate through: `code` → `ml` → `perf`)
+1. Switch to a different agent type (rotate through: `code` → `ml` → `perf` → `code`; if current is `ml`, next is `perf`; if current is `perf`, next is `code`)
 2. Spawn 2 agents in parallel with competing strategies; keep whichever improves metric
 3. Stop, report progress, surface to user — do not continue looping blindly
 
@@ -367,7 +367,8 @@ Ideation agent: <agent type>.
 Run 3–5 independent iterations of the Review→Ideate→Modify→Commit→Verify→Guard→Log loop.
 Baseline metric: <metric_cmd key> = <baseline>. Direction: <higher|lower>.
 Scope files: <scope_files>.
-Report: {axis, iterations_run, kept, best_metric, best_commit, description}
+Write your full iteration log (all runs, metrics, reasoning) to `$RUN_DIR/teammate-<axis>.md` using the Write tool before returning.
+Return ONLY a compact JSON envelope: {axis, iterations_run, kept, best_metric, best_commit, description}
 Call TaskUpdate(in_progress) when starting; TaskUpdate(completed) when done.
 ```
 

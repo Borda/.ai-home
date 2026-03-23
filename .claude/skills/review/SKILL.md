@@ -60,6 +60,20 @@ Use classification to skip optional agents:
 - REFACTOR scope → skip Agent 6 (solution-architect)
 - FEATURE/MIXED → spawn all agents
 
+### Linked issue analysis (PR mode only)
+
+Parse the PR body (from `gh pr view $ARGUMENTS`) for issue references (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract all referenced issue numbers into `ISSUE_NUMS` (list). Cap at 3 issues maximum.
+
+If `ISSUE_NUMS` is non-empty, spawn one **sw-engineer** agent per issue at the start of Step 2 (in parallel with Codex co-review — both are independent of each other). Each issue agent should:
+
+- Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
+- Fetch comments: `gh issue view <N> --comments`
+- Produce `/analyse`-style output: Summary, Root Cause Hypotheses table (top 3), Code Evidence for top hypothesis
+- Write full analysis to `$RUN_DIR/issue-<N>.md` (file-handoff protocol)
+- Return compact JSON envelope only: `{"status":"done","issue":N,"root_cause":"<one-line summary>","file":"$RUN_DIR/issue-<N>.md","confidence":0.N}`
+
+If `ISSUE_NUMS` is empty, skip all issue-related checks in downstream steps.
+
 ## Step 2: Codex co-review
 
 Set up the run directory (shared by Codex and all agent spawns in Step 3):
@@ -117,6 +131,8 @@ Flag rules:
 
 Read the review checklist: `cat .claude/skills/review/checklist.md` — apply CRITICAL/HIGH patterns as severity anchors. Respect the suppressions list.
 
+If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/issue-*.md`. Read them. Evaluate whether the code changes address the root cause identified in each linked issue — not just the symptom or the PR description. If the PR addresses only a symptom while the root cause remains unfixed, flag as `[blocking] HIGH — root cause misalignment`. If the PR description diverges from the issue's stated problem (solving something different than what was reported), flag as `HIGH — PR/issue scope divergence`.
+
 **Agent 2 — qa-specialist**: Audit test coverage. Identify untested code paths, missing edge cases, and test quality issues. Check for Machine Learning (ML)-specific issues (non-deterministic tests, missing seed pinning). List the top 5 tests that should be added. Also check explicitly for missing tests in these patterns (these are Ground Truth (GT)-level findings, not afterthoughts):
 
 - Concurrent access to shared state (when locks or shared variables are present)
@@ -126,6 +142,8 @@ Read the review checklist: `cat .claude/skills/review/checklist.md` — apply CR
 - Type-coercion boundary inputs: for functions that parse or convert strings to typed values (int(), float(), datetime), test with inputs that are near-valid (float strings for int parsers, empty strings, very large values, None) — these are common omissions.
 
 **Consolidation rule**: Report each test gap as one finding with a concise list of test scenarios, not as separate findings per scenario. Format: "Missing tests for `parse_numeric()`: empty string, None, very large integers, float-string for int parser." This keeps the test coverage section actionable and prevents the section from exceeding 5 items.
+
+If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/issue-*.md`. Read them. Check that tests cover the specific reproduction scenario described in the linked issue. If the issue includes a minimal reproduction or error trace that is not covered by new or existing tests, flag as `HIGH — issue reproduction not tested`.
 
 **Agent 3 — perf-optimizer**: Analyze code for performance issues. Look for algorithmic complexity issues, Python loops that should be NumPy/torch ops, repeated computation, unnecessary Input/Output (I/O). For ML code: check DataLoader config, mixed precision usage. Prioritize by impact.
 
@@ -184,7 +202,7 @@ Read and follow the cross-validation protocol from `.claude/skills/_shared/cross
 
 Spawn a **sw-engineer** consolidator agent with this prompt:
 
-> "Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Apply the consolidation rules from `.claude/skills/review/checklist.md` (signal-to-noise filter, annotation completeness, section caps). Apply the precision gate: only include findings with a concrete, actionable location (function, line range, or variable name). Apply the finding density rule: for modules under 100 lines, aim for ≤10 total findings. Rank findings within each section by impact (blocking > critical > high > medium > low). For `codex.md`: include its unique findings under a `### Codex Co-Review` section; deduplicate against agent findings (same file:line raised by both → keep the agent version, mark as 'also flagged by Codex'). Parse each agent's `confidence` from its envelope; assign `codex` a fixed confidence of 0.75 (moderate — static analysis, no runtime context). Write the consolidated report to `tasks/output-review-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=tasks/output-review-<date>.md`"
+> "Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Apply the consolidation rules from `.claude/skills/review/checklist.md` (signal-to-noise filter, annotation completeness, section caps). Apply the precision gate: only include findings with a concrete, actionable location (function, line range, or variable name). Apply the finding density rule: for modules under 100 lines, aim for ≤10 total findings. Rank findings within each section by impact (blocking > critical > high > medium > low). For `codex.md`: include its unique findings under a `### Codex Co-Review` section; deduplicate against agent findings (same file:line raised by both → keep the agent version, mark as 'also flagged by Codex'). If `issue-*.md` files exist in `$RUN_DIR`, include a `### Issue Root Cause Alignment` section placed immediately after `### [blocking] Critical`. For each linked issue: state the root cause hypothesis, whether the PR addresses it (yes / partially / no), whether the PR description diverges from the issue's stated problem, and whether the reproduction scenario is tested. Any `root cause misalignment` or `scope divergence` finding is at least HIGH severity. Parse each agent's `confidence` from its envelope; assign `codex` a fixed confidence of 0.75 (moderate — static analysis, no runtime context). Write the consolidated report to `tasks/output-review-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=tasks/output-review-<date>.md`"
 
 Main context receives only the one-liner verdict. Proceed with that summary for terminal output.
 
@@ -194,6 +212,13 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 ### [blocking] Critical (must fix before merge)
 - [bugs, security issues, data corruption risks]
 - Severity: CRITICAL / HIGH
+
+### Issue Root Cause Alignment
+(omit if no linked issues)
+- Issue #N: [title] — [root cause hypothesis from analysis]
+- Root cause addressed: [yes / partially / no — explanation]
+- PR/issue scope alignment: [aligned / diverged — what differs]
+- Reproduction tested: [yes / no — what's missing]
 
 ### Architecture & Quality
 - [sw-engineer findings]

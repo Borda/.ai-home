@@ -122,6 +122,8 @@ Spawn one **self-mentor** agent per file (or batch into groups of up to 10 for e
 
 Replace `<RUN_DIR>` with the actual directory path and `<file-basename>` with just the filename.
 
+> The template file is canonical for the per-file audit criteria. The disk inventory and RUN_DIR path injected here are runtime values added to each agent spawn.
+
 After all spawns complete, you will have a list of short summaries in context. Use these to identify which files have findings. The full content is in the run directory files.
 
 ## Step 4: System-wide checks

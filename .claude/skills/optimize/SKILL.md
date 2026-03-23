@@ -53,6 +53,8 @@ Task the `perf-optimizer` agent with:
 6. Write your full analysis (bottleneck identification, optimization reasoning, Confidence block) to `tasks/optimize-analysis-$(date +%Y-%m-%d).md` using the Write tool
 7. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{"status":"done","bottleneck":"<description>","files_modified":[],"confidence":0.N,"file":"tasks/optimize-analysis-<date>.md"}`
 
+> **Note**: the `perf-optimizer` spawn is synchronous — the Agent tool awaits the response before proceeding. CLAUDE.md §8 background monitoring does not apply.
+
 ## Step 3: Codex correctness check
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the optimization changes from Step 2.

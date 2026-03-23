@@ -104,15 +104,10 @@ Spawn a **linting-expert** agent if mypy or ruff issues require non-trivial fixe
 
 Mandatory after the quality stack completes. Gracefully degrades if Codex is unavailable.
 
-Read `.claude/skills/_shared/codex-prepass.md` and apply it to the current diff:
+Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the changes.
 
-1. **Pre-flight**: `which codex` — if not installed, print `⚠ Codex not available — skipping pre-pass` and proceed
-2. **Skip check**: if `git diff HEAD --stat` shows only formatting/comment/whitespace changes, skip
-3. **Dispatch**: run the Codex pre-pass on the implementation diff:
-   ```bash
-   codex exec "Review the staged diff (git diff HEAD). Flag bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns. Apply minimal targeted fixes — do not make architectural changes. Skip cosmetic nits." --sandbox workspace-write
-   ```
-   > **Sandbox note**: `--sandbox workspace-write` allows Codex to write source files in the workdir and `/tmp`, but blocks `.git/` paths (e.g. `.git/index.lock`) — so Codex can fix files but cannot stage or commit them; use `git diff HEAD` to capture what it changed.
+# Additional steps not in shared file:
+
 4. **Validate**: if Codex made changes, re-run the quality stack on affected files only:
    ```bash
    CODEX_CHANGED=$(git diff HEAD --name-only | grep '\.py$' | tr '\n' ' ')

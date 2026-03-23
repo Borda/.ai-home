@@ -24,7 +24,7 @@ Project always wins: files in home that have no counterpart in the project are l
 <constants>
 
 - PROJECT root: `$(git rev-parse --show-toplevel)`
-- HOME_EXPANDED: `$(eval echo ~)`
+- HOME_EXPANDED: `$HOME`
 - File manifest: `git ls-files .claude/` and `git ls-files .codex/` — git-tracked only; gitignored paths (state/, logs/, settings.local.json, auth.json) excluded automatically
 - settings.json transform: replace `node .claude/hooks/` with `node $HOME/.claude/hooks/` (portable — avoids hardcoded usernames). Covers all hook entries — statusLine, task-log, and future additions.
 - Never synced: `settings.local.json`, `.codex/auth.json` — not git-tracked, excluded automatically
@@ -38,7 +38,7 @@ Project always wins: files in home that have no counterpart in the project are l
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 ```
@@ -51,7 +51,7 @@ Each bash block must be self-contained (redeclare variables at the top). Do not 
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 cd "$PROJECT" && git ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
@@ -65,7 +65,7 @@ rsync prints only files that would change; identical files are silently skipped.
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
 sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
@@ -99,7 +99,7 @@ rm -f "$SETTINGS_TMP"
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 cd "$PROJECT" && git ls-files .codex/ \
   | sed 's|^\.codex/||' \
@@ -118,7 +118,7 @@ Each bash block must be self-contained (redeclare variables at the top).
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 cd "$PROJECT" && git ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
@@ -130,7 +130,7 @@ cd "$PROJECT" && git ls-files .claude/ \
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
 sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
@@ -151,7 +151,7 @@ fi
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 cd "$PROJECT" && git ls-files .codex/ \
   | sed 's|^\.codex/||' \
@@ -162,7 +162,7 @@ cd "$PROJECT" && git ls-files .codex/ \
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
-HOME_EXPANDED="$(eval echo ~)"
+HOME_EXPANDED="$HOME"
 # JSON validity
 jq empty "$HOME_EXPANDED/.claude/settings.json" && echo "settings.json: valid"
 

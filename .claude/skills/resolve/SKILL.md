@@ -18,7 +18,7 @@ The result: a conflict-free, review-addressed PR branch pushed to the fork, read
 
 **Core invariant — transparent and reversible**: every action produces a visible, named git object (merge commit, fix commit) that can be inspected and reverted individually. This is why all conflict resolution goes forward via `git merge` (creates a new commit with two parents) and never via `git rebase` (rewrites SHA history, destroys the ability to revert or cherry-pick individual steps). Each action item becomes its own commit for the same reason — granular revert is always possible.
 
-When given bare comment text, skip straight to Codex dispatch (Step 10).
+When given bare comment text, skip straight to Codex dispatch (Step 11).
 
 </objective>
 
@@ -70,7 +70,7 @@ If codex is missing: set `CODEX_AVAILABLE=false` and continue — Steps 3–7 (i
 Parse $ARGUMENTS:
 
 - If it is a number or matches a GitHub PR URL pattern → **PR mode** (continue from Step 2)
-- Otherwise → **comment dispatch mode** (jump to Step 10)
+- Otherwise → **comment dispatch mode** (jump to Step 11)
 
 ## Step 2: Create task
 
@@ -308,7 +308,7 @@ git diff HEAD --stat
 If code changed → commit:
 
 ```bash
-git add -A
+git add $(git diff HEAD --name-only)
 git commit -m "$(cat <<'EOF'
 <imperative short summary of the change>
 
@@ -343,7 +343,7 @@ gh pr view <PR#> --json headRefOid,commits --jq '.commits[-3:] | .[].messageHead
 
 Confirm the latest commit headlines match what was just committed.
 
-## Step 9b: Final report
+## Step 10: Final report
 
 Mark the task `completed`, then print:
 
@@ -379,7 +379,7 @@ Mark the task `completed`, then print:
 
 ______________________________________________________________________
 
-## Step 10: Comment dispatch + Codex review loop
+## Step 11: Comment dispatch + Codex review loop
 
 Reached when $ARGUMENTS is bare comment text (not a PR number or URL).
 
@@ -395,7 +395,7 @@ TaskCreate(
 
 If `CODEX_AVAILABLE=false`: stop with `⚠ codex not found — install: npm install -g @openai/codex` and mark the task completed.
 
-### 10a: Dispatch
+### 11a: Dispatch
 
 ```bash
 codex exec "Apply this review comment to the codebase. If the change is already present, or the comment has no actionable code change, make no changes and briefly explain why. Comment: $ARGUMENTS" --sandbox workspace-write
@@ -403,7 +403,7 @@ codex exec "Apply this review comment to the codebase. If the change is already 
 
 Record the initial dispatch outcome (code changed or no change + reason).
 
-### 10b: Codex review loop (max 5 passes)
+### 11b: Codex review loop (max 5 passes)
 
 ```bash
 git diff HEAD --stat  # confirm there are changes to review
@@ -460,7 +460,7 @@ Mark the task `completed`, then print:
 - **Push verification** — always confirm via `gh pr view --json commits` that new commits appear on GitHub before reporting success; exit code 0 from `git push` is necessary but not sufficient (branch protection rules can silently reject)
 - **`gh pr merge` flags**: `--merge` preserves all commits and history; `--squash` collapses to one (loses individual action-item commits); never suggest `--rebase` (rewrites SHAs); default recommendation is `--merge` unless project convention says otherwise
 - **Escape hatch**: `git merge --abort` undoes the entire conflict state and returns the PR branch to pre-merge state; use `git push --force-with-lease` (never plain `--force`) if push is rejected after local amending
-- **5-iteration cap** on the Step 10 Codex review loop overrides the global 3-iteration default — skill-declared bounds take precedence (CLAUDE.md §3 "Safety breaks for loops")
+- **5-iteration cap** on the Step 11 Codex review loop overrides the global 3-iteration default — skill-declared bounds take precedence (CLAUDE.md §3 "Safety breaks for loops")
 - **`codex exec` timeout**: allow up to 2 minutes per call; background health monitoring (CLAUDE.md §8) does not apply because Codex runs sequentially, not as a spawned background agent
 - **Worktree cleanup safety net**: `SessionEnd` hook runs `git worktree prune` — catches any orphaned worktrees from prior sessions
 - Follow-up chains:

@@ -203,16 +203,12 @@ rm -r .claude/skills/<old-name>
 ### Mode: Delete Agent
 
 ```bash
-# Confirm existence before deleting
-ls .claude/agents/<name>.md
 rm .claude/agents/<name>.md
 ```
 
 ### Mode: Delete Skill
 
 ```bash
-# Confirm existence before deleting
-ls .claude/skills/<name>/SKILL.md
 rm -r .claude/skills/<name>
 ```
 

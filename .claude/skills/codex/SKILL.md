@@ -173,7 +173,7 @@ Route based on this ground truth:
 - **Codex output contains "permission denied", "Operation not permitted", "cannot write", or "sandbox denied"** alongside a claim that changes ARE in the working tree: treat this as a contradiction requiring manual verification — pause and surface the contradiction to the user before proceeding
 - **Partial completion**: Codex stopped partway (token limit, ambiguity) → resume the session with a clarifying follow-up (max 2 additional attempts):
   ```bash
-  codex exec resume --last "<specific clarification or continuation instruction>" --sandbox workspace-write  # Note: verify 'resume --last <prompt>' syntax with 'codex exec resume --help' — the --last flag may require a session ID rather than a prompt string
+  codex exec resume --last "<specific clarification or continuation instruction>" --sandbox workspace-write  # Verified: --last is a boolean flag (selects most recent session); [PROMPT] is a separate positional arg — SESSION_ID and --last are mutually exclusive alternatives
   ```
 - **Error / timeout**: report the error, do not retry the same prompt; suggest running Codex interactively (`codex "<task>"`) for diagnostics
 - **Rate limit**: report the limit hit, suggest waiting and retrying
@@ -285,16 +285,13 @@ To review delegation history:
 
 ```bash
 # Convenience for manual review; use Read tool for single-entry inspection when running as Claude
-# Human-readable table (no dependencies)
+# jq variant: jq -r '[.ts, .status, .agent, .prompt[:60]] | @tsv' .codex/logs/delegations.jsonl | column -t
 cat .codex/logs/delegations.jsonl | python3 -c "
 import json, sys
 for line in sys.stdin:
     d = json.loads(line)
     print(f\"{d.get('ts',''):<22} {d.get('status',''):<12} {d.get('agent',''):<16} {d.get('prompt','')[:60]}\")
 "
-
-# With jq (if available)
-jq -r '[.ts, .status, .agent, .prompt[:60]] | @tsv' .codex/logs/delegations.jsonl | column -t
 ```
 
 </workflow>

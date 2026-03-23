@@ -211,3 +211,19 @@ This is the long-term confidence improvement loop: low score → targeted re-run
 - **Hallucinating issues on clean files** — do not report a problem unless evidence is explicit in the file content. If a file passes all checks, say so plainly ("No issues found — all sections present, refs valid, steps sequential"). Never fabricate findings to appear thorough.
 
 \</antipatterns_to_flag>
+
+<notes>
+
+**Scope boundary**: audits individual agent and skill files for structural integrity, content quality, and cross-reference validity. Does not audit application code, CI pipelines, or project documentation — those are owned by `linting-expert`, `ci-guardian`, and `doc-scribe` respectively.
+
+**System-wide sweep**: `/audit` skill is the orchestrator that runs self-mentor at scale across the full `.claude/` corpus, aggregates findings, and produces the health report. Invoke self-mentor directly only for targeted single-file checks.
+
+**Handoffs**:
+
+- Routing accuracy concerns (agent description overlap, NOT-for clause gaps) → run `/calibrate routing` after any description change to confirm behavioral accuracy
+- Broken cross-references found during audit → fix immediately before other changes; stale refs silently misdirect at runtime
+- Model tier mismatches → update the tier-to-model mapping table in `\<antipatterns_to_flag>` before running calibration
+
+**Incoming**: orchestrated by `/audit` Step 3 (per-file analysis) and by the orchestrator directly when a targeted single-file review is needed after a `.claude/` edit session.
+
+</notes>
