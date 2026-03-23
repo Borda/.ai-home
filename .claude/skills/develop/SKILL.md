@@ -71,7 +71,7 @@ Read `.claude/skills/develop/modes/<mode>.md` and run its **## Step 1** instruct
 
 This step produces a scope analysis that is used by all subsequent steps.
 
-**Gate**: if the mode file's Step 1 flags a complexity smell (feature: 8+ files / 2+ new classes; fix: root cause spans 3+ modules; refactor: directory-wide scope without explicit goal), present the scope concern to the user before proceeding.
+**Gate**: if the mode file's Step 1 flags a complexity smell (feature: 8+ files / 2+ new classes; fix: root cause spans 3+ modules; refactor: directory-wide scope (10+ files, regardless of whether a goal is stated)), present the scope concern to the user before proceeding. These thresholds are exhaustive — no mode file adds additional gate conditions beyond what is listed here.
 
 ## Step 2: Mode-specific steps
 
@@ -182,6 +182,8 @@ The report format is defined in the mode file's `## Final Report` section. Use t
 Detect `--team` flag in `$ARGUMENTS`. Each mode file defines its team assignments in a `## Team Assignments` section.
 
 **Shared protocol:**
+
+Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree agent — follow its Bash two-call pattern for any command run inside a worktree from the lead's context.
 
 1. Lead performs Step 1 (scope analysis) in its own context
 2. Lead reads the mode file's `## Team Assignments` to determine teammate roles and responsibilities

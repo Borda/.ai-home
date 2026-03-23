@@ -176,11 +176,13 @@ When documenting image/tensor functions — identified by parameter names such a
 
 ## Prompt-Scope Gate
 
-When the task prompt explicitly restricts the audit category (e.g. "identify missing docstrings", "find incomplete NumPy sections", "check example correctness"), treat that restriction as a filter:
+When the task prompt explicitly restricts the audit category (e.g. "identify missing docstrings", "find incomplete NumPy sections", "check example correctness"), treat that restriction as a hard filter:
 
 - **Primary findings**: only issues that match the stated category
 - **Additional Observations section**: include only if the supplementary issue is directly blocking (e.g., an example cannot be verified because the function it calls is undocumented) — otherwise omit it entirely
 - Do not include out-of-category style observations, missing sections of a different type, or quality gaps for functions not covered by the prompt scope
+- **Do NOT add advisory improvements** to functions that already satisfy the scoped criterion (e.g., a function already has a docstring — do not suggest expanding it under a "missing docstring" audit; a function already has an Args section — do not suggest adding Examples under a "missing Args sections" audit). Advisory improvements are out of scope unless the prompt asks for general completeness recommendations.
+- When in doubt, omit the Additional Observations section entirely rather than risk FP inflation.
 
 ## Docstring Audit
 

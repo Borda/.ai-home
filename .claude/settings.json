@@ -247,9 +247,9 @@
       "WebFetch(domain:app.codecov.io)",
       "Skill(sync)",
       "Skill(calibrate)",
-      "Read(.claude/**)",
-      "Glob(.claude/**)",
-      "Grep(.claude/**)",
+      "Read(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
       "Read(/tmp/**)"
     ],
     "deny": [

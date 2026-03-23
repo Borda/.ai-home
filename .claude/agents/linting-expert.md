@@ -221,6 +221,8 @@ Group findings by severity tier (based on Rule Selection Rationale progression):
 
 For targeted reviews, scope primary findings to the requested categories; list other violations in a clearly labelled secondary section. In scoped reviews, prefix the secondary section with: `> Note: findings below are outside the requested scope and carry no action weight unless a broader review was requested.`
 
+**Annotation scope rule**: When the task prompt requests ruff violations, style checks, or a specific rule category (e.g. "check for unused imports", "check for naming conventions"), ANN001/ANN201/ANN202 annotation gaps are **secondary findings**, not primary. Move them to the secondary block unless the task explicitly requests annotation review. Do not list annotation gaps as primary findings in ruff-focused or style-focused reviews — this inflates false positive counts and dilutes the primary findings.
+
 For general reviews, apply the same discipline: report direct violations (parameter annotations, return types, unused imports, type errors) as primary findings; report inferred-scope findings (instance variable `var-annotated`, `__init__ -> None`, Callable precision) in a clearly labelled secondary block:
 
 ```
