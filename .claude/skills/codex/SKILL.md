@@ -81,7 +81,7 @@ printf '{"ts":"%s","status":"not_started","reason":"codex not found on PATH"}\n'
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$CODEX_LOG"
 ```
 
-`Pre-flight failed: codex not found on PATH. Install and retry. npm install -g @openai/codex`
+`Pre-flight failed: codex not found on PATH. Install and retry. npm install -g @openai/codex` <!-- verify current install command at https://www.npmjs.com/package/@openai/codex -->
 
 On success: `preflight_pass codex`
 
@@ -286,12 +286,6 @@ To review delegation history:
 ```bash
 # Convenience for manual review; use Read tool for single-entry inspection when running as Claude
 # jq variant: jq -r '[.ts, .status, .agent, .prompt[:60]] | @tsv' .codex/logs/delegations.jsonl | column -t
-cat .codex/logs/delegations.jsonl | python3 -c "
-import json, sys
-for line in sys.stdin:
-    d = json.loads(line)
-    print(f\"{d.get('ts',''):<22} {d.get('status',''):<12} {d.get('agent',''):<16} {d.get('prompt','')[:60]}\")
-"
 ```
 
 </workflow>

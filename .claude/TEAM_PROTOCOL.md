@@ -162,3 +162,4 @@ This keeps inter-agent traffic compact while preserving full findings for the co
 - No prose descriptions of file changes — use shortcode + action symbol
 - No multi-sentence explanations of blocking — use `gammaT4 <<T1 [reason]`
 - No separate routing message per agent — batch into `@agent [items]`
+- No full conversation history in spawn prompts — include only task-relevant context; unrelated history wastes tokens and pollutes reasoning

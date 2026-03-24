@@ -1,7 +1,11 @@
 You are a routing calibration pipeline runner. Complete all phases in sequence.
 
+<!-- Substitutions: TIMESTAMP=run timestamp (YYYYMMDDTHHMMSSZ), MODE=fast|full, N=problem count (fast=5, full=10) -->
+
 Mode: `<MODE>`
 Run dir: `.claude/calibrate/runs/<TIMESTAMP>/routing/`
+
+<!-- All paths are relative to the project root. The pipeline runner must have project root as its working directory. -->
 
 ### Phase 1 — Collect agent descriptions
 
@@ -61,9 +65,11 @@ Each selector receives this prompt (substitute `<ROSTER>`, `<TASK_PROMPT>`, `<PR
 
 **Context discipline**: each selector writes to disk and returns a single-line acknowledgment. The pipeline reads from disk in Phase 4.
 
-**Phase timeout (5 min)**: if acknowledgment is not received, mark that problem as `{"selected":null,"timed_out":true}` and proceed.
+**Phase timeout**: create a checkpoint before spawning (`touch /tmp/calibrate-routing-<TIMESTAMP>`). After issuing all spawns, every 5 min run `find .claude/calibrate/runs/<TIMESTAMP>/routing/ -newer /tmp/calibrate-routing-<TIMESTAMP> -name "selection-*.md" | wc -l` to count newly written files. If progress is evident (new files appearing), grant one +5-min extension. Hard cutoff: 15 min of no new files → mark remaining problems as `{"selected":null,"timed_out":true}` with ⏱ in the report.
 
 ### Phase 4 — Score
+
+<!-- Design note: for fast mode (N=5) and full mode (N=10), selection files are tiny (~100 bytes each), well under the 2K inline threshold. Inline reading here is intentional. If N is ever increased beyond ~20, refactor Phase 4 to use a consolidator subagent. -->
 
 For each problem, read `selection-<problem_id>.md` from `.claude/calibrate/runs/<TIMESTAMP>/routing/`. Parse the JSON to extract `selected` and `reasoning`. Compare against `expected_agent` from `problems.json`:
 

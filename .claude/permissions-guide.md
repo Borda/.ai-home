@@ -3,21 +3,17 @@
 Annotated companion to the `permissions.allow` and `permissions.deny` lists in `settings.json`.
 Every entry here must have a matching entry there, and vice versa — kept in sync by `/audit` (drift check) and `/manage add perm` / `/manage remove perm`.
 
-**Remote/upstream operations and destructive git commands are explicitly denied** — see the Deny List section below. Deny rules are evaluated before allow rules; a matching deny always blocks execution regardless of any allow entry.
+**Destructive git commands are explicitly denied** — see the Deny List section below. Deny rules are evaluated before allow rules; a matching deny always blocks execution regardless of any allow entry. Remote-mutating operations (`git push`, `git remote`) are not denied — they prompt the user for approval.
 
 ______________________________________________________________________
 
 ## Deny List — always blocked
 
-| Permission              | Description                    | Why denied                                               |
-| ----------------------- | ------------------------------ | -------------------------------------------------------- |
-| `Bash(git push:*)`      | Push commits to a remote       | Remote mutations require explicit user action            |
-| `Bash(git branch -D:*)` | Force-delete a local branch    | Destructive; may lose unmerged work                      |
-| `Bash(git branch -d:*)` | Delete a merged local branch   | Requires explicit user intent                            |
-| `Bash(git tag -d:*)`    | Delete a local tag             | Tags are release markers; user-only                      |
-| `Bash(git remote:*)`    | Add, remove, or modify remotes | Remote config changes are user-owned                     |
-| `Bash(git clean:*)`     | Discard untracked files        | Irreversible; untracked files are permanently deleted    |
-| `Bash(git restore:*)`   | Discard working-tree changes   | Destructive; discards uncommitted edits without recovery |
+| Permission              | Description                  | Why denied                          |
+| ----------------------- | ---------------------------- | ----------------------------------- |
+| `Bash(git branch -D:*)` | Force-delete a local branch  | Destructive; may lose unmerged work |
+| `Bash(git branch -d:*)` | Delete a merged local branch | Requires explicit user intent       |
+| `Bash(git tag -d:*)`    | Delete a local tag           | Tags are release markers; user-only |
 
 ______________________________________________________________________
 
@@ -25,12 +21,12 @@ ______________________________________________________________________
 
 These entries pre-authorize `Read`, `Glob`, and `Grep` on directories that skills and teammates access frequently as part of their own configuration or runtime state. Without them, agents are prompted to confirm reading their own config files.
 
-| Permission         | Description                        | Typical use case                                                                                    |
-| ------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Read(.claude/**)` | Read any file under `.claude/`     | Teammates read `TEAM_PROTOCOL.md` and agent files at spawn; skills read their own SKILL.md files    |
-| `Glob(.claude/**)` | Glob-match files under `.claude/`  | `/audit` and `/manage` enumerate agents, skills, and hooks without shell `find`                     |
-| `Grep(.claude/**)` | Search content under `.claude/`    | `/audit` checks cross-references; `/calibrate` locates skill keyword patterns                       |
-| `Read(/tmp/**)`    | Read temporary files under `/tmp/` | `/calibrate` reads checkpoint files for background agent health monitoring; skill temp output files |
+| Permission      | Description                        | Typical use case                                                                                    |
+| --------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Read(./**)`    | Read any file in the project root  | Teammates read `TEAM_PROTOCOL.md` and agent files at spawn; skills read their own SKILL.md files    |
+| `Glob(./**)`    | Glob-match any file in the project | `/audit` and `/manage` enumerate agents, skills, hooks, and source files without shell `find`       |
+| `Grep(./**)`    | Search content in any project file | `/audit` checks cross-references; `/calibrate` locates skill keyword patterns                       |
+| `Read(/tmp/**)` | Read temporary files under `/tmp/` | `/calibrate` reads checkpoint files for background agent health monitoring; skill temp output files |
 
 ______________________________________________________________________
 
@@ -105,19 +101,20 @@ ______________________________________________________________________
 
 ## Git — read-only
 
-| Permission              | Description                                          | Typical use case                                                      |
-| ----------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
-| `Bash(git log:*)`       | Browse commit history                                | `/release` reads commits since last tag; general history inspection   |
-| `Bash(git shortlog:*)`  | Summarise history grouped by author                  | Contributor stats for release notes                                   |
-| `Bash(git describe:*)`  | Derive version string from nearest tag               | Determine current version in release automation                       |
-| `Bash(git diff:*)`      | Show unstaged / staged / commit-to-commit changes    | Pre-commit review, diffing a patch before applying                    |
-| `Bash(git show:*)`      | Inspect a specific commit, tag, or blob              | Read the content of a tagged release or a specific file at a ref      |
-| `Bash(git rev-list:*)`  | Enumerate commits in a range                         | Count distance between refs, find commits to include in release notes |
-| `Bash(git rev-parse:*)` | Resolve refs to hashes; get project root             | `/sync` uses `--show-toplevel` to locate the project root             |
-| `Bash(git ls-files:*)`  | List tracked files in the index                      | `/sync` uses this inside `cd $PROJECT && git ls-files .claude/`       |
-| `Bash(git branch:*)`    | List or inspect local branches                       | Check which branch is active; list branches without touching remote   |
-| `Bash(git tag:*)`       | List or inspect local tags                           | Find the latest release tag without pushing                           |
-| `Bash(git status:*)`    | Show working-tree state: staged, unstaged, untracked | Pre-commit check, verifying clean state before a release              |
+| Permission              | Description                                          | Typical use case                                                        |
+| ----------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Bash(git fetch:*)`     | Fetch from a remote without merging                  | `/resolve` fetches remote refs to detect fork divergence before merging |
+| `Bash(git log:*)`       | Browse commit history                                | `/release` reads commits since last tag; general history inspection     |
+| `Bash(git shortlog:*)`  | Summarise history grouped by author                  | Contributor stats for release notes                                     |
+| `Bash(git describe:*)`  | Derive version string from nearest tag               | Determine current version in release automation                         |
+| `Bash(git diff:*)`      | Show unstaged / staged / commit-to-commit changes    | Pre-commit review, diffing a patch before applying                      |
+| `Bash(git show:*)`      | Inspect a specific commit, tag, or blob              | Read the content of a tagged release or a specific file at a ref        |
+| `Bash(git rev-list:*)`  | Enumerate commits in a range                         | Count distance between refs, find commits to include in release notes   |
+| `Bash(git rev-parse:*)` | Resolve refs to hashes; get project root             | `/sync` uses `--show-toplevel` to locate the project root               |
+| `Bash(git ls-files:*)`  | List tracked files in the index                      | `/sync` uses this inside `cd $PROJECT && git ls-files .claude/`         |
+| `Bash(git branch:*)`    | List or inspect local branches                       | Check which branch is active; list branches without touching remote     |
+| `Bash(git tag:*)`       | List or inspect local tags                           | Find the latest release tag without pushing                             |
+| `Bash(git status:*)`    | Show working-tree state: staged, unstaged, untracked | Pre-commit check, verifying clean state before a release                |
 
 ______________________________________________________________________
 
@@ -133,8 +130,6 @@ ______________________________________________________________________
 | `Bash(git add:*)`        | Stage files for the next commit                                     | Stage changes after an edit before prompting user to commit                                                                                               |
 | `Bash(git checkout:*)`   | Switch branches or restore individual files from a ref              | Switch to a feature branch; restore a file to HEAD state                                                                                                  |
 | `Bash(git stash:*)`      | Shelve uncommitted changes temporarily                              | Save work in progress before pulling or switching context                                                                                                 |
-| `Bash(git restore:*)`    | Discard working-directory changes for specific paths                | Undo accidental edits to a file                                                                                                                           |
-| `Bash(git clean:*)`      | Delete untracked files                                              | Ensure a clean build directory before running tests                                                                                                       |
 | `Bash(git apply:*)`      | Apply a patch file to the working tree                              | Apply a generated diff or a contributor's patch                                                                                                           |
 
 ______________________________________________________________________

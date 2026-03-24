@@ -3,7 +3,7 @@ name: audit
 description: Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness, and upgrade proposals. Reports by severity; auto-fixes at the requested level — 'fix high' (critical+high), 'fix medium' (critical+high+medium), 'fix all' (all findings including low); 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes.
 argument-hint: '[agents|skills] [fix [high|medium|all]] | upgrade'
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, WebFetch
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 ---
 
 <objective>
@@ -27,6 +27,13 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
 
 </inputs>
 
+<constants>
+<!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 self-mentor spawns -->
+MONITOR_INTERVAL=300   # 5 minutes between polls
+HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
+EXTENSION=300          # one +5 min extension if output file explains delay
+</constants>
+
 <workflow>
 
 **Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase and mark status live so the user can see progress in real time:
@@ -34,8 +41,8 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
 - Phase 1: setup + collect (Pre-flight + Steps 1–2) → mark in_progress when starting, completed when file list is ready
 - Phase 2: per-file audit (Step 3) → mark in_progress when agents launch, completed when all reports received
 - Phase 3: system-wide checks (Step 4) → mark in_progress when checks start, completed when all checks done
-- Phase 4: aggregate + fix (Steps 5–9) → mark in_progress, then completed when fixes land
-- Phase 5: final report (Step 10) → mark in_progress, then completed before output
+- Phase 4: aggregate + fix (Steps 5–10) → mark in_progress, then completed when fixes land
+- Phase 5: final report (Step 11) → mark in_progress, then completed before output
 - On loop retry or scope change → create a new task; do not reuse the completed task
 
 Surface progress to the user at natural milestones: after system-wide checks ("✓ Checks 1-11 complete, N findings so far — spawning per-file audits"), after agent reports ("Agent reports received — N medium, N low findings"), and before each fix batch ("Fixing N medium findings in parallel").
@@ -118,13 +125,22 @@ Spawn one **self-mentor** agent per file (or batch into groups of up to 10 for e
 2. Include the disk inventory from Step 2 (agent/skill list for cross-reference validation)
 3. End with:
 
-> "Write your FULL findings (all severity levels, Confidence block) to `<RUN_DIR>/<file-basename>.md` using the Write tool — where `<file-basename>` is the filename only (e.g. `oss-maintainer.md`, `audit-SKILL.md`). Then return to the caller ONLY a one-line summary: `<filename>: N critical, N high, N medium, N low [confidence 0.N]` — nothing else in your response."
+> "Write your FULL findings (all severity levels, Confidence block) to `<RUN_DIR>/<file-basename>.md` using the Write tool — where `<file-basename>` is the filename only (e.g. `oss-maintainer.md`, `audit-SKILL.md`). Then return to the caller ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"<RUN_DIR>/<file-basename>.md\",\"findings\":N,\"severity\":{\"critical\":N,\"high\":N,\"medium\":N,\"low\":N},\"confidence\":0.N,\"summary\":\"<filename>: N critical, N high, N medium, N low\"}`"
 
 Replace `<RUN_DIR>` with the actual directory path and `<file-basename>` with just the filename.
 
 > The template file is canonical for the per-file audit criteria. The disk inventory and RUN_DIR path injected here are runtime values added to each agent spawn.
 
 After all spawns complete, you will have a list of short summaries in context. Use these to identify which files have findings. The full content is in the run directory files.
+
+**Health monitoring** (CLAUDE.md §8): after spawning all batches, create a checkpoint:
+
+```bash
+AUDIT_CHECKPOINT="/tmp/audit-check-$(date +%s)"
+touch "$AUDIT_CHECKPOINT"
+```
+
+Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT" -type f | wc -l` — new files = agents alive; zero new files for `$HARD_CUTOFF` seconds = stalled. Grant one `$EXTENSION` extension if the output file tail explains the delay. On timeout: read partial output from the stalled agent's file; surface it with ⏱ in the final report. Never silently omit timed-out agents.
 
 ## Step 4: System-wide checks
 
@@ -213,11 +229,7 @@ Flag any drift between MEMORY.md, README.md, settings.json, and actual disk stat
 
 Three capability tiers define the expected model assignment for each agent:
 
-| Tier                | Profile                                                     | Current mapping     |
-| ------------------- | ----------------------------------------------------------- | ------------------- |
-| `plan-gated`        | Long-horizon reasoning, plan mode, governance               | `opusplan`          |
-| `deep-reasoning`    | Complex implementation, multi-file code gen, judgment calls | `opus`              |
-| `focused-execution` | Pattern matching, structured output, rule application       | `sonnet` or `haiku` |
+See `self-mentor` agent for the canonical tier-to-model mapping.
 
 Extract declared models with Bash:
 
@@ -241,7 +253,7 @@ Using model reasoning, classify each agent into a tier based on its `<role>`, `d
 
 **Report only** — never auto-fix. Model assignments may be intentional trade-offs (e.g., cost sensitivity, latency constraints). Flag mismatches with rationale so the user can decide.
 
-**Time-resilience note**: when new model tiers or model aliases arrive, update only the tier-to-model mapping table above. The tier classification heuristic (what each agent does) is model-agnostic.
+**Time-resilience note**: when new model tiers or model aliases arrive, update only the tier-to-model mapping table in this step. The tier classification heuristic (what each agent does) is model-agnostic.
 
 ### Tool efficiency
 
@@ -313,7 +325,7 @@ The test: would a reasonable reader expect this content to apply to every single
 
 Spawn a **web-explorer** agent to fetch the current Claude Code documentation. Try the direct paths below; if they don't resolve, navigate from the Claude Code homepage (`code.claude.com`) to find the current schema pages.
 
-**File-based handoff**: the web-explorer agent must write its full findings (validated fields, deprecated fields, new features, upgrade proposals with genuine-value assessment) to `$RUN_DIR/docs-freshness.md` using the Write tool. Return ONLY a summary line: `findings=N deprecated=N new_features=N confidence=0.N` — nothing else in the response.
+**File-based handoff**: the web-explorer agent must write its full findings (validated fields, deprecated fields, new features, upgrade proposals with genuine-value assessment) to `$RUN_DIR/docs-freshness.md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{"status":"done","file":"$RUN_DIR/docs-freshness.md","findings":N,"deprecated":N,"new_features":N,"confidence":0.N,"summary":"N findings, N deprecated, N new features"}`
 
 - Hook event names, types, and schemas — `code.claude.com/docs/en/hooks`
 - Agent frontmatter schema — `code.claude.com/docs/en/sub-agents`
@@ -522,7 +534,7 @@ fi
 
 **Delegate aggregation to a consolidator agent** to avoid flooding the main context with all agent findings. Spawn a **self-mentor** consolidator agent with this prompt:
 
-> "Read all finding files in `<RUN_DIR>/` (\*.md files from Steps 3–4, including `docs-freshness.md` if present). Apply the severity classification from `.claude/skills/audit/severity-table.md`. Antipatterns that indicate severity under-classification are also in that file. Group all findings by severity (critical, high, medium, low). Apply the one-finding-per-issue rule: when a single location has multiple distinct problems at different severities, emit one finding entry per problem. Write the aggregated severity table to `<RUN_DIR>/aggregate.md` using the Write tool. Return ONLY a one-line summary: `findings=N critical=N high=N medium=N low=N`"
+> "Read all finding files in `<RUN_DIR>/` (\*.md files from Steps 3–4, including `docs-freshness.md` if present). Apply the severity classification from `.claude/skills/audit/severity-table.md`. Antipatterns that indicate severity under-classification are also in that file. Group all findings by severity (critical, high, medium, low). Apply the one-finding-per-issue rule: when a single location has multiple distinct problems at different severities, emit one finding entry per problem. Write the aggregated severity table to `<RUN_DIR>/aggregate.md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"<RUN_DIR>/aggregate.md\",\"findings\":N,\"severity\":{\"critical\":N,\"high\":N,\"medium\":N,\"low\":N},\"confidence\":0.N,\"summary\":\"N findings total: C critical, H high, M medium, L low\"}`"
 
 Main context receives only that one-liner for the Step 7 report structure. Read `<RUN_DIR>/aggregate.md` only if you need to display specific finding details in Step 7.
 
@@ -592,28 +604,28 @@ Each subagent prompt template: Read the fix prompt template from .claude/skills/
 - **Dead loop**: flag for user review — requires human judgment on which link to break
 - **Model tier mismatch**: report only — model assignments may be intentional for cost/latency trade-offs; user decides whether to adjust
 
-After all subagents complete, collect their results and proceed to Step 9.
+After all subagents complete, collect their results and proceed to Step 10.
 
 **Low findings** (nits): fix only when `fix all` was passed — otherwise collect in the final report for optional manual cleanup.
 
-## Step 8b: Codex cross-file check
+## Step 9: Codex cross-file check
 
 After all Step 8 fix agents complete and before self-mentor re-audit:
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the combined diff of all fixes.
 
-Treat any findings as additional issues entering Step 9's re-audit scope. Skip if Step 8 touched only 1 file.
+Treat any findings as additional issues entering Step 10's re-audit scope. Skip if Step 8 touched only 1 file.
 
-## Step 9: Re-audit modified files + confidence check
+## Step 10: Re-audit modified files + confidence check
 
-For every file changed in Step 8, spawn **self-mentor** again to confirm the fix resolved the finding and no new issues were introduced. Use the same file-based approach as Step 3 — write full re-audit findings to `<RUN_DIR>/<file-basename>-reaudit.md` and return only a one-line summary.
+For every file changed in Step 8, spawn **self-mentor** again to confirm the fix resolved the finding and no new issues were introduced. Use the same file-based approach as Step 3 — write full re-audit findings to `<RUN_DIR>/<file-basename>-reaudit.md` and return ONLY a compact JSON envelope: `{"status":"done","file":"<RUN_DIR>/<file-basename>-reaudit.md","findings":N,"severity":{"critical":N,"high":N,"medium":N,"low":N},"confidence":0.N,"summary":"<filename>: fix confirmed, N residual findings"}`
 
 ```bash
 # Spot-check: confirm the previously broken reference no longer appears
 grep -n "<broken-name>" <fixed-file>
 ```
 
-**Confidence re-run**: parse each confidence score from the one-line summaries (Step 3) and re-audit summaries (Step 9). For any file where **Score < 0.7**:
+**Confidence re-run**: parse each confidence score from the one-line summaries (Step 3) and re-audit summaries (Step 10). For any file where **Score < 0.7**:
 
 1. Re-spawn self-mentor on that file with the specific gap from the `Gaps:` field addressed in the prompt (e.g., "pay special attention to async error paths — previous pass flagged this as a gap")
 2. If confidence is still < 0.7 after one retry: flag to user with ⚠ and include the gap in the final report — do not silently drop it
@@ -627,7 +639,7 @@ grep -n "<broken-name>" <fixed-file>
 
 If re-audit surfaces new issues, loop back to Step 8 for those findings only (max 2 re-audit cycles — escalate to user if still unresolved).
 
-## Step 10: Final report
+## Step 11: Final report
 
 Output the complete audit summary:
 

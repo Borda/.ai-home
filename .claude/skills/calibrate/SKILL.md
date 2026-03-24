@@ -1,7 +1,7 @@
 ---
 name: calibrate
 description: Calibration testing for agents and skills. Generates synthetic problems with known outcomes (quasi-ground-truth), runs targets against them, and measures recall, precision, and confidence calibration — revealing whether self-reported confidence scores track actual quality.
-argument-hint: '{all|agents|skills|routing|<name>} [fast|full] [ab] [apply]'
+argument-hint: '{all|agents|skills|routing|communication|<name>} [fast|full] [ab] [apply]'
 allowed-tools: Read, Write, Edit, Bash, Agent, TaskCreate, TaskUpdate
 ---
 
@@ -15,13 +15,14 @@ Calibration data drives the improvement loop: systematic gaps become instruction
 
 <inputs>
 
-- **$ARGUMENTS**: `{all|agents|skills|<name>} [fast|full] [ab] [apply]`
+- **$ARGUMENTS**: `{all|agents|skills|routing|communication|<name>} [fast|full] [ab] [apply]`
 
   - **Target** (first token — defaults to `all`):
     - `all` — all agents + all calibratable skills (`/audit`, `/review`)
     - `agents` — all agents only
     - `skills` — calibratable skills only (`/audit`, `/review`)
     - `routing` — routing accuracy test: measures how accurately a `general-purpose` orchestrator selects the correct `subagent_type` for synthetic task prompts (not a per-agent quality benchmark; not included in `all`, `agents`, or `skills` — invoke explicitly)
+    - `communication` — handover + team protocol compliance: runs `self-mentor` against synthetic agent responses and team transcripts with injected protocol violations (missing JSON envelope, missing `summary`, AgentSpeak v2 breaches); not included in `all`, `agents`, or `skills` — invoke explicitly
     - `<agent-name>` — single agent (e.g., `sw-engineer`)
     - `/audit` or `/review` — single skill
   - **Pace** (optional, default `fast`):
@@ -52,25 +53,7 @@ Calibration data drives the improvement loop: systematic gaps become instruction
 - ROUTING_ACCURACY_THRESHOLD: 0.90 (below → agent descriptions need improvement)
 - ROUTING_HARD_THRESHOLD: 0.80 (below → high-overlap pair descriptions need disambiguation)
 
-Problem domain by agent:
-
-- `sw-engineer` → Python bugs: type errors, logic errors, anti-patterns, bare `except:`, mutable defaults
-- `qa-specialist` → coverage gaps: uncovered edge cases, missing exception tests, Machine Learning (ML) non-determinism
-- `linting-expert` → violations: ruff rules, mypy errors, annotation gaps
-- `self-mentor` → config issues: broken cross-refs, missing workflow blocks, wrong model, step gaps
-- `doc-scribe` → docs gaps: missing docstrings, missing Google style sections, broken examples
-- `perf-optimizer` → perf issues: unnecessary loops, repeated computation, wrong dtype, missing vectorisation
-- `ci-guardian` → Continuous Integration (CI) issues: non-pinned action Secure Hash Algorithms (SHAs), missing cache, inefficient matrix
-- `data-steward` → data issues: label leakage, split contamination, augmentation order bugs
-- `ai-researcher` → paper analysis: missed contributions, wrong method attribution
-- `solution-architect` → design issues: leaky abstractions, circular dependencies, missing Architecture Decision Record (ADR), backward-compat violations without deprecation path
-- `web-explorer` → content quality: broken or unverified Uniform Resource Locators (URLs), outdated docs, incomplete extraction from fetched pages
-- `oss-maintainer` → Open Source Software (OSS) governance: incorrect Semantic Versioning (SemVer) decision, missing CHANGELOG entry, bad deprecation path, wrong release checklist item
-
-Skill domains:
-
-- `/audit` → synthetic `.claude/` config with N injected structural issues
-- `/review` → synthetic Python module with N cross-domain issues (arch + tests + docs + lint)
+Domain tables per mode: see `modes/agents.md`, `modes/skills.md`, `modes/routing.md`, `modes/communication.md`.
 
 </constants>
 
@@ -79,8 +62,9 @@ Skill domains:
 **Task tracking**: create tasks at the start of execution (Step 1) for each phase that will run:
 
 - "Calibrate agents" — Step 2 (benchmark mode, when target includes agents)
-- "Calibrate skills" — Step 2 Skills sub-section (benchmark mode, when target includes skills)
-- "Calibrate routing" — Step 2 Routing sub-section (benchmark mode, when target is `routing`)
+- "Calibrate skills" — Step 2 (benchmark mode, when target includes skills)
+- "Calibrate routing" — Step 2 (benchmark mode, when target is `routing`)
+- "Calibrate communication" — Step 2 (benchmark mode, when target is `communication`)
 - "Analyse and report" — Steps 3–5 (benchmark mode)
 - "Apply findings" — Step 6 (apply mode only)
   Mark each in_progress when starting, completed when done. On loop retry or scope change, create a new task.
@@ -91,9 +75,10 @@ From `$ARGUMENTS`, determine:
 
 - **Target list** — parse the first token:
   - `all` or omitted → all agents + `/audit` + `/review`
-  - `agents` → all agents only (the full agent list in the constants block)
+  - `agents` → all agents only (the full agent list in `modes/agents.md`)
   - `skills` → `/audit` and `/review` only
   - `routing` → routing accuracy test (NOT included in `all`, `agents`, or `skills` — invoke explicitly)
+  - `communication` → handover + team protocol compliance (NOT included in `all`, `agents`, or `skills` — invoke explicitly)
   - Any other token → single agent or skill name
 - **Mode**: look for `fast` or `full` in remaining tokens — default `fast`
 - **A/B flag**: `ab` present → also spawn a `general-purpose` baseline per problem
@@ -105,35 +90,26 @@ If benchmark will run (i.e., `fast` or `full` is present, with or without `apply
 
 Create tasks before proceeding:
 
-- Benchmark only (no `apply`): TaskCreate "Calibrate agents" (if target includes agents), TaskCreate "Calibrate skills" (if target includes skills), TaskCreate "Calibrate routing" (if target is `routing`), TaskCreate "Analyse and report"
-- Benchmark + auto-apply (`fast`/`full` + `apply`): TaskCreate "Calibrate agents" (if target includes agents), TaskCreate "Calibrate skills" (if target includes skills), TaskCreate "Calibrate routing" (if target is `routing`), TaskCreate "Analyse and report", TaskCreate "Apply findings"
+- Benchmark only (no `apply`): TaskCreate "Calibrate agents" (if target includes agents), TaskCreate "Calibrate skills" (if target includes skills), TaskCreate "Calibrate routing" (if target is `routing`), TaskCreate "Calibrate communication" (if target is `communication`), TaskCreate "Analyse and report"
+- Benchmark + auto-apply (`fast`/`full` + `apply`): TaskCreate "Calibrate agents" (if target includes agents), TaskCreate "Calibrate skills" (if target includes skills), TaskCreate "Calibrate routing" (if target is `routing`), TaskCreate "Calibrate communication" (if target is `communication`), TaskCreate "Analyse and report", TaskCreate "Apply findings"
 - Pure apply mode (only `apply`, no `fast`/`full`): TaskCreate "Apply findings" only
 
 ## Step 2: Spawn pipeline subagents
 
-Mark "Calibrate agents" in_progress. Issue all agent pipeline subagent spawns.
+For each target mode in the resolved target list, read the corresponding mode file and execute its spawn instructions. Issue ALL spawns in a **single response** — modes are independent and run concurrently.
 
-### Skills
+| Target mode   | Mode file                                         | Task to mark in_progress  |
+| ------------- | ------------------------------------------------- | ------------------------- |
+| agents        | `.claude/skills/calibrate/modes/agents.md`        | "Calibrate agents"        |
+| skills        | `.claude/skills/calibrate/modes/skills.md`        | "Calibrate skills"        |
+| routing       | `.claude/skills/calibrate/modes/routing.md`       | "Calibrate routing"       |
+| communication | `.claude/skills/calibrate/modes/communication.md` | "Calibrate communication" |
 
-Mark "Calibrate skills" in_progress. Issue all skill pipeline subagent spawns.
-
-### Routing
-
-When target is `routing` (skip agent/skill spawns above and the section below for this target): Mark "Calibrate routing" in_progress. Read `.claude/skills/calibrate/templates/routing-pipeline-prompt.md`. Substitute `<N>` (5 for fast, 10 for full), `<TIMESTAMP>`, `<MODE>`. Spawn a **single** `general-purpose` pipeline subagent with the substituted template as its prompt — it handles all phases internally. Proceed to Step 3 after spawning.
-
-Issue all subagents from both agents and skills in a **single response** — agents and skills are independent and run concurrently. One `general-purpose` subagent per target; do not wait for one to finish before spawning the next.
-
-Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<DOMAIN>`, `<N>`, `<TIMESTAMP>`, `<MODE>`, `<AB_MODE>` before spawning — set `<AB_MODE>` to `true` or `false`):
-
-______________________________________________________________________
-
-Read the pipeline prompt template from .claude/skills/calibrate/templates/pipeline-prompt.md and use it as the self-contained prompt for each subagent. Before spawning, substitute these variables in the template: <TARGET>, <DOMAIN>, <N>, <TIMESTAMP>, <MODE>, \<AB_MODE>.
-
-______________________________________________________________________
+Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instructions for the pipeline subagent. The pipeline template lives at `.claude/skills/calibrate/templates/pipeline-prompt.md`. **N override**: `communication` caps at fast=3 / full=5 (not the global FULL_N=10) to prevent pipeline context overflow — read `modes/communication.md` for details.
 
 ## Step 3: Collect results and print combined report
 
-**Health monitoring** — apply the protocol from CLAUDE.md §8 (Background Agent Health Monitoring). Run dir for liveness checks: `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/`. Constants below tighten the global defaults for this skill:
+**Health monitoring** — apply the protocol from CLAUDE.md §8. Run dir for liveness checks: `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/`. Constants below tighten the global defaults for this skill:
 
 ```bash
 # Initialise checkpoints after all pipeline spawns
@@ -149,7 +125,6 @@ if [ "$NEW" -gt 0 ]; then
 elif [ "$ELAPSED" -ge 10 ]; then
   echo "⏱ $TARGET TIMED OUT (hard limit)"
 elif [ "$ELAPSED" -ge 5 ]; then
-  # One-time extension per CLAUDE.md §8: check output file for delay explanation
   OUTPUT_FILE=".claude/calibrate/runs/<TIMESTAMP>/$TARGET/pipeline.jsonl"
   if tail -20 "$OUTPUT_FILE" 2>/dev/null | grep -qi 'delay\|wait\|slow'; then
     echo "⏸ $TARGET: extension granted (+5 min)"
@@ -186,19 +161,7 @@ Print the combined benchmark report:
 *ΔRecall/ΔSevAcc/ΔFmt: specialist − general (positive = specialist better). ΔTokens: token_ratio − 1.0 (negative = more focused). AB Verdict covers ΔRecall and ΔF1 only; use ΔSevAcc and ΔFmt as supplementary evidence for agents where ΔRecall ≈ 0.*
 ```
 
-**If target is `routing`**, replace the table above with the routing-specific format:
-
-```
-## Routing Calibration — <date> — <MODE>
-
-| Metric           | Value      | Status |
-|------------------|------------|--------|
-| Routing accuracy | N/M (XX%)  | ≥90% ✓ / 80–90% ~ / <80% ⚠ |
-| Hard accuracy    | N/M (XX%)  | ≥80% ✓ / <80% ⚠ |
-| Confusion errors | N          | 0 ✓ / >0 list pairs |
-```
-
-Flag routing accuracy < ROUTING_ACCURACY_THRESHOLD (0.90) or hard accuracy < ROUTING_HARD_THRESHOLD (0.80) with ⚠. Print confused pair details from the routing report's Confused Pairs section. Mark "Calibrate routing" completed.
+**If target is `routing`**: read `modes/routing.md` "Report format" section and use that table instead of the standard table above. Mark "Calibrate routing" completed.
 
 Flag any target where recall < 0.70 or |bias| > 0.15 with ⚠.
 
@@ -315,16 +278,17 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - **Stale proposals**: `apply` uses verbatim text matching (`old_string` = **Current** from proposal). If the agent file was edited between the benchmark run and `apply`, any change whose **Current** text no longer matches is skipped with a warning — no silent clobbering of intermediate edits.
 - **`routing` target vs `/audit` Check 12**: `/audit` Check 12 performs static analysis of description overlap (finds potential confusion zones); `/calibrate routing` tests behavioral impact — it generates real routing decisions and measures whether descriptions actually disambiguate. Run in sequence: `/audit` first (fast, structural), then `/calibrate routing` (behavioral, slower). They are complementary, not redundant.
 - **`routing` not in `all`**: routing tests orchestrator dispatch logic, not agent quality — excluded from batch calibration. Run `/calibrate routing` explicitly after any agent description change.
-- **Routing proposals**: the routing pipeline's Phase 5 writes description improvement proposals to `.claude/calibrate/runs/<TIMESTAMP>/routing/report.md` — look in the Proposals section for targeted wording suggestions per confused pair.
+- **`communication` not in `all`**: communication tests protocol compliance and token efficiency — excluded from batch calibration. Run `/calibrate communication` explicitly after any protocol or handoff change.
 - Follow-up chains:
   - Recall < 0.70 or borderline → `/calibrate <agent> fast apply` → `/calibrate <agent>` to verify improvement — stop and escalate to user if recall is still < 0.70 after this cycle (max 1 apply cycle per run)
   - Calibration bias > 0.15 → add adjusted threshold to MEMORY.md → note in next audit
   - Routing accuracy < 0.90 or hard accuracy < 0.80 → update descriptions for confused pairs → `/calibrate routing` to verify improvement
-  - Recommended cadence: run before and after any significant agent instruction change; run `/calibrate routing` after any agent description change
+  - Recommended cadence: run before and after any significant agent instruction change; run `/calibrate routing` after any agent description change; run `/calibrate communication` after any protocol or handoff change
 - **Internal Quality Loop suppressed during benchmarking**: the Phase 2 prompt explicitly tells target agents not to self-review before answering. This ensures calibration measures raw instruction quality — not the `(agent + loop)` composite. If the loop were enabled, it would inflate both recall and confidence by an unknown ratio, masking real instruction gaps and making it impossible to attribute improvement to instruction changes vs. the loop self-correcting at inference time.
-- **Skill-creator complement**: `/calibrate` benchmarks agents and skills via synthetic ground-truth problems; the official `skill-creator` from the anthropics/skills repository <!-- verify at use time --> handles skill-level eval — trigger accuracy, A/B description testing, and description optimization. The two are complementary: run `/calibrate` for quality and recall, `skill-creator` for trigger reliability.
-- **A/B mode rationale**: every specialized agent adds system-prompt tokens — if a `general-purpose` subagent matches its recall and F1, the specialization adds no value. `ab` mode quantifies this gap per-target so you can decide whether to keep, retrain, or retire an agent. `significant` (Δ>0.10) confirms the agent's domain depth earns its cost; `marginal` (0.05–0.10) suggests instruction improvements may help; `none` (\<0.05) signals the agent's current instructions add no measurable lift over a vanilla agent — consider strengthening domain-specific antipatterns and re-running. Token cost is informational (logged in scores.json) but not part of the verdict — prioritize recall/F1 delta as the primary signal.
-- **A/B blind spot — role-specificity beyond recall**: for any agent whose domain is well-covered by general training data (structured rule application, documented conventions, standard code patterns), `none` AB verdict does NOT mean "retire the agent". Their specialization shows up in severity accuracy, output actionability, token efficiency, and scope discipline — not recall alone. The benchmark measures all four: `delta_severity_accuracy` (correct prioritization), `delta_format_score` (structured, actionable output), `token_ratio` (conciseness), and `scope_fp` (domain refusal). A `none` ΔRecall result paired with positive ΔSevAcc, ΔFmt, and negative ΔTokens still confirms the specialist earns its cost — use ΔSevAcc and ΔFmt as the primary evidence in this case.
+- **Skill-creator complement**: Trigger accuracy and A/B description testing are not yet implemented — a future skill-creator skill from Anthropic would own this domain; run `/calibrate` for quality and recall.
+- **A/B mode rationale**: every specialized agent adds system-prompt tokens — if a `general-purpose` subagent matches its recall and F1, the specialization adds no value. `ab` mode quantifies this gap per-target. `significant` (Δ>0.10) confirms the agent's domain depth earns its cost; `marginal` (0.05–0.10) suggests instruction improvements may help; `none` (\<0.05) signals the agent's current instructions add no measurable lift over a vanilla agent. Token cost is informational (logged in scores.json) but not part of the verdict — prioritize recall/F1 delta as the primary signal.
+- **A/B blind spot — role-specificity beyond recall**: for any agent whose domain is well-covered by general training data, `none` AB verdict does NOT mean "retire the agent". Their specialization shows up in severity accuracy, output actionability, token efficiency, and scope discipline — not recall alone. A `none` ΔRecall result paired with positive ΔSevAcc, ΔFmt, and negative ΔTokens still confirms the specialist earns its cost.
 - **AB mode nesting**: Phase 2b spawns `general-purpose` baseline agents inside the pipeline subagent. Phase 3 spawns `general-purpose` scorer agents inside the same pipeline subagent. All at 2 levels (main → pipeline → agents) — no additional depth.
+- **Mode files**: domain tables and mode-specific spawn instructions live in `modes/agents.md`, `modes/skills.md`, `modes/routing.md`, `modes/communication.md`. Add a new target mode by creating a new file in `modes/` and adding a row to the Step 2 dispatch table.
 
 </notes>

@@ -21,14 +21,14 @@ Rules:
 - Issues must be unambiguous — a domain expert would confirm them
 - Cover ≥1 easy and ≥1 medium problem; hard is optional
 - Each problem has 2–5 known issues; no runtime-only-detectable issues
-- **Include exactly 1 out-of-scope problem** (difficulty: `"scope"`): input is clearly outside the agent's domain (e.g., for `linting-expert`, a natural-language question; for `ci-guardian`, a Python data pipeline). Set `ground_truth: []`. A correct response is declining, redirecting, or returning no findings. Any findings reported = false positives (scope failure). This tests scope discipline directly.
+- **Include exactly 1 out-of-scope problem** (difficulty: `"scope"`): input is clearly outside the agent's domain (e.g., for `linting-expert`, a natural-language question; for `ci-guardian`, a plain Python NumPy data transformation script with no CI/CD configuration). Set `ground_truth: []`. A correct response is declining, redirecting, or returning no findings. Any findings reported = false positives (scope failure). This tests scope discipline directly.
 - Return a valid JSON array only (no prose)
 
-Write the JSON array to `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/problems.json` (use Bash `mkdir -p` to create dirs).
+Write the JSON array to `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/problems.json` (the run dir is pre-created by the invoking skill before this pipeline is spawned).
 
 ### Phase 2 — Run target on each problem (parallel)
 
-Spawn one `<TARGET>` named subagent per problem. Issue ALL spawns in a **single response** — no waiting between spawns.
+Spawn one `<TARGET>` named subagent per problem using the **Agent tool** — never via Bash or CLI. Issue ALL spawns in a **single response** — no waiting between spawns.
 
 The prompt for each subagent is exactly:
 
@@ -44,7 +44,7 @@ The prompt for each subagent is exactly:
 
 **Context discipline**: subagents write to disk and return a single-line acknowledgment. The pipeline agent must NOT accumulate their full analyses in its context — scorers read from disk in Phase 3. Receiving only `Wrote: <problem_id>` per agent is correct and expected.
 
-**Phase timeout (PHASE_TIMEOUT_MIN = 5 min)**: if the acknowledgment line is not received within 5 minutes, mark that problem as `{"timed_out": true}` in scores.json and proceed. Never block indefinitely on a single response.
+**Phase timeout**: after 5 min of no acknowledgment, run `tail -20 .claude/calibrate/runs/<TIMESTAMP>/<TARGET>/response-<problem_id>.md` — if output shows active progress, grant one +5-min extension. Hard cutoff at 15 min of no new file activity: mark that problem as `{"timed_out": true}` in scores.json and proceed. Never block indefinitely on a single response.
 
 For **skill targets** (target starts with `/`): spawn a `general-purpose` subagent with the skill's SKILL.md content prepended as context, running against the synthetic input from the problem. Apply the same write-and-acknowledge pattern.
 
@@ -52,11 +52,11 @@ For **skill targets** (target starts with `/`): spawn a `general-purpose` subage
 
 Spawn one `general-purpose` subagent per problem using the **identical prompt** as Phase 2 (same task_prompt + input + Confidence instruction), plus the same write-and-acknowledge suffix pointing to `response-<problem_id>-general.md`. Issue ALL spawns in a **single response** — no waiting between spawns.
 
-**Phase timeout**: same 5-minute budget applies — proceed with partial baseline data if any response hangs.
+**Phase timeout**: same protocol as Phase 2 — 5-min check with one +5-min extension if progress is evident; 15-min hard cutoff; proceed with partial baseline data if any response hangs.
 
 ### Phase 3 — Score responses (parallel scorer subagents)
 
-Spawn one `general-purpose` scorer subagent per problem. Issue ALL spawns in a **single response** — no waiting between spawns.
+Spawn one `general-purpose` scorer subagent per problem using the **Agent tool** — never via Bash or CLI. Issue ALL spawns in a **single response** — no waiting between spawns.
 
 Each scorer receives this prompt (substitute `<PROBLEM_ID>`, `<GROUND_TRUTH_JSON>`, `<RUN_DIR>`, `<AB_MODE>`):
 
@@ -156,6 +156,7 @@ Verdict: `significant` (delta_recall or delta_f1 > 0.10) / `marginal` (0.05–0.
 ```
 
 Write a single-line JSONL result to `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/result.jsonl`:
+(one line per pipeline run — the orchestrating skill concatenates these across runs into `.claude/logs/calibrations.jsonl`)
 
 `{"ts":"<TIMESTAMP>","target":"<TARGET>","mode":"<MODE>","mean_recall":0.N,"mean_confidence":0.N,"calibration_bias":0.N,"mean_f1":0.N,"severity_accuracy":0.N,"format_score":0.N,"problems":<N>,"scope_fp":N,"verdict":"...","gaps":["..."]}`
 
@@ -168,7 +169,7 @@ Determine the target file path:
 - Agent: `.claude/agents/<TARGET>.md`
 - Skill: `.claude/skills/<TARGET>/SKILL.md` (strip the leading `/` from target name)
 
-Spawn a **self-mentor** subagent. Pass only the **file path** and **report path** — do NOT paste file contents into the prompt; self-mentor reads the files itself:
+Spawn a **self-mentor** subagent using the **Agent tool** — never via Bash or CLI. Pass only the **file path** and **report path** — do NOT paste file contents into the prompt; self-mentor reads the files itself:
 
 > You are reviewing a calibration benchmark result and proposing instruction improvements.
 >
@@ -195,6 +196,7 @@ Spawn a **self-mentor** subagent. Pass only the **file path** and **report path*
 > ```
 
 Write the self-mentor response verbatim to `.claude/calibrate/runs/<TIMESTAMP>/<TARGET>/proposal.md`.
+Ask self-mentor to end their proposed changes with a `## Confidence` block per CLAUDE.md output standards.
 
 ### Return value
 

@@ -166,6 +166,7 @@
       "Bash(gh release list:*)",
       "Bash(gh api graphql:*)",
       "Bash(git log:*)",
+      "Bash(git fetch:*)",
       "Bash(git shortlog:*)",
       "Bash(git describe:*)",
       "Bash(git diff:*)",
@@ -253,13 +254,9 @@
       "Read(/tmp/**)"
     ],
     "deny": [
-      "Bash(git push:*)",
       "Bash(git branch -D:*)",
       "Bash(git branch -d:*)",
-      "Bash(git tag -d:*)",
-      "Bash(git remote:*)",
-      "Bash(git clean:*)",
-      "Bash(git restore:*)"
+      "Bash(git tag -d:*)"
     ]
   },
   "statusLine": {

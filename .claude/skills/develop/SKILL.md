@@ -65,13 +65,26 @@ Strip the mode token from arguments — the remainder is passed to mode-specific
 
 Detect `--team` flag: if present anywhere in arguments, enable team mode (see ## Team Mode section).
 
+**Branch safety guard** (skip for `plan` mode — plan mode makes no code changes):
+
+```bash
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] || [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  echo "⚠ On default branch ($CURRENT_BRANCH) — create a feature branch before running /develop"
+  exit 1
+fi
+```
+
+If the guard fires: stop, report the branch name, and ask the user to create a feature branch.
+
 ## Step 1: Scope analysis
 
 Read `.claude/skills/develop/modes/<mode>.md` and run its **## Step 1** instructions.
 
 This step produces a scope analysis that is used by all subsequent steps.
 
-**Gate**: if the mode file's Step 1 flags a complexity smell (feature: 8+ files / 2+ new classes; fix: root cause spans 3+ modules; refactor: directory-wide scope (10+ files, regardless of whether a goal is stated)), present the scope concern to the user before proceeding. These thresholds are exhaustive — no mode file adds additional gate conditions beyond what is listed here.
+**Gate**: if the mode file's Step 1 flags a complexity smell (feature: 8+ files / 2+ new classes; fix: root cause spans 3+ modules; refactor: directory-wide scope (10+ files, regardless of whether a goal is stated)), present the scope concern to the user before proceeding. These thresholds are exhaustive — no mode file adds additional gate conditions beyond what is listed here. <!-- source of truth — keep in sync with mode files if thresholds change -->
 
 ## Step 2: Mode-specific steps
 
@@ -106,17 +119,19 @@ Mandatory after the quality stack completes. Gracefully degrades if Codex is una
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the changes.
 
-# Additional steps not in shared file:
+If codex-prepass.md step count changes, verify alignment of steps below.
 
-4. **Validate**: if Codex made changes, re-run the quality stack on affected files only:
+## Additional steps not in shared file:
+
+3. **Validate**: if Codex made changes, re-run the quality stack on affected files only:
    ```bash
    CODEX_CHANGED=$(git diff HEAD --name-only | grep '\.py$' | tr '\n' ' ')
    [ -n "$CODEX_CHANGED" ] && uv run ruff check $CODEX_CHANGED --fix && uv run pytest <test_dir> -q 2>&1 | tail -10
    ```
    - Tests pass → accept Codex corrections
    - Tests fail → revert Codex changes (`git restore .`) and note in final report
-5. **Collect findings**: build `CODEX_FINDINGS` — a bullet list of every applied fix and every flagged-but-not-fixed issue. If nothing was found or the step was skipped, set `CODEX_FINDINGS=""`.
-6. **Co-authorship rule**: add `Co-Authored-By: OpenAI Codex <codex@openai.com>` to the commit when Codex made an intellectual contribution — correctly identifying a bug or issue and producing the right fix — regardless of whether its bytes landed in the file directly or were applied by Claude. The bar is the reasoning and the patch content, not file I/O mechanics. Do NOT add it when Codex found no issues or was skipped.
+4. **Collect findings**: build `CODEX_FINDINGS` — a bullet list of every applied fix and every flagged-but-not-fixed issue. If nothing was found or the step was skipped, set `CODEX_FINDINGS=""`.
+5. **Co-authorship rule**: add `Co-Authored-By: OpenAI Codex <codex@openai.com>` to the commit when Codex made an intellectual contribution — correctly identifying a bug or issue and producing the right fix — regardless of whether its bytes landed in the file directly or were applied by Claude. The bar is the reasoning and the patch content, not file I/O mechanics. Do NOT add it when Codex found no issues or was skipped.
 
 Include a `### Codex Pre-pass` section in the final report:
 

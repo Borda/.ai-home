@@ -43,7 +43,7 @@ Use this prompt scaffold (adapt the constraints from Step 1):
 ```
 Survey the literature on: <$ARGUMENTS>
 Codebase constraints: <framework, Python version, compute budget, existing dependencies from Step 1>
-Deliver: comparison table (method, key idea, benchmarks, compute, code available), recommendation for best method, and a 3-step implementation plan for this codebase.
+Deliver: comparison table (method, key idea, benchmarks, compute, code available), recommendation for best method, a 3-step implementation plan for this codebase, key hyperparameters (name, typical range, what it controls) for the recommended method, and common gotchas (failure modes and how to avoid them).
 Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `tasks/survey-research-$(date +%Y-%m-%d).md` using the Write tool.
 Then return ONLY a compact JSON envelope on your final line — nothing else after it:
 {"status":"done","papers":N,"recommendation":"<method name>","file":"tasks/survey-research-<date>.md","confidence":0.N}

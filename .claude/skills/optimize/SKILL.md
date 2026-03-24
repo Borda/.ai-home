@@ -111,7 +111,7 @@ After confirming improvements, inspect the applied changes (`git diff HEAD --sta
 
 Read `.claude/skills/_shared/codex-delegation.md` and apply the delegation criteria defined there.
 
-Example prompt: `"use the doc-scribe to add an inline comment to the inner loop in src/batch_processor.py:87 explaining that the result tensor is pre-allocated before the loop to avoid repeated GPU memory allocation — the old version called torch.zeros() inside the loop"`
+Example prompt: `"add a brief inline comment to the inner loop in src/batch_processor.py:87 explaining that the result tensor is pre-allocated before the loop to avoid repeated GPU memory allocation — the old version called torch.zeros() inside the loop"`
 
 Only print a `### Codex Delegation` section after the Step 4 terminal output when tasks were actually delegated — omit entirely if nothing was delegated.
 

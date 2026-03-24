@@ -3,7 +3,7 @@ name: observe
 description: Analyzes ongoing work patterns and the existing agent/skill roster to suggest creating new agents or skills for specialized or repetitive tasks. Continuously monitors what tasks are being done repeatedly or where specialist knowledge would help. Avoids recommending duplicates.
 argument-hint: '[review | prune | "<recurring task description>"]'
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+allowed-tools: Read, Edit, Bash, Glob
 ---
 
 <objective>
@@ -59,7 +59,7 @@ If `$ARGUMENTS` was provided, use it as additional context for the pattern analy
 
 - **3+ occurrences** of a pattern in recent history → candidate for automation
 - **2+ different projects** using the same manual process → cross-project skill
-- **> 10 minutes** of manual work per occurrence → high-value automation target
+- **significant manual effort** per occurrence (subjective — use git history context) → high-value automation target
 - **Domain-specific knowledge** required → candidate for a specialist agent (not just a skill)
 
 ## Step 3: Gap analysis
@@ -67,7 +67,7 @@ If `$ARGUMENTS` was provided, use it as additional context for the pattern analy
 For each identified pattern, check:
 
 1. **Is it already covered?** — search existing agent/skill descriptions for overlap
-2. **Is it frequent enough?** — recurring ≥ 3 times or clearly domain-specialized
+2. **Is it frequent enough?** — recurring ≥ 3 times or clearly domain-specialized (See Step 2 heuristics — combine ≥3 occurrences with the effort/frequency signals from Steps 1–2)
 3. **Would a specialist add quality?** — does it require deep domain knowledge?
 4. **Is it too narrow?** — a single-use task doesn't warrant a persistent agent
 
@@ -121,6 +121,8 @@ Anti-pattern checklist — reject the candidate if any apply:
 ### No Action Needed
 [pattern]: already handled by [existing agent/skill]
 
+<!-- review mode: suppress "Recommend: New Agent/Skill" sections — output only "Existing Coverage", "Recommend: Enhance Existing", and "No Action Needed" -->
+
 ## Confidence
 **Score**: [0.N]
 **Gaps**: [e.g., git history too shallow, task files not present, descriptions too generic to compare]
@@ -138,7 +140,7 @@ Locate, evaluate, and trim the project memory file.
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
 MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|/|-|g')/memory/MEMORY.md"
-echo "$MEMORY_FILE"
+echo "Memory file located."
 ```
 
 Read the memory file with the Read tool. Also read `.claude/CLAUDE.md` to identify overlap — anything already covered in CLAUDE.md does not need to live in memory.
@@ -148,6 +150,8 @@ Read the memory file with the Read tool. Also read `.claude/CLAUDE.md` to identi
 - **Drop**: content that is no longer accurate (removed features, resolved one-time issues, superseded decisions), or fully duplicated in CLAUDE.md
 - **Trim**: sections still accurate but containing implementation history or rationale no longer needed day-to-day — keep operational facts (what/where), drop the why-it-was-built backstory
 - **Keep**: rules actively applied every session; project-specific facts absent from CLAUDE.md; anything the model needs to act correctly
+
+Before applying edits, print a brief summary of what will be trimmed to terminal so the user can review before any changes are made.
 
 Apply changes with the Edit tool — targeted replacements for trimmed sections, full section removal for dropped ones.
 

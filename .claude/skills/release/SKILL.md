@@ -37,17 +37,16 @@ If no mode is given, defaults to `notes`. `prepare` is the full release pipeline
 Parse `$ARGUMENTS` by the first token:
 
 ```bash
-FIRST=$(echo "$ARGUMENTS" | awk '{print $1}')
-REST=$(echo "$ARGUMENTS" | cut -d' ' -f2-)
+read FIRST REST <<< "$ARGUMENTS"
 ```
 
-| First token                     | Mode      | Routing                                                                                                                                              |
-| ------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prepare`                       | prepare   | Skip to **Mode: prepare**                                                                                                                            |
-| `audit`                         | audit     | Skip to **Mode: audit**                                                                                                                              |
-| `migration`                     | migration | Set `FROM=$(echo $REST \| awk '{print $1}')`, `TO=$(echo $REST \| awk '{print $2}')`, `RANGE="$FROM..$TO"`, continue Steps 1–5 with migration format |
-| `notes`, `changelog`, `summary` | as named  | Set `RANGE="$REST"` (empty = default); continue Steps 1–5                                                                                            |
-| *(none or bare range)*          | notes     | Set `RANGE="$ARGUMENTS"`; continue Steps 1–5                                                                                                         |
+| First token                     | Mode      | Routing                                                                                                                                |
+| ------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `prepare`                       | prepare   | Skip to **Mode: prepare**                                                                                                              |
+| `audit`                         | audit     | Skip to **Mode: audit**                                                                                                                |
+| `migration`                     | migration | `read MIGRATION_FROM MIGRATION_TO <<< "$REST"`, set `RANGE="$MIGRATION_FROM..$MIGRATION_TO"`, continue Steps 1–5 with migration format |
+| `notes`, `changelog`, `summary` | as named  | Set `RANGE="$REST"` (empty = default); continue Steps 1–5                                                                              |
+| *(none or bare range)*          | notes     | Set `RANGE="$ARGUMENTS"`; continue Steps 1–5                                                                                           |
 
 ## Step 1: Gather changes
 
@@ -102,7 +101,8 @@ Before writing, fetch the last 2–3 releases from the repo to check for project
 
 ```bash
 gh release list --limit 3
-gh release view <latest-tag>   # replace <latest-tag> with an actual tag from the list above; read the body to match style, tone, and structure
+LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+gh release view "$LATEST_TAG"   # read the body to match style, tone, and structure
 ```
 
 If the existing releases deviate significantly from the templates below (e.g., no emoji sections, different heading levels, prose-style entries), match their style. The templates below are the default — project conventions take precedence.
@@ -227,8 +227,9 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - Public-facing output (release notes, changelogs, migration guides) is co-authored with `oss-maintainer` — follow its `<voice>` guidelines for human, direct tone
 - Follow-up chains:
   - Before cutting a release → `/release audit [version]` to check readiness: blockers, docs alignment, version consistency, CVEs
-  - Readiness confirmed → `/release prepare <version>` to run the full pipeline and write all artifacts
+  - Readiness confirmed → `/release prepare <version>` to run the full pipeline and write all artifacts (audit runs automatically inside `prepare` — skip `/release audit` if you run `prepare` directly)
   - Release includes breaking changes → `/analyse` for downstream ecosystem impact assessment
+  - Notes/changelog written → See Step 5 for the release-create gate (`gh release create` must be run by the user via project tooling)
   - `migration` content written → add to project docs and link from the CHANGELOG entry
 
 </notes>

@@ -92,19 +92,21 @@ Over budget: <N agents> | Broken refs: <N> | Duplicates found: <N>
 ### Issues (priority-ordered)
 
 #### [P1] Broken cross-references (fix immediately)
-- file:line — "See X agent" but X does not exist on disk
+- file:line — "See X agent" but X does not exist on disk → Fix: update ref to correct agent name or remove
 
 #### [P2] Duplication (remove from non-canonical owner)
-- fileA:lines X-Y duplicates fileB:lines A-B — keep in fileB, add cross-ref in fileA
+- fileA:lines X-Y duplicates fileB:lines A-B — keep in fileB, add cross-ref in fileA → Fix: remove duplicate block from fileA, replace with "See fileB"
 
 #### [P3] Disproportionate length (investigate)
-- agent-name: significantly longer than peers — flag sections that could be cross-refs or bullet points
+- agent-name: significantly longer than peers — flag sections that could be cross-refs or bullet points → Fix: convert verbose section to cross-ref bullet or trim to essential content
 
 #### [P4] Outdated content (verify and update)
-- linting-expert:line — ruff version cited as X but latest is Y
+- linting-expert:line — ruff version cited as X but latest is Y → Fix: fetch latest version and update the cited value
 
 #### [P5] Structure issues (fix before next use)
-- agent-name: missing <workflow> block
+- agent-name: missing <workflow> block → Fix: add <workflow> block with numbered steps after the <role> section
+
+**No prose after the Issues block** — do not add "Notes:", "Observations:", or "Additional context:" sections below the Recommendations list. All findings go in the table; anything that cannot be expressed as a finding is omitted.
 
 ### Recommendations
 1. Immediate: [P1 and P2 fixes]
@@ -117,6 +119,10 @@ Over budget: <N agents> | Broken refs: <N> | Duplicates found: <N>
 **Refinements**: N passes. [Pass 1: <what improved>. Pass 2: <what improved>.] — omit if 0 passes
 ```
 
+**Compact output rule**: emit the Issues table and Recommendations list only — no prose preamble, no "Compliant:" summary paragraphs, no bold narrative lines outside the table, no "Notes" prose sections after the table. If zero findings, write one line: `No issues found.`
+
+**Fix directive required**: every finding bullet must end with `→ Fix: <one-line action>`. If a finding has no actionable fix (e.g., a gap requiring a calibration batch change), write `→ Fix: n/a — calibration batch update needed`. Omitting the fix directive is a format violation.
+
 The score is a **coverage estimate** (how thoroughly this file was checked), not a quality guarantee. The `Gaps` field is the primary reliable signal — read it before acting on the score. `/calibrate` measures whether scores track actual recall over time.
 
 Confidence scoring guidance:
@@ -127,7 +133,7 @@ Confidence scoring guidance:
 - **Issue-specific cap application**: apply the 0.95 inline-only cap only to findings that depend on disk state (cross-reference validation, roster completeness). For findings derivable purely from the provided content (tag balance, step numbering, missing sections, model in frontmatter), do not reduce score for "no disk Glob" — those findings are not disk-dependent. Score each finding category independently before computing the aggregate.
 - **0.7–0.9**: most files checked; one or two references unverifiable without runtime data
 - **\<0.7**: significant blind spots — flag explicitly; orchestrator should consider a second pass
-- Principled underconfidence (score 0.88–0.92) is acceptable and correct when: recall is perfect but scoring method is inline-only (no cross-file verification), or when the target had no runtime context. Do not inflate confidence to 0.95+ to compensate for these structural limitations — report the real score and name the limit in Gaps.
+- Principled underconfidence (score 0.88–0.92) is acceptable and correct when: recall is perfect but scoring method is inline-only (no cross-file verification), or when the target had no runtime context. Do not inflate confidence to 0.95+ to compensate for these structural limitations — report the real score and name the limit in Gaps. Exception: if all identified findings are derivable purely from the provided content (no disk Glob or spec lookup required), the confidence floor is 0.90 — "spec not consulted live" alone does not justify scores below 0.90 when no disk-dependent finding is present.
 
 \</output_format>
 
@@ -168,7 +174,7 @@ This is the long-term confidence improvement loop: low score → targeted re-run
 <workflow>
 
 1. Glob all agent files: `.claude/agents/*.md` and skill files: `.claude/skills/**/*.md`
-2. Read each file and evaluate: structure, cross-refs, line count, duplication
+2. Read each file and evaluate: structure, cross-refs, line count, duplication — when evaluating handoff envelope compliance specifically, read `.claude/skills/_shared/file-handoff-protocol.md` first to verify required fields from the live source rather than memory
 3. For cross-refs: `Grep("See .* agent", ".claude/agents/")` — validate each target exists on disk
 4. For URLs: `WebFetch` each URL found in agent/skill files — confirm it resolves and content matches the description; flag any that 404 or mismatch as P4 (outdated content)
 5. For duplication: scan for identical or near-identical code blocks across agents

@@ -24,11 +24,12 @@ The spawned agent **must**:
     "medium": 2
   },
   "file": "<path>",
-  "confidence": 0.88
+  "confidence": 0.88,
+  "summary": "1 high (missing tool), 2 medium (unused tools)"
 }
 ```
 
-Include any additional task-specific keys (e.g. `"papers":5` for survey, `"verdict":"approve"` for review) but keep the envelope ≤200 bytes.
+Include any additional task-specific keys (e.g. `"papers":5` for survey, `"verdict":"approve"` for review) but keep the envelope ≤250 bytes. The `summary` field is a one-line human-readable description of what was found or done — always include it.
 
 ## RUN_DIR convention
 
@@ -53,20 +54,22 @@ Include any additional task-specific keys (e.g. `"papers":5` for survey, `"verdi
 ```
 Read all finding files in `<RUN_DIR>/`. Apply the consolidation rules from <checklist path>.
 Write the consolidated report to `<output path>` using the Write tool.
-Return ONLY a one-line summary: `verdict=<VALUE> | findings=N | critical=N | high=N | file=<path>`
+Return ONLY a compact JSON envelope on your final line — nothing else after it:
+{"status":"done","findings":N,"severity":{"critical":N,"high":N,"medium":N,"low":N},"file":"<output path>","confidence":0.N,"summary":"<one-line description of what was found>"}
 ```
 
-Main context receives only the one-liner.
+Main context receives only the envelope JSON.
 
 ## Envelope fields reference
 
-| Field        | Required | Description                                |
-| ------------ | -------- | ------------------------------------------ |
-| `status`     | yes      | `"done"`, `"timed_out"`, `"error"`         |
-| `findings`   | yes      | total finding count (0 if none)            |
-| `severity`   | yes      | `{"critical":N,"high":N,"medium":N}`       |
-| `file`       | yes      | absolute path to the written findings file |
-| `confidence` | yes      | agent's self-reported confidence (0–1)     |
+| Field        | Required | Description                                                   |
+| ------------ | -------- | ------------------------------------------------------------- |
+| `status`     | yes      | `"done"`, `"timed_out"`, `"error"`                            |
+| `findings`   | yes      | total finding count (0 if none)                               |
+| `severity`   | yes      | `{"critical":N,"high":N,"medium":N}`                          |
+| `file`       | yes      | absolute path to the written findings file                    |
+| `confidence` | yes      | agent's self-reported confidence (0–1)                        |
+| `summary`    | yes      | one-line human-readable description of what was found or done |
 
 ## Reference implementation
 

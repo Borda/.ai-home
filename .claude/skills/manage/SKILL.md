@@ -3,7 +3,7 @@ name: manage
 description: Create, update, or delete agents and skills with full cross-reference propagation. Also manages settings.json permissions atomically with permissions-guide.md via add/remove perm operations.
 argument-hint: <create|update|delete> <agent|skill> <name> | add perm <rule> "desc" "use-case" | remove perm <rule>
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, WebFetch
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 ---
 
 <objective>
@@ -53,6 +53,8 @@ Manage the lifecycle of agents and skills in the `.claude/` directory. Handles c
 - SKILLS_DIR: `.claude/skills`
 - USED_COLORS: blue, green, purple, lime, orange, yellow, cyan, violet, teal, indigo, magenta, pink
 - AVAILABLE_COLORS: coral, gold, olive, navy, salmon, red, maroon, aqua, brown
+
+maintain colors manually — add new agent colors here when creating agents
 
 </constants>
 
@@ -125,7 +127,7 @@ Branch into one of six modes:
 
 1. Fetch the latest Claude Code agent frontmatter schema to ensure the template is current:
 
-   - Spawn **web-explorer** to fetch `https://code.claude.com/docs/en/sub-agents` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-schema-$(date +%s).md` using the Write tool. Return ONLY a summary line: `fields=N new=N deprecated=N schema_file=/tmp/manage-schema-<ts>.md`"
+   - Spawn **web-explorer** to fetch `https://code.claude.com/docs/en/sub-agents` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`"
    - Read the returned summary and use it to extract: valid frontmatter fields (`name`, `description`, `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `isolation`), current model shorthands, and any new fields
    - Note any new fields worth including in the generated template
      Adjust the template generated in steps 2–4 to reflect the current schema. If a new field is
@@ -149,7 +151,7 @@ Read the agent scaffold template from .claude/skills/manage/templates/agent-scaf
 
 1. Fetch the latest Claude Code skill frontmatter schema to ensure the template is current:
 
-   - Spawn **web-explorer** to fetch `https://code.claude.com/docs/en/skills` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-skill-schema-$(date +%s).md` using the Write tool. Return ONLY a summary line: `fields=N new=N deprecated=N schema_file=/tmp/manage-skill-schema-<ts>.md`"
+   - Spawn **web-explorer** to fetch `https://code.claude.com/docs/en/skills` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-skill-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-skill-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`"
    - Read the returned summary and use it to extract: valid frontmatter fields (`name`, `description`, `argument-hint`, `disable-model-invocation`, `user-invocable`, `allowed-tools`, `model`, `context`, `agent`, `hooks`), and any new fields
    - Note any new fields worth including in the generated template
      Adjust the template generated in step 3 to reflect the current schema. Include `model`
@@ -357,7 +359,7 @@ Use Grep to search for the specific changed name and confirm:
 - **Delete**: zero hits for deleted name (or flagged references noted)
 - **Create**: new file exists with valid structure
 
-For **create** and **update** operations, also verify tool efficiency: cross-check the agent/skill's declared tools (`tools:` or `allowed-tools:`) against the tool names that actually appear in the workflow body. Any declared tool not referenced anywhere in the content should be flagged as a cleanup candidate (unnecessary permission surface).
+For **create** and **update** operations, also verify tool efficiency: cross-check the agent/skill's declared tools (`tools:` or `allowed-tools:`) against the tool names that actually appear in the workflow body. Any declared tool not referenced anywhere in the content should be flagged as a cleanup candidate in the Step 10 final report (report only — do not block the operation) (unnecessary permission surface).
 
 ## Step 9: Audit
 

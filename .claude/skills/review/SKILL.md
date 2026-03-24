@@ -2,7 +2,7 @@
 name: review
 description: Multi-agent code review covering architecture, tests, performance, docs, lint, security, and Application Programming Interface (API) design.
 argument-hint: '[file, directory, or PR number] [--reply]'
-allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
+allowed-tools: Read, Write, Bash, Grep, Agent, TaskCreate, TaskUpdate
 context: fork
 ---
 
@@ -22,6 +22,13 @@ Perform a comprehensive code review by spawning specialized sub-agents in parall
   - **Scope**: this skill reviews Python source code only. If the input is a non-Python file (YAML, JSON, shell script, etc.), state that it is out of scope and suggest the appropriate tool — do not produce findings.
 
 </inputs>
+
+<constants>
+<!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 parallel agent spawns -->
+MONITOR_INTERVAL=300   # 5 minutes between polls
+HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
+EXTENSION=300          # one +5 min extension if output file explains delay
+</constants>
 
 <workflow>
 
@@ -157,6 +164,15 @@ If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/iss
 
 **Agent 6 — solution-architect (optional, for PRs touching public API boundaries)**: If the diff touches `__init__.py` exports, adds/modifies Protocols or Abstract Base Classes (ABCs), changes module structure, or introduces new public classes — evaluate API design quality, coupling impact, and backward compatibility. Skip if changes are internal implementation only.
 
+**Health monitoring** (CLAUDE.md §8): after spawning all agents, create a checkpoint:
+
+```bash
+REVIEW_CHECKPOINT="/tmp/review-check-$(date +%s)"
+touch "$REVIEW_CHECKPOINT"
+```
+
+Every `$MONITOR_INTERVAL` seconds, run `find "$RUN_DIR" -newer "$REVIEW_CHECKPOINT" -type f | wc -l` — new files = alive; zero new files for `$HARD_CUTOFF` seconds = stalled. Grant one `$EXTENSION` extension if the output file tail explains the delay. On timeout: read partial output; mark the agent ⏱ in the final report. Never silently omit timed-out agents.
+
 ## Step 4: Post-agent checks (run in parallel)
 
 While agents from Step 3 are completing, run these two independent checks simultaneously:
@@ -165,6 +181,9 @@ While agents from Step 3 are completing, run these two independent checks simult
 
 ```bash
 # Check if changed APIs are used by downstream projects
+# Rate-limit guard: if gh api returns HTTP 429, wait 10 seconds and retry once.
+# If still rate-limited, log "rate-limited — downstream search may be incomplete" and continue.
+# --paginate is available for large result sets but increases rate-limit exposure; omit unless completeness is critical.
 CHANGED_EXPORTS=$(git diff HEAD~1 HEAD -- "src/**/__init__.py" | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u)
 for export in $CHANGED_EXPORTS; do
   echo "=== $export ==="

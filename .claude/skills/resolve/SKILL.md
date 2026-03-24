@@ -3,7 +3,7 @@ name: resolve
 description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (1) PR intelligence — reads the full thread, linked issues, and PR body to synthesize contribution motivation and classify every comment into action items; (2) conflict resolution — checks out the PR branch (fork-aware via gh pr checkout), merges BASE into it, and resolves conflicts semantically using the contributor's intent as the priority lens; (3) implements each action item as a separate attributed commit via Codex, then pushes back to the contributor's fork. Also accepts bare comment text for single-comment dispatch."
 argument-hint: <PR number or URL> | <review comment text>
 disable-model-invocation: true
-allowed-tools: Read, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate
+allowed-tools: Read, Edit, Bash, TaskCreate, TaskUpdate, Agent
 ---
 
 <objective>
@@ -18,7 +18,7 @@ The result: a conflict-free, review-addressed PR branch pushed to the fork, read
 
 **Core invariant — transparent and reversible**: every action produces a visible, named git object (merge commit, fix commit) that can be inspected and reverted individually. This is why all conflict resolution goes forward via `git merge` (creates a new commit with two parents) and never via `git rebase` (rewrites SHA history, destroys the ability to revert or cherry-pick individual steps). Each action item becomes its own commit for the same reason — granular revert is always possible.
 
-When given bare comment text, skip straight to Codex dispatch (Step 11).
+When given bare comment text, skip straight to Codex dispatch (Step 12).
 
 </objective>
 
@@ -38,10 +38,11 @@ preflight_ok()  { local f=".claude/state/preflight/$1.ok"; [ -f "$f" ] && [ $(( 
 preflight_pass(){ mkdir -p .claude/state/preflight; date +%s > ".claude/state/preflight/$1.ok"; }
 
 # codex — optional; intelligence + conflict resolution work without it
+CODEX_AVAILABLE=false
 if preflight_ok codex; then
-  echo "codex: ok (cached)"
+  CODEX_AVAILABLE=true && echo "codex: ok (cached)"
 elif which codex &>/dev/null; then
-  preflight_pass codex && echo "codex: ok"
+  preflight_pass codex && CODEX_AVAILABLE=true && echo "codex: ok"
 else
   echo "codex: missing — action item implementation (Step 8) will be skipped"
 fi
@@ -60,8 +61,6 @@ fi
 # Show current remotes — confirms we are in the right repo and surfaces any existing fork remotes
 git remote -v
 ```
-
-<!-- codex package: npm show @openai/codex version to check latest before pinning -->
 
 If gh is missing or not authenticated: stop (error printed above)
 
@@ -265,7 +264,7 @@ d. **Stage**:
 git add <file>
 ```
 
-### 7e: Complete the merge
+e. **Complete the merge**:
 
 ```bash
 git merge --continue --no-edit
@@ -322,7 +321,33 @@ If no code changed (already done or non-actionable) → record Codex's reason; d
 
 Record per-item: `committed <SHA>` or `skipped — <Codex reason>`.
 
-## Step 9: Push
+## Step 9: Lint and QA gate
+
+```bash
+RUN_DIR="/tmp/resolve-$(date +%s)"; mkdir -p "$RUN_DIR"
+```
+
+Spawn both agents in parallel:
+
+```
+Agent(linting-expert): "Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
+
+Agent(qa-specialist): "Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
+```
+
+Wait for both. Then:
+
+- If `linting-expert` made file changes → commit them:
+
+```bash
+git add $(git diff HEAD --name-only)
+git commit -m "lint: auto-fix violations after resolve cycle"
+```
+
+- If `qa-specialist` reports **blocking** issues → fix each one (via Codex if `CODEX_AVAILABLE=true`, otherwise inline edit), then re-run qa-specialist once to confirm resolution; if issues remain after one fix pass, surface them in the final report and continue (do not loop indefinitely)
+- Warnings (non-blocking) → record in the final report; do not block push
+
+## Step 10: Push
 
 ```bash
 git push
@@ -343,7 +368,7 @@ gh pr view <PR#> --json headRefOid,commits --jq '.commits[-3:] | .[].messageHead
 
 Confirm the latest commit headlines match what was just committed.
 
-## Step 10: Final report
+## Step 11: Final report
 
 Mark the task `completed`, then print:
 
@@ -364,6 +389,9 @@ Mark the task `completed`, then print:
 | 2 | [suggest] | add docstring | ✓ committed | def5678 |
 | 3 | [question] | why not use X? | ⊘ answered inline — existing approach is correct per linked issue #42 | — |
 
+### Lint + QA
+<linting-expert summary: N fixes applied | or "no violations"> / <qa-specialist summary: N blocking fixed, N warnings | or "clean">
+
 ### Push
 ✓ Pushed to <remote>/<HEAD_REF> — N new commits
 
@@ -379,7 +407,7 @@ Mark the task `completed`, then print:
 
 ______________________________________________________________________
 
-## Step 11: Comment dispatch + Codex review loop
+## Step 12: Comment dispatch + Codex review loop
 
 Reached when $ARGUMENTS is bare comment text (not a PR number or URL).
 
@@ -395,7 +423,7 @@ TaskCreate(
 
 If `CODEX_AVAILABLE=false`: stop with `⚠ codex not found — install: npm install -g @openai/codex` and mark the task completed.
 
-### 11a: Dispatch
+### 12a: Dispatch
 
 ```bash
 codex exec "Apply this review comment to the codebase. If the change is already present, or the comment has no actionable code change, make no changes and briefly explain why. Comment: $ARGUMENTS" --sandbox workspace-write
@@ -403,7 +431,7 @@ codex exec "Apply this review comment to the codebase. If the change is already 
 
 Record the initial dispatch outcome (code changed or no change + reason).
 
-### 11b: Codex review loop (max 5 passes)
+### 12b: Codex review loop (max 5 passes)
 
 ```bash
 git diff HEAD --stat  # confirm there are changes to review
@@ -413,21 +441,47 @@ If no changes: skip the loop; set `CODEX_REVIEW_FINDINGS=""`.
 
 Otherwise:
 
-```
-for REVIEW_PASS in 1..5:
+```bash
+for REVIEW_PASS in 1 2 3 4 5; do
 
   # Review phase
-  codex exec "Review all changes in git diff HEAD. List every non-cosmetic issue (bug, logic error, regression, missed edge case) as a numbered list. Do NOT list cosmetic nits. End with: ISSUES_FOUND=<count>." --sandbox workspace-write
+  CODEX_OUT=$(codex exec "Review all changes in git diff HEAD. List every non-cosmetic issue (bug, logic error, regression, missed edge case) as a numbered list. Do NOT list cosmetic nits. End with: ISSUES_FOUND=<count>." --sandbox workspace-write 2>&1)
+  ISSUES_FOUND=$(echo "$CODEX_OUT" | grep -oE 'ISSUES_FOUND=[0-9]+' | tail -1 | cut -d= -f2)
+  ISSUES_FOUND=${ISSUES_FOUND:-0}
+  echo "$CODEX_OUT"
 
-  if ISSUES_FOUND == 0: break
+  if [ "$ISSUES_FOUND" -eq 0 ]; then
+    break
+  fi
 
-  # Fix phase
-  for each issue in the list:
-    codex exec "Apply this fix to the codebase: <issue description>" --sandbox workspace-write
+  # Fix phase — apply each issue returned by the review above
+  codex exec "Apply this fix to the codebase: <issue description>" --sandbox workspace-write
 
-if REVIEW_PASS reached 5 and ISSUES_FOUND > 0:
-  note "⚠ Review loop hit 5-pass cap — N issues remain; surface to user"
+done
+
+if [ "$REVIEW_PASS" -eq 5 ] && [ "$ISSUES_FOUND" -gt 0 ]; then
+  echo "⚠ Review loop hit 5-pass cap — $ISSUES_FOUND issues remain; surface to user"
+fi
 ```
+
+### 12c: Lint and QA gate
+
+If code was changed (dispatch or review loop produced commits):
+
+```bash
+RUN_DIR="/tmp/resolve-$(date +%s)"; mkdir -p "$RUN_DIR"
+```
+
+Spawn both agents in parallel:
+
+```
+Agent(linting-expert): "Review all files changed in HEAD (git diff HEAD~N..HEAD where N = number of commits just made). List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
+
+Agent(qa-specialist): "Review all files changed in the most recent commits for correctness, edge cases, and regressions. Flag any blocking issues. Write your full findings to $RUN_DIR/qa-specialist-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
+```
+
+- If `linting-expert` made changes → commit: `lint: auto-fix violations after resolve cycle`
+- If `qa-specialist` reports blocking issues → fix inline, then re-run once; surface any unresolved issues in the report
 
 Mark the task `completed`, then print:
 
@@ -438,6 +492,9 @@ Mark the task `completed`, then print:
 
 ### Codex Review
 <findings across passes, or "No issues found" / "Skipped — no changes">
+
+### Lint + QA
+<linting-expert summary: N fixes applied | or "no violations"> / <qa-specialist summary: N blocking fixed, N warnings | or "clean">
 
 **Next**: review diff and commit | reply to reviewer with Codex's explanation
 
@@ -450,9 +507,10 @@ Mark the task `completed`, then print:
 
 <notes>
 
+- **Branch safety** — `gh pr checkout <PR#>` always switches to the PR's HEAD branch, never to `main`/`master`; all commits land on the PR branch by design. Never push directly to the default branch — if for any reason the PR branch turns out to be the default branch, abort and surface the issue to the user
 - **OSS fork support** — `gh pr checkout <PR#>` works identically for same-repo branches and forks; for forks it adds the contributor's remote (named after their login) and configures tracking; plain `git push` then targets the fork branch correctly with no manual remote setup
 - **Merge direction** — the skill merges `origin/BASE_REF` INTO `HEAD_REF` (updating the PR branch), NOT the reverse; this preserves the PR branch as the source of truth and keeps the GitHub merge clean; the maintainer still clicks Merge (or runs `gh pr merge`) after reviewing
-- **Never rebase** — all conflict resolution uses `git merge`; rebase rewrites commit SHAs and breaks cherry-pick / revert; `--ff-only` is used only for clean no-conflict merges
+- **Never rebase** — all conflict resolution uses `git merge`; rebase rewrites commit SHAs and breaks cherry-pick / revert; Step 5 uses `git merge --continue --no-edit` to complete a merge after conflict resolution
 - **Contribution motivation before code** — Step 3a must happen before any file is read or edited; it provides the "whose intent wins" lens for conflict decisions; reading the PR body and linked issues often reveals design constraints that are invisible from git diff alone
 - **Separate commits per action item** — each `[req]` and `[suggest]` item becomes its own commit attributing the review comment author; this makes the change history reviewable, the diff bisectable, and each change independently revertable
 - **`[question]` items** — answer first (in a PR comment or inline reasoning), then reclassify before implementing; never silently implement a response to an unanswered question
@@ -460,7 +518,7 @@ Mark the task `completed`, then print:
 - **Push verification** — always confirm via `gh pr view --json commits` that new commits appear on GitHub before reporting success; exit code 0 from `git push` is necessary but not sufficient (branch protection rules can silently reject)
 - **`gh pr merge` flags**: `--merge` preserves all commits and history; `--squash` collapses to one (loses individual action-item commits); never suggest `--rebase` (rewrites SHAs); default recommendation is `--merge` unless project convention says otherwise
 - **Escape hatch**: `git merge --abort` undoes the entire conflict state and returns the PR branch to pre-merge state; use `git push --force-with-lease` (never plain `--force`) if push is rejected after local amending
-- **5-iteration cap** on the Step 11 Codex review loop overrides the global 3-iteration default — skill-declared bounds take precedence (CLAUDE.md §3 "Safety breaks for loops")
+- **5-iteration cap** on the Step 12 Codex review loop overrides the global 3-iteration default — skill-declared bounds take precedence (CLAUDE.md §3 "Safety breaks for loops")
 - **`codex exec` timeout**: allow up to 2 minutes per call; background health monitoring (CLAUDE.md §8) does not apply because Codex runs sequentially, not as a spawned background agent
 - **Worktree cleanup safety net**: `SessionEnd` hook runs `git worktree prune` — catches any orphaned worktrees from prior sessions
 - Follow-up chains:

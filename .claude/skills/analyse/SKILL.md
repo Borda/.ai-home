@@ -188,7 +188,10 @@ Read the compact terminal summary template from `.claude/skills/_shared/terminal
 
 ## Mode: Discussion Analysis
 
-When `$ARGUMENTS` starts with `discussion` (e.g., `discussion 15`), route directly here.
+When `$ARGUMENTS` starts with `discussion`, route directly here. Two accepted patterns:
+
+- `discussion <N>` — first word is `discussion`, second word is a number (e.g. `discussion 15`): route here with N as the discussion number. This is the explicit string-prefix path and takes priority over the numeric auto-detection block above.
+- A bare number that auto-detection resolves to `TYPE="discussion"` (via the GraphQL check in Auto-Detection): also routes here.
 
 ```bash
 DISC_NUM=${ARGUMENTS#discussion }
@@ -443,8 +446,8 @@ Decision:
 
 - The report file path
 - The item number and contributor handle (from the analysis data)
-- **For PR mode** — prompt: "Read the report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block: (1) overall PR comment in GitHub Markdown (full MD: headers, bullets, code blocks, `> blockquotes`, links) — `@handle` open, scope line, one prose paragraph per blocking/high issue; items also in the inline table get one clause only, not a full paragraph; nit/low items as a single 'Minor:' line only; decisive close; (2) inline comments table with columns `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; ordered high → medium → low, then most confident first within each tier; nit/low items omitted from the table entirely. Use all blocking and high findings. No column-width line-wrapping in prose. Write your full output to `tasks/output-reply-<type>-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `overall=N_issues blocking=N | inline=N_rows | → tasks/output-reply-<type>-<number>-<date>.md`"
-- **For issue/discussion mode** — prompt: "Read the report at `<path>` for context, then fetch the full thread (`gh issue view <number> --comments` or equivalent GraphQL for discussions) and read every comment. Write your reply as a participant who has followed this thread from the start — not as an outsider summarising it. Rules: (1) If someone in the thread already gave the correct answer, credit them by @handle and build on what they said; do not re-explain what they already covered clearly — add only what is genuinely missing. (2) If a newer version fixes the issue, that is the resolution — state it directly and do not list workarounds alongside it; workarounds only belong in a reply when no fix exists. (3) Be constructive: acknowledge the reporter's situation and validate what is correct in their understanding. (4) Be resolute: if the issue is resolved, explained, or a duplicate, say so plainly and close it — do not hedge or leave it open-ended. (5) One short comment in plain GitHub Markdown; no inline table. Write your full reply to `tasks/output-reply-<type>-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `reply=N_sentences resolved=<yes|no|partial> | → tasks/output-reply-<type>-<number>-<date>.md`"
+- **For PR mode** — prompt: "Read the report at `<path>`. Apply voice and formatting rules from oss-maintainer's `<voice>` block — do not embed formatting rules inline here. Write your full output to `tasks/output-reply-<type>-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"tasks/output-reply-<type>-<number>-<date>.md\",\"issues\":N,\"blocking\":N,\"inline_rows\":N,\"confidence\":0.N,\"summary\":\"N issues, N blocking, N inline rows\"}`"
+- **For issue/discussion mode** — prompt: "Read the report at `<path>` for context, then fetch the full thread (`gh issue view <number> --comments` or equivalent GraphQL for discussions) and read every comment. Apply voice and formatting rules from oss-maintainer's `<voice>` block — do not embed formatting rules inline here. Write your full reply to `tasks/output-reply-<type>-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"tasks/output-reply-<type>-<number>-<date>.md\",\"sentences\":N,\"resolved\":\"yes|no|partial\",\"confidence\":0.N,\"summary\":\"Reply: N sentences, resolved: yes|no|partial\"}`"
 
 Print compact terminal summary:
 

@@ -46,6 +46,8 @@ STATE_DIR:                  .claude/state/research/
 | `ml`             | `ai-researcher`      | accuracy, loss, F1, AUC, BLEU                |
 | `arch`           | `solution-architect` | coupling, cohesion, modularity metrics       |
 
+> note: solution-architect uses opusplan tier — higher cost per ideation call |
+
 **Auto-inference keyword heuristics** (applied when `agent_strategy: auto`):
 
 - metric_cmd contains `pytest`, `coverage`, `complexity` → `code` → `sw-engineer`
@@ -176,6 +178,20 @@ Print: `Baseline: <metric_cmd key> = <value>`. Then proceed to Step 5.
 
 For each iteration `i` from 1 to `max_iterations`:
 
+**Phase overview** (all phases run per iteration):
+
+| Phase | Name            | Trigger / description                                                                                |
+| ----- | --------------- | ---------------------------------------------------------------------------------------------------- |
+| 1     | Review          | Always — build compact context from git log, JSONL history, and recent diff                          |
+| 2     | Ideate          | Always — spawn specialist agent to propose and implement ONE atomic change                           |
+| 3     | Verify files    | Always — check `git diff --stat`; skip to Phase 8 if no files changed (no-op)                        |
+| 4     | Commit          | Always — stage modified files and commit before verifying metric                                     |
+| 5     | Verify metric   | Always — run `metric_cmd` with timeout; revert on timeout                                            |
+| 6     | Guard           | Always — run `guard_cmd`; record pass or fail                                                        |
+| 7     | Decide          | Always — keep, rework, or revert based on metric + guard result                                      |
+| 8     | Log             | Always — append JSONL record and update `state.json`                                                 |
+| 9     | Progress checks | Always — summary every SUMMARY_INTERVAL, stuck detection, diminishing-returns warn, early-stop check |
+
 #### Phase 1 — Review
 
 Build context for the ideation agent:
@@ -206,6 +222,8 @@ Return ONLY the JSON result line — nothing else after it:
 ```
 
 For `--colab` runs: the ideation agent (especially `ai-researcher`) may call `mcp__colab-mcp__runtime_execute_code` during this phase to prototype GPU code before committing.
+
+<!-- MCP tool call — invoked via MCP protocol, not Bash; requires colab-mcp server enabled in settings.local.json -->
 
 If the Agent tool is unavailable (nested subagent context), implement the change inline and construct the JSON result manually.
 
@@ -337,8 +355,14 @@ ______________________________________________________________________
 Triggered by `resume [run-id]`. If no `run-id` given, list available runs from `.claude/state/research/` and resume the most recent `status: running` one.
 
 1. Read `state.json` from the run dir.
-2. Validate git HEAD: if the current HEAD has diverged from `state.json.best_commit` in an unexpected direction, warn and ask before continuing.
-3. Continue the iteration loop from `state.json.iteration + 1`.
+2. **Validate `experiments.jsonl` integrity**: read the last line of `experiments.jsonl` and attempt to parse it as JSON. If the last line is truncated or not valid JSON, warn the user:
+   ```
+   ⚠ experiments.jsonl last line appears corrupt (truncated or invalid JSON).
+   Offer to truncate the corrupt entry (y/n)?
+   ```
+   If the user confirms, remove the last line before resuming. If they decline, stop and let the user fix it manually.
+3. Validate git HEAD: if the current HEAD has diverged from `state.json.best_commit` in an unexpected direction, warn and ask before continuing.
+4. Continue the iteration loop from `state.json.iteration + 1`.
 
 ______________________________________________________________________
 
@@ -350,7 +374,12 @@ ______________________________________________________________________
 
 1. Lead completes Steps 1–4 (config, preconditions, baseline) solo.
 2. Lead identifies 2–3 distinct optimization axes from the goal + codebase analysis.
-3. Lead spawns 2–3 teammates (reasoning agents at `opus` per CLAUDE.md §Agent Teams), each assigned a different axis and a matching ideation agent type. Each teammate runs in an isolated worktree (`isolation: worktree`).
+3. Lead defines the run output directory and spawns 2–3 teammates (reasoning agents at `opus` per CLAUDE.md §Agent Teams), each assigned a different axis and a matching ideation agent type. Each teammate runs in an isolated worktree (`isolation: worktree`).
+
+```bash
+RUN_DIR="/tmp/research-team-$(date +%s)"
+mkdir -p "$RUN_DIR"
+```
 
 Example axis assignment for "reduce training time":
 
@@ -373,9 +402,17 @@ Call TaskUpdate(in_progress) when starting; TaskUpdate(completed) when done.
 ```
 
 4. Each teammate runs their iterations independently and reports results.
-5. Lead cherry-picks the winning commits from each axis into the main branch, tests for compatibility, runs `guard_cmd`.
-6. Lead measures combined metric, resolves conflicts if needed, writes the Step 6 report with per-axis breakdown and combined result.
-7. Shutdown teammates.
+5. **Consolidation**: after all teammates complete (or reach `TeammateIdle`), spawn a single `general-purpose` consolidator agent. Provide it the file paths of all teammate output files (`$RUN_DIR/teammate-<axis>.md` for each axis). Prompt:
+   ```
+   Read the teammate output files at the following paths: <paths>.
+   Synthesize findings into a single consolidated report: per-axis summary, metric improvements, best commits, and recommended cherry-pick order.
+   Write the full consolidated report to `$RUN_DIR/consolidated.md` using the Write tool.
+   Return ONLY: {"status":"done","axes_summarized":<N>,"file":"$RUN_DIR/consolidated.md"}
+   ```
+   Read `$RUN_DIR/consolidated.md` for the cherry-pick plan before proceeding.
+6. Lead cherry-picks the winning commits from each axis into the main branch, tests for compatibility, runs `guard_cmd`.
+7. Lead measures combined metric, resolves conflicts if needed, writes the Step 6 report with per-axis breakdown and combined result.
+8. Shutdown teammates.
 
 **Note on CLAUDE.md §8**: team mode uses in-process teammates that send `TeammateIdle` notifications on completion — the file-activity polling protocol does not apply; `TeammateIdle` is the liveness signal.
 

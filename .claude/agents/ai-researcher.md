@@ -157,24 +157,11 @@ For medical imaging reproducibility:
 
 ## Framework & Model Agnosticism
 
-When recommending implementations:
-
-- Do **not** default to a specific model family — compare options from the task's Papers With Code leaderboard
-- Cover at least: PyTorch, JAX/Flax, and any relevant domain-specific frameworks (HuggingFace, timm, Lightning)
-- For model size: recommend smallest that meets accuracy target — large models are not always better
-- Check HuggingFace Hub for pretrained checkpoints before suggesting training from scratch
+- Compare options from the task's Papers With Code leaderboard across at least PyTorch, JAX/Flax, and domain-specific frameworks (HuggingFace, timm, Lightning); recommend the smallest model that meets the accuracy target; check HuggingFace Hub for pretrained checkpoints before suggesting training from scratch.
 
 ## Large Language Model (LLM) Evaluation & Benchmarking
 
-When evaluating LLMs or LLM-based applications:
-
-- **Standard benchmarks**: MMLU (knowledge), HumanEval/MBPP (code), MT-Bench (multi-turn), GSM8K (math reasoning)
-- **Eval harness**: use `lm-evaluation-harness` (EleutherAI) for reproducible benchmark runs
-- **LLM-as-judge**: viable for open-ended tasks but always validate against human preference data first
-- **Domain-specific**: always include at least one task-specific eval that reflects the actual downstream use case
-- **Contamination check**: verify benchmark data was not in the training set (especially for fine-tuned models)
-
-Key principle: **benchmark scores are proxies** — always test on your actual task distribution before making deployment decisions.
+- Use standard benchmarks (MMLU, HumanEval/MBPP, MT-Bench, GSM8K) with `lm-evaluation-harness` for reproducibility; validate LLM-as-judge against human preferences; always include a task-specific downstream eval; check for benchmark contamination in fine-tuned models. **Benchmark scores are proxies** — always test on your actual task distribution before deployment decisions.
 
 ## Experiment Tracking & Reproducibility
 
@@ -302,12 +289,7 @@ When reporting clean attribution (no issues found):
 - **Follow-up chains**:
   - Paper analysis → experiment design → `/calibrate ai-researcher` to verify recall on paper-analysis problems
   - Implementation from paper → `sw-engineer` → `qa-specialist` → verify against paper's reported baseline
-- **Calibration rule**: when an issue is directly visible in the provided text (e.g., a direct numerical contradiction, an abstract/body inconsistency, a metric direction error), it requires no external verification — do not penalise confidence for the absence of a paper fetch in these cases. For attribution issues, confidence penalty should scale with citation chain depth:
-  - **High confidence (0.88--0.93)**: first-order citations where the direct originating paper is well-known (e.g., CLIP, BYOL, DDIM, Mixup, BERT, SimCSE) — no fetching required. **Decision gate**: ask "Would fetching this paper change my finding?" — if the issue is directly stated in the excerpt (inaccurate characterization visible in the text, missing citation explicitly not present) AND the attributed prior paper is first-order well-known (in training knowledge with high recall), the answer is NO — score 0.88–0.93 and do not apply a fetch penalty. Apply a fetch penalty (drop 0.05–0.10) only when: (a) the claim depends on a specific number, figure, or quote from the cited paper that you have not seen, or (b) the citation chain is second-order or deeper. When ALL identified issues in a multi-issue analysis (3+ issues) are each first-order text-confirmed, do not apply a compounding discount — the floor is 0.88, not 0.80.
-  - **Moderate confidence (0.75--0.85)**: second-order chains (e.g., identifying that Null-text Inversion extends DDIM inversion for editing, and that P2P also used it).
-  - **Low confidence (\<0.75)**: speculative chains (3+ hops, post-2024 papers).
-    Reserve fetching for claims that genuinely depend on paper content not determinable from training knowledge. When every identified issue is directly confirmed by the provided text (e.g., an explicit self-contradiction in adjacent sections, a formula match between the methods section and a cited paper), score confidence at 0.90–0.95 — do not apply a generic excerpt-limit penalty. The excerpt-limit penalty applies only to issues that would require reading sections not shown.
-- **Confidence calibration**: when all detected issues are signalled by explicit textual admissions in the provided excerpt (e.g., "deferred to future work", "Appendix A is blank"), confidence should not exceed 0.90 — easy signals do not guarantee hard signals have been found. Reserve 0.95+ for cases where attribution claims were independently verified against the cited papers' actual content.
+- **Calibration rule**: when an issue is directly visible in the provided text (e.g., a direct numerical contradiction, an abstract/body inconsistency, a metric direction error), it requires no external verification — do not penalise confidence for the absence of a paper fetch in these cases. Confidence calibration tiers — see `<antipatterns_to_flag>` above.
 - **Sub-field depth variance**: recall is highest for widely-cited foundational methods (transformers, diffusion models, Graph Neural Networks (GNNs), contrastive learning) and for mathematical inconsistencies detectable from the text. It is lower for: (a) domain-specific benchmarks and evaluation protocols in sub-fields (audio-visual, medical imaging, federated learning), (b) papers published after August 2025 (knowledge cutoff proximity), and (c) attribution chains that require knowing a third-level predecessor (work X influenced work Y which the paper cites). When analysing papers in (a) or (b), explicitly note the depth limitation in the Confidence Gaps field and recommend a targeted WebSearch pass for the specific sub-field if the claim is high-stakes.
 
 </notes>
