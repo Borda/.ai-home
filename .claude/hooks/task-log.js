@@ -1,25 +1,72 @@
 #!/usr/bin/env node
-// PreToolUse hook  — logs Task/Skill invocations; writes codex session file on Skill(codex) start
-//                    or Bash calls whose command starts with "codex" (e.g. /resolve path).
-// PostToolUse hook — removes codex session file when Skill(codex) or Bash(codex …) completes.
-// SubagentStart hook — adds the subagent to the active-agents state.
-// SubagentStop hook  — removes the subagent from state and logs completion.
-// PreCompact hook  — logs context compaction start to compactions.jsonl.
-// Stop hook        — clears active-agents state when the main agent finishes.
-// SessionEnd hook  — clears active-agents state when the session terminates.
+// task-log.js — multi-event lifecycle hook
 //
-// Writes to:
-//   .claude/logs/invocations.jsonl      — append-only audit log
+// PURPOSE
+//   Central nervous system for session state tracking.  It handles six distinct
+//   Claude Code hook events and maintains three categories of runtime state that
+//   other hooks (statusline.js) read to render the live status line:
+//
+//     agents/   — which subagents are currently running
+//     codex/    — which /codex skill sessions are active
+//     tools/    — which tool types fired in the current turn (for the 🔧 line)
+//
+//   It also appends to append-only audit logs so you have a full history of every
+//   agent launch, skill invocation, and context compaction across sessions.
+//
+// HOOK EVENT RESPONSIBILITIES
+//
+//   PreToolUse
+//     • Logs Task/Agent and Skill invocations to invocations.jsonl.
+//     • Opens a codex session file when Skill(codex) or a Bash codex command
+//       starts (keyed by tool_use_id so concurrent sessions don't collide).
+//     • Writes/increments a per-tool-type file in state/tools/ for the 🔧 display.
+//       Agent and Task tool calls are excluded here — they are tracked via the
+//       dedicated SubagentStart/Stop events to avoid double-counting.
+//
+//   PostToolUse
+//     • Closes the codex session file when Skill(codex) or Bash(codex …) completes,
+//       so the 🤖 counter drops back to zero immediately after the run finishes.
+//
+//   SubagentStart
+//     • Creates state/agents/<id>.json with the agent type, model, color (read from
+//       the agent's frontmatter), and start timestamp.  One file per agent ID means
+//       concurrent agents never overwrite each other (no read-modify-write race).
+//
+//   SubagentStop
+//     • Deletes the per-agent file so the 🕵 counter decrements correctly.
+//     • Appends a completion entry (with last assistant message) to invocations.jsonl
+//       for post-mortem debugging.
+//
+//   PreCompact
+//     • Appends a compaction event to compactions.jsonl.
+//     • Scans the tail of the transcript for Write/Edit tool_use blocks, extracts
+//       modified file paths, and writes state/session-context.md — a lightweight
+//       breadcrumb that survives context compaction and is re-read at session resume.
+//
+//   Stop  (end of Claude's turn)
+//     • Clears state/tools/ so the 🔧 line resets between turns.
+//       Agents are intentionally NOT cleared here — subagents can still be running
+//       across turns and must stay visible on the status line.
+//
+//   SessionEnd  (full session teardown)
+//     • Clears state/agents/, state/tools/, and state/codex/ completely.
+//     • Runs `git worktree prune` to remove stale worktree refs.
+//     • Removes any worktrees under .claude/worktrees/ older than 2 hours
+//       (orphaned by crashed agents or interrupted sessions).
+//
+// STATE FILES
+//   .claude/logs/invocations.jsonl      — append-only audit log (agents + skills)
 //   .claude/logs/compactions.jsonl      — compaction events log
-//   .claude/state/agents/<id>.json      — one file per active subagent (replaces agents.json)
+//   .claude/state/agents/<id>.json      — one file per active subagent
 //   .claude/state/codex/<id>.json       — one file per active /codex skill session
-//   .claude/state/tools/<tool>.json     — one file per tool type, updated on each PreToolUse
-//   .claude/state/session-context.md    — files modified + compact summary (written on compaction)
+//   .claude/state/tools/<tool>.json     — one file per tool type, current turn only
+//   .claude/state/session-context.md    — modified-files breadcrumb for compaction
 //
 // Exit 0 always — logging must never block Claude.
 
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 let raw = "";
 process.stdin.setEncoding("utf8");
@@ -76,7 +123,8 @@ process.stdin.on("end", () => {
         }
       }
       // Track all tool calls for statusline tool-activity line (count per type within window)
-      if (tool_name) {
+      // Exclude Agent/Task — those are tracked separately via SubagentStart/Stop → state/agents/
+      if (tool_name && tool_name !== "Agent" && tool_name !== "Task") {
         try {
           fs.mkdirSync(toolsDir, { recursive: true });
           const toolFile = path.join(toolsDir, `${tool_name}.json`);
@@ -141,8 +189,11 @@ process.stdin.on("end", () => {
           const readSize = Math.min(50 * 1024, stats.size);
           const buf = Buffer.alloc(readSize);
           const fd = fs.openSync(transcriptPath, "r");
-          fs.readSync(fd, buf, 0, readSize, stats.size - readSize);
-          fs.closeSync(fd);
+          try {
+            fs.readSync(fd, buf, 0, readSize, stats.size - readSize);
+          } finally {
+            fs.closeSync(fd);
+          }
           const transcriptTail = buf.toString("utf8");
           // Extract file paths from Write and Edit tool_use blocks
           const filePattern = /"file_path"\s*:\s*"([^"]+)"/g;
@@ -195,10 +246,9 @@ process.stdin.on("end", () => {
           }
         } catch (_) {}
       }
-      const { execSync } = require("child_process");
       // Prune stale worktrees (orphaned by crashed agents or interrupted sessions)
       try {
-        execSync("git worktree prune", { cwd: root, timeout: 5000 });
+        execFileSync("git", ["worktree", "prune"], { cwd: root, timeout: 5000, stdio: "ignore" });
       } catch (_) {}
       // Clean stale worktrees from .claude/worktrees/ (older than 2h)
       const worktreesDir = path.join(root, ".claude", "worktrees");
@@ -209,7 +259,11 @@ process.stdin.on("end", () => {
           const p = path.join(worktreesDir, entry);
           const stat = fs.statSync(p);
           if (stat.isDirectory() && stat.mtimeMs < cutoff) {
-            execSync(`git worktree remove --force "${p}"`, { cwd: root, timeout: 10000 });
+            execFileSync("git", ["worktree", "remove", "--force", p], {
+              cwd: root,
+              timeout: 10000,
+              stdio: "ignore",
+            });
           }
         }
       } catch (_) {}

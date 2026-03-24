@@ -1,14 +1,44 @@
 #!/usr/bin/env node
-// Minimal statusline: model | cwd | billing | context bar
-// Receives session JSON via stdin from Claude Code
+// statusline.js — Claude Code status line renderer
 //
-// Billing detection:
-//   - ANTHROPIC_API_KEY set → API key billing → show real cost in yellow ($X.XX)
-//   - No API key          → OAuth subscription → show "<Plan> ~$X.XX" in cyan
-//   Plan name: read from ~/.claude/state/subscription.json (written at SessionStart by `claude auth status`).
-//   Falls back to CLAUDE_PLAN env var, then "Sub" if cache is unavailable.
-//   Note: cost.total_cost_usd is tokens × API rates — NOT actual subscription charge.
-//   Subscription quota % is not exposed in hook data. Check /status for monthly usage.
+// PURPOSE
+//   Renders a two-line live status display in the Claude Code terminal, refreshed
+//   on every hook event.  Gives an at-a-glance view of model, cost, context usage,
+//   active subagents, running Codex sessions, and current tool activity.
+//
+// OUTPUT FORMAT
+//   Line 1 — session metadata:
+//     <model>  <project-dir>  <billing>  <context-bar pct%>
+//
+//   Line 2 — runtime activity (always shown, "none" when idle):
+//     🕵 N agent(s) (<type> [×N], …)  │  🤖 <codex>  │  🔧 <tools>
+//
+// LINE 1 DETAILS
+//   model       display_name or id from session JSON
+//   project-dir basename of workspace.current_dir
+//   billing     API key mode  → yellow  "API $X.XX"  (real spend, every token costs)
+//               OAuth/sub mode → cyan   "<Plan> ~$X.XX"  (theoretical API-rate cost,
+//               NOT actual quota; use /status for real monthly usage)
+//   Plan name   priority: CLAUDE_PLAN env var → subscription.json cached at SessionStart
+//               by `claude auth status` → fallback "Sub"
+//   context bar 10-char block bar; color: green <50% · yellow <75% · red ≥75% used
+//
+// LINE 2 DETAILS
+//   🕵 agents   reads state/agents/*.json written by task-log.js SubagentStart/Stop.
+//               Groups by type; specialized agents shown in their declared color
+//               (from agent frontmatter color: field); general-purpose shown in gray.
+//               Safety-net: ignores entries older than 10 min (SubagentStop crash/hang).
+//   🤖 codex    reads state/codex/*.json written by task-log.js PreToolUse/PostToolUse.
+//               Shows count of active /codex skill sessions.
+//               Safety-net: ignores entries older than 30 min.
+//   🔧 tools    reads state/tools/*.json written by task-log.js PreToolUse.
+//               Shows tool types active within the last 30 s with per-type call counts.
+//               Each tool type has a fixed ANSI color for visual stability.
+//               Agent and Task tool calls are excluded (tracked under 🕵 instead).
+//
+// ANSI RENDERING
+//   \x1b[K at end of each line clears to end of line — prevents stale characters
+//   from longer previous renders bleeding through when the new output is shorter.
 
 const fs = require("fs");
 const os = require("os");
@@ -23,7 +53,8 @@ process.stdin.on("end", () => {
 
     const modelName = model?.display_name || model?.id || "";
     const dir = path.basename(workspace?.current_dir || process.cwd());
-    const remaining = context_window?.remaining_percentage ?? null;
+    const remainingRaw = context_window?.remaining_percentage;
+    const remaining = Number.isFinite(Number(remainingRaw)) ? Number(remainingRaw) : null;
     const usd = cost?.total_cost_usd ?? 0;
     const isApiKey = !!process.env.ANTHROPIC_API_KEY;
 
@@ -92,7 +123,8 @@ process.stdin.on("end", () => {
 
     if (remaining !== null) {
       const pct = Math.max(0, Math.min(100, 100 - remaining)); // pct = context used (100 - remaining_pct)
-      const bar = "█".repeat(Math.round(pct / 10)) + "░".repeat(10 - Math.round(pct / 10));
+      const filled = Math.round(pct / 10);
+      const bar = "█".repeat(filled) + "░".repeat(10 - filled);
       const color = pct < 50 ? 32 : pct < 75 ? 33 : 31; // green / yellow / red
       parts.push(`\x1b[${color}m${bar} ${Math.round(pct)}%\x1b[0m`);
     }
@@ -165,7 +197,7 @@ process.stdin.on("end", () => {
       codexPart = `\x1b[33m🤖\x1b[0m \x1b[2mnone\x1b[0m`;
     }
 
-    // Line 3 — tool activity (always shown, even when idle)
+    // Line 2 — tool activity segment (always shown, even when idle)
     let toolLine = "";
     try {
       const toolsDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/tools");
@@ -176,7 +208,9 @@ process.stdin.on("end", () => {
           try {
             const t = JSON.parse(fs.readFileSync(path.join(toolsDir, f), "utf8"));
             if (!t.since || now - new Date(t.since).getTime() > TOOL_MAX_AGE_MS) return [];
-            return [{ tool: t.tool, count: t.count || 1 }];
+            if (!t.tool || typeof t.tool !== "string") return [];
+            const count = Number.isFinite(Number(t.count)) ? Math.max(1, Number(t.count)) : 1;
+            return [{ tool: t.tool, count }];
           } catch (_) {
             return [];
           }

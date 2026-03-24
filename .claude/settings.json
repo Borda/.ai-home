@@ -15,6 +15,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/lint-on-save.js",
+            "type": "command"
+          }
+        ]
       }
     ],
     "PreCompact": [

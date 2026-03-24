@@ -1,11 +1,40 @@
 #!/usr/bin/env node
-// TeammateIdle hook — redirects to pending tasks if any exist in the shared task list.
-// TaskCompleted hook — no-op (exit 0), reserved for future quality gates.
+// teammate-quality.js — agent team quality gate hook
 //
-// TeammateIdle: exit code 2 sends stderr as feedback to the teammate and keeps it working.
-// TaskCompleted: always exit 0 to avoid rejection loops.
+// PURPOSE
+//   Prevents teammates in an agent team from going idle while work remains, and
+//   provides a hook point for future output quality validation.  Works alongside
+//   task-log.js which tracks session state; this hook acts on team-level events.
 //
-// Exit 0 always on error — hooks must never block Claude.
+// HOOK EVENT RESPONSIBILITIES
+//
+//   TeammateIdle
+//     Fires when a teammate finishes its current task and has nothing to do.
+//     Checks for pending tasks in the shared task list for the current team
+//     (.claude/tasks/<team>/*.json under the current workspace). If any pending
+//     tasks exist, writes a
+//     redirect message to stderr and exits 2 — Claude Code interprets exit 2
+//     as "feedback for the teammate", re-activating it with the message as
+//     context so it can claim and complete the next task.
+//     If no pending tasks are found (or the task directory is absent), exits 0
+//     and the teammate idles normally.
+//
+//   TaskCompleted
+//     Fires when a teammate signals it has completed a task.
+//     Currently a no-op (exit 0).  Reserved as a hook point for future quality
+//     gates: output validation, confidence score checks, or handoff verification.
+//     Deliberately always exits 0 — rejecting a completed task risks infinite
+//     rejection loops if the quality bar cannot be met.
+//
+// EXIT CODES
+//   0  No action needed (idle is fine, or task completion accepted).
+//   2  Pending tasks found → stderr message redirects the teammate back to work.
+//      Never exit 2 on TaskCompleted — rejection loops are worse than gaps.
+//
+// ERROR HANDLING
+//   All errors are silently swallowed (exit 0).  A quality-gate hook must never
+//   crash or block Claude — a broken hook that prevents teammates from completing
+//   tasks is worse than no gate at all.
 
 const fs = require("fs");
 const path = require("path");
@@ -21,7 +50,8 @@ process.stdin.on("end", () => {
     if (hook_event_name === "TeammateIdle" && team_name) {
       // Look for pending tasks in the shared task list — redirect if any exist
       try {
-        // Task files live at ~/.claude/tasks/<team>/ when teams use file-based tracking.
+        if (typeof team_name !== "string" || path.basename(team_name) !== team_name) process.exit(0);
+        // Task files live at <workspace>/.claude/tasks/<team>/ when teams use file-based tracking.
         // If the directory is absent (e.g., in-memory teams), readdirSync throws and the
         // catch block silently lets the teammate go idle — no redirect occurs.
         const tasksDir = path.join(process.cwd(), ".claude", "tasks", team_name);
