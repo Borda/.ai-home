@@ -59,15 +59,8 @@ def reset_random_seeds():
 Use the decorator form, not inline `if`:
 
 ```python
-# Correct
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_cuda_inference(): ...
-
-
-# Wrong — do not use
-def test_cuda_inference():
-    if not torch.cuda.is_available():
-        pytest.skip(...)
 ```
 
 ## Docstrings

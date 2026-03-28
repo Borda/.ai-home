@@ -25,10 +25,7 @@ Every hook file must start with:
 //   2  <feedback case — Claude Code shows output and Claude acts on it>
 ```
 
-Subsection order: `PURPOSE` → `HOW IT WORKS` → `EXIT CODES` (add others like `HOOK EVENT RESPONSIBILITIES` as needed).
-
-All three sections are required in every hook file. `HOW IT WORKS` may not be omitted even for
-simple hooks — use at least one numbered step.
+Subsection order: `PURPOSE` → `HOW IT WORKS` → `EXIT CODES` (add others like `HOOK EVENT RESPONSIBILITIES` as needed). `HOW IT WORKS` may not be omitted even for simple hooks — use at least one numbered step.
 
 ## Exit Code Rules
 

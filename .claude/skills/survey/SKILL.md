@@ -44,9 +44,9 @@ Use this prompt scaffold (adapt the constraints from Step 1):
 Survey the literature on: <$ARGUMENTS>
 Codebase constraints: <framework, Python version, compute budget, existing dependencies from Step 1>
 Deliver: comparison table (method, key idea, benchmarks, compute, code available), recommendation for best method, a 3-step implementation plan for this codebase, key hyperparameters (name, typical range, what it controls) for the recommended method, and common gotchas (failure modes and how to avoid them).
-Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `tasks/survey-research-$(date +%Y-%m-%d).md` using the Write tool.
+Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `_out/$(date +%Y)/$(date +%m)/output-survey-research-$(date +%Y-%m-%d).md` using the Write tool.
 Then return ONLY a compact JSON envelope on your final line — nothing else after it:
-{"status":"done","papers":N,"recommendation":"<method name>","file":"tasks/survey-research-<date>.md","confidence":0.N}
+{"status":"done","papers":N,"recommendation":"<method name>","file":"_out/YYYY/MM/output-survey-research-<date>.md","confidence":0.N}
 ```
 
 **If the Agent tool is unavailable** (running as a subagent where nested agent spawning is blocked), skip the Agent call and conduct the research inline: use WebSearch and WebFetch to find the top 5 papers, then synthesize the comparison table yourself. Notify the user: "Note: ai-researcher agent could not be spawned in this context — conducting research inline."
@@ -103,7 +103,7 @@ Use the Grep tool to search the codebase for any existing related code:
 | ai-researcher | [score] | [gaps] |
 ```
 
-Write the full report to `tasks/output-survey-$(date +%Y-%m-%d).md` using the Write tool — **do not print the full report to terminal**.
+Write the full report to `_out/$(date +%Y)/$(date +%m)/output-survey-$(date +%Y-%m-%d).md` using the Write tool — **do not print the full report to terminal**.
 
 Then print a compact terminal summary:
 
@@ -115,7 +115,7 @@ Best method: [recommended approach / architecture]
 Key papers:  [top 2–3 papers with year]
 Gaps:        [what the survey couldn't cover or needs runtime validation]
 Confidence:  [aggregate score] — [key gaps]
-→ saved to tasks/output-survey-[date].md
+→ saved to _out/YYYY/MM/output-survey-[date].md
 ---
 ```
 
@@ -145,13 +145,13 @@ You are an ai-researcher teammate surveying: [topic].
 Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your cluster: [method family N] (e.g., "attention-free architectures" vs "linear attention variants").
 Survey the top 3 methods in your cluster: comparison table + recommendation given constraints.
-Write your full findings (comparison table, analysis, Confidence block) to `tasks/survey-<teammate-name>-$(date +%Y-%m-%d).md` using the Write tool.
-Report completion with deltaT# HOOK:verify and include: papers=N recommendation="<method>" confidence=0.N file=tasks/survey-<teammate-name>-<date>.md
+Write your full findings (comparison table, analysis, Confidence block) to `_out/$(date +%Y)/$(date +%m)/output-survey-<teammate-name>-$(date +%Y-%m-%d).md` using the Write tool.
+Report completion with deltaT# HOOK:verify and include: papers=N recommendation="<method>" confidence=0.N file=_out/$(date +%Y)/$(date +%m)/output-survey-<teammate-name>-<date>.md
 Compact Instructions: preserve paper titles, benchmarks, code links. Discard protocol handshakes.
 Task tracking: call TaskUpdate(in_progress) when you start your assigned task; call TaskUpdate(completed) when done, before sending your delta message.
 ```
 
-Lead synthesizes by reading teammate file paths from their delta messages. For 3 teammates, spawn a consolidator ai-researcher agent: "Read the survey files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `tasks/output-survey-$(date +%Y-%m-%d).md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
+Lead synthesizes by reading teammate file paths from their delta messages. For 3 teammates, spawn a consolidator ai-researcher agent: "Read the survey files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `_out/$(date +%Y)/$(date +%m)/output-survey-$(date +%Y-%m-%d).md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
 
 </workflow>
 

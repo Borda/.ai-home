@@ -86,8 +86,8 @@ If `ISSUE_NUMS` is empty, skip all issue-related checks in downstream steps.
 Set up the run directory (shared by Codex and all agent spawns in Step 3):
 
 ```bash
-TIMESTAMP=$(date +%s)
-RUN_DIR="/tmp/review-$TIMESTAMP"
+TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+RUN_DIR="_review/$TIMESTAMP"
 mkdir -p "$RUN_DIR"
 ```
 
@@ -294,8 +294,6 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 ```
 
 After parsing confidence scores: if any agent scored < 0.7, prepend **⚠ LOW CONFIDENCE** to that agent's findings section and explicitly state the gap. Do not silently drop uncertain findings — flag them so the reviewer can decide whether to investigate further.
-
-Write the full consolidated report to `tasks/output-review-$(date +%Y-%m-%d).md` using the Write tool — **do not print the full report to terminal**.
 
 Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **PR Summary** template with the **Extended Fields (review only)** addendum. Replace `[entity-line]` with `Review — [target]` and replace `[skill-specific path]` with `tasks/output-review-$(date +%Y-%m-%d).md`.
 

@@ -53,9 +53,9 @@ Before returning, self-review:
 ## Output Routing
 
 - **Long output** (multi-item analysis, 5+ findings, or any prose exceeding ~10 lines) →
-  write to `tasks/output-<slug>-<YYYY-MM-DD>.md` (**new file — never overwrite an existing
-  file; append a counter suffix if the date-slug already exists**, e.g. `-2.md`); print
-  compact terminal summary (verdict · 2–3 sentences · critical points · confidence · `→ file`)
+  write to `_out/YYYY/MM/output-<slug>-<YYYY-MM-DD>.md` (**new file — never overwrite an
+  existing file; append a counter suffix if the date-slug already exists**, e.g. `-2.md`);
+  print compact terminal summary (verdict · 2–3 sentences · critical points · confidence · `→ file`)
 - **Short inline status** (single result, pass/fail, one-sentence finding) → terminal only;
   do **not** create a file
 - Prose paragraphs: no hard line breaks at column width

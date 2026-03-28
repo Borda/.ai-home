@@ -294,6 +294,9 @@ Process `[req]` items first, then `[suggest]` items. **Each item gets its own co
 For each action item:
 
 ```bash
+# Guard: ensure clean state before each item
+test -z "$(git status --porcelain)" || { echo "⚠ dirty tree before item #<id> — stashing"; git stash push -m "resolve-pre-item-<id>"; }
+
 # Snapshot before
 git diff HEAD --stat
 
@@ -307,12 +310,14 @@ git diff HEAD --stat
 If code changed → commit:
 
 ```bash
+# Stage tracked modifications + new files from Codex (never git add -A)
 git add $(git diff HEAD --name-only)
+git ls-files --others --exclude-standard | xargs -r git add --
 git commit -m "$(cat <<'EOF'
 <imperative short summary of the change>
 
-Addresses review comment by @<author> (PR #<PR_NUMBER>)
-<optional: 1-line note on approach if non-obvious>
+[resolve #<item_id>] Review comment by @<author> (PR #<PR_NUMBER>):
+"<first 72 chars of full_comment_text>..."
 EOF
 )"
 ```
@@ -324,7 +329,7 @@ Record per-item: `committed <SHA>` or `skipped — <Codex reason>`.
 ## Step 9: Lint and QA gate
 
 ```bash
-RUN_DIR="/tmp/resolve-$(date +%s)"; mkdir -p "$RUN_DIR"
+RUN_DIR="_resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"
 ```
 
 Spawn both agents in parallel:
@@ -478,7 +483,7 @@ fi
 If code was changed (dispatch or review loop produced commits):
 
 ```bash
-RUN_DIR="/tmp/resolve-$(date +%s)"; mkdir -p "$RUN_DIR"
+RUN_DIR="_resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"
 ```
 
 Spawn both agents in parallel:
@@ -530,7 +535,7 @@ Mark the task `completed`, then print:
 - **Merge direction** — the skill merges `origin/BASE_REF` INTO `HEAD_REF` (updating the PR branch), NOT the reverse; this preserves the PR branch as the source of truth and keeps the GitHub merge clean; the maintainer still clicks Merge (or runs `gh pr merge`) after reviewing
 - **Never rebase** — all conflict resolution uses `git merge`; rebase rewrites commit SHAs and breaks cherry-pick / revert; Step 5 uses `git merge --continue --no-edit` to complete a merge after conflict resolution
 - **Contribution motivation before code** — Step 3a must happen before any file is read or edited; it provides the "whose intent wins" lens for conflict decisions; reading the PR body and linked issues often reveals design constraints that are invisible from git diff alone
-- **Separate commits per action item** — each `[req]` and `[suggest]` item becomes its own commit attributing the review comment author; this makes the change history reviewable, the diff bisectable, and each change independently revertable
+- **Separate commits per action item** — each `[req]` and `[suggest]` item must produce exactly one atomic commit; the `[resolve #N]` tag in the message lets `git log --grep='resolve #3'` find the exact commit for any action item; this makes the history reviewable, the diff bisectable, and each change independently revertable; an empty commit is never created when Codex makes no changes
 - **`[question]` items** — answer first (in a PR comment or inline reasoning), then reclassify before implementing; never silently implement a response to an unanswered question
 - **Case A (already MERGING)** — if a prior `git merge origin/$BASE_REF` left markers, the skill skips Steps 5 detection and 6 context-distill, jumps directly to Step 7c (resolve per file), uses the existing markers; no new merge is started
 - **Push verification** — always confirm via `gh pr view --json commits` that new commits appear on GitHub before reporting success; exit code 0 from `git push` is necessary but not sufficient (branch protection rules can silently reject)

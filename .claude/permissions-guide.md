@@ -40,41 +40,55 @@ ______________________________________________________________________
 
 ## Shell utilities
 
-| Permission             | Description                                      | Typical use case                                                                               |
-| ---------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `Bash(curl:*)`         | HTTP requests and file downloads                 | Hit a REST API, download a file, fetch raw URLs for link verification                          |
-| `Bash(echo:*)`         | Print strings to stdout                          | Pipe content into another command, emit simple diagnostics                                     |
-| `Bash(find:*)`         | Locate files by name, type, or modification time | Discover files matching a pattern across a directory tree                                      |
-| `Bash(grep:*)`         | Search file content by regex pattern             | Filter command output, find usages across a codebase                                           |
-| `Bash(head:*)`         | Read the first N lines of a file                 | Inspect file headers, preview log beginnings                                                   |
-| `Bash(tail:*)`         | Read the last N lines of a file                  | Follow live logs with `-f`, inspect recent entries                                             |
-| `Bash(ls:*)`           | List directory contents                          | Check file existence, inspect directory structure                                              |
-| `Bash(wc:*)`           | Count lines, words, or bytes                     | Measure file count, line budget checks                                                         |
-| `Bash(diff:*)`         | Compare two files line-by-line                   | Confirm patch outcome, spot drift between config files                                         |
-| `Bash(cp:*)`           | Copy files                                       | `/sync` uses this to propagate config files to `~/.claude/`                                    |
-| `Bash(mkdir:*)`        | Create directories                               | Ensure target paths exist before writing                                                       |
-| `Bash(time:*)`         | Measure wall-clock execution time                | Establish baseline before an optimisation pass                                                 |
-| `Bash(rsync:*)`        | Efficient file sync between directories          | `/sync` uses this to propagate config files; `--dry-run` for drift reports, no `--delete` ever |
-| `Bash(sed:*)`          | Stream editor for text transformation            | Rewrite paths, strip comments, process file content in pipelines                               |
-| `Bash(awk:*)`          | Column-oriented text processing                  | Extract fields, compute sums, reformat tabular output                                          |
-| `Bash(cat:*)`          | Concatenate and print file contents              | Pipe multi-file content into a command; display small files                                    |
-| `Bash(sort:*)`         | Sort lines of text                               | Deduplicate sorted output, produce ordered lists for diffing                                   |
-| `Bash(uniq:*)`         | Filter adjacent duplicate lines                  | Count occurrences, collapse repeated log lines                                                 |
-| `Bash(cut:*)`          | Extract fixed columns or delimited fields        | Pull specific CSV/TSV columns, trim output fields                                              |
-| `Bash(tr:*)`           | Translate or delete characters                   | Normalise line endings, uppercase/lowercase transforms                                         |
-| `Bash(xargs:*)`        | Build and execute commands from stdin            | Batch-apply a command to a list of files or arguments                                          |
-| `Bash(tee:*)`          | Write stdin to stdout and a file simultaneously  | Capture command output while still piping it downstream                                        |
-| `Bash(jq:*)`           | Query and transform JSON                         | Parse API responses, inspect settings.json, filter JSONL logs                                  |
-| `Bash(date:*)`         | Print or format the current date/time            | Timestamp log entries, generate dated filenames                                                |
-| `Bash(which:*)`        | Locate an executable on PATH                     | Verify a tool is installed before invoking it                                                  |
-| `Bash(env:*)`          | Print or set environment variables               | Inspect current env, run a command with a modified environment                                 |
-| `Bash(comm:*)`         | Compare two sorted files line by line            | `/audit` Check 1: diff on-disk agent/skill names against MEMORY.md roster                      |
-| `Bash(mktemp:*)`       | Create a temporary file with a unique name       | `/sync` creates a temp settings.json before comparing with rsync --checksum                    |
-| `Bash(touch:*)`        | Create a file or update its modification time    | `/audit` health monitoring: create per-agent checkpoint files for stall detection              |
-| `Bash(printf:*)`       | Formatted output (supports escape sequences)     | Color-coded terminal output in audit and hook scripts                                          |
-| `Bash(basename:*)`     | Strip directory and suffix from a file path      | Extract agent/skill names from full file paths in audit and manage scripts                     |
-| `Bash(dirname:*)`      | Extract directory component from a file path     | Compute parent directory of a file path in shell pipelines                                     |
-| `Bash(node --check:*)` | Validate Node.js script syntax without running   | `/audit upgrade` correctness check for hook JS files after applying config changes             |
+| Permission                    | Description                                      | Typical use case                                                                               |
+| ----------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `Bash(curl:*)`                | HTTP requests and file downloads                 | Hit a REST API, download a file, fetch raw URLs for link verification                          |
+| `Bash(echo:*)`                | Print strings to stdout                          | Pipe content into another command, emit simple diagnostics                                     |
+| `Bash(find:*)`                | Locate files by name, type, or modification time | Discover files matching a pattern across a directory tree                                      |
+| `Bash(find _calibrate*)`      | Locate files inside `_calibrate/` skill run dirs | `/calibrate` health monitoring: find new files in run dir to detect stalled agents             |
+| `Bash(find _resolve*)`        | Locate files inside `_resolve/` skill run dirs   | `/resolve` artifact inspection and TTL cleanup                                                 |
+| `Bash(find _audit*)`          | Locate files inside `_audit/` skill run dirs     | `/audit` health monitoring and TTL cleanup                                                     |
+| `Bash(find _review*)`         | Locate files inside `_review/` skill run dirs    | `/review` artifact inspection and TTL cleanup                                                  |
+| `Bash(find _optimize*)`       | Locate files inside `_optimize/` skill run dirs  | `/optimize` campaign iteration inspection and TTL cleanup                                      |
+| `Bash(find _develop*)`        | Locate files inside `_develop/` skill run dirs   | `/develop` review-cycle artifact inspection and TTL cleanup                                    |
+| `Bash(find _out*)`            | Locate files inside `_out/` output dirs          | Quality-gates long-output TTL cleanup; locate output files by date                             |
+| `Bash(grep:*)`                | Search file content by regex pattern             | Filter command output, find usages across a codebase                                           |
+| `Bash(head:*)`                | Read the first N lines of a file                 | Inspect file headers, preview log beginnings                                                   |
+| `Bash(tail:*)`                | Read the last N lines of a file                  | Follow live logs with `-f`, inspect recent entries                                             |
+| `Bash(ls:*)`                  | List directory contents                          | Check file existence, inspect directory structure                                              |
+| `Bash(wc:*)`                  | Count lines, words, or bytes                     | Measure file count, line budget checks                                                         |
+| `Bash(diff:*)`                | Compare two files line-by-line                   | Confirm patch outcome, spot drift between config files                                         |
+| `Bash(cp:*)`                  | Copy files                                       | `/sync` uses this to propagate config files to `~/.claude/`                                    |
+| `Bash(mkdir:*)`               | Create directories                               | Ensure target paths exist before writing                                                       |
+| `Bash(mkdir -p _calibrate/*)` | Create `_calibrate/` skill run subdirs           | `/calibrate` creates a timestamped run dir before spawning pipeline agents                     |
+| `Bash(mkdir -p _resolve/*)`   | Create `_resolve/` skill run subdirs             | `/resolve` creates a run dir for lint+QA gate artifacts                                        |
+| `Bash(mkdir -p _audit/*)`     | Create `_audit/` skill run subdirs               | `/audit` creates a timestamped run dir before spawning self-mentor agents                      |
+| `Bash(mkdir -p _review/*)`    | Create `_review/` skill run subdirs              | `/review` creates a run dir for multi-agent review artifacts                                   |
+| `Bash(mkdir -p _optimize/*)`  | Create `_optimize/` skill run subdirs            | `/optimize` creates a run dir for perf and campaign mode artifacts                             |
+| `Bash(mkdir -p _develop/*)`   | Create `_develop/` skill run subdirs             | `/develop` creates a run dir for review-cycle artifacts                                        |
+| `Bash(mkdir -p _out/*/*)`     | Create `_out/YYYY/MM/` output subdirs            | Quality-gates long output; skills write reports to `_out/YYYY/MM/output-<slug>-<date>.md`      |
+| `Bash(time:*)`                | Measure wall-clock execution time                | Establish baseline before an optimisation pass                                                 |
+| `Bash(rsync:*)`               | Efficient file sync between directories          | `/sync` uses this to propagate config files; `--dry-run` for drift reports, no `--delete` ever |
+| `Bash(sed:*)`                 | Stream editor for text transformation            | Rewrite paths, strip comments, process file content in pipelines                               |
+| `Bash(awk:*)`                 | Column-oriented text processing                  | Extract fields, compute sums, reformat tabular output                                          |
+| `Bash(cat:*)`                 | Concatenate and print file contents              | Pipe multi-file content into a command; display small files                                    |
+| `Bash(sort:*)`                | Sort lines of text                               | Deduplicate sorted output, produce ordered lists for diffing                                   |
+| `Bash(uniq:*)`                | Filter adjacent duplicate lines                  | Count occurrences, collapse repeated log lines                                                 |
+| `Bash(cut:*)`                 | Extract fixed columns or delimited fields        | Pull specific CSV/TSV columns, trim output fields                                              |
+| `Bash(tr:*)`                  | Translate or delete characters                   | Normalise line endings, uppercase/lowercase transforms                                         |
+| `Bash(xargs:*)`               | Build and execute commands from stdin            | Batch-apply a command to a list of files or arguments                                          |
+| `Bash(tee:*)`                 | Write stdin to stdout and a file simultaneously  | Capture command output while still piping it downstream                                        |
+| `Bash(jq:*)`                  | Query and transform JSON                         | Parse API responses, inspect settings.json, filter JSONL logs                                  |
+| `Bash(date:*)`                | Print or format the current date/time            | Timestamp log entries, generate dated filenames                                                |
+| `Bash(which:*)`               | Locate an executable on PATH                     | Verify a tool is installed before invoking it                                                  |
+| `Bash(env:*)`                 | Print or set environment variables               | Inspect current env, run a command with a modified environment                                 |
+| `Bash(comm:*)`                | Compare two sorted files line by line            | `/audit` Check 1: diff on-disk agent/skill names against MEMORY.md roster                      |
+| `Bash(mktemp:*)`              | Create a temporary file with a unique name       | `/sync` creates a temp settings.json before comparing with rsync --checksum                    |
+| `Bash(touch:*)`               | Create a file or update its modification time    | `/audit` health monitoring: create per-agent checkpoint files for stall detection              |
+| `Bash(printf:*)`              | Formatted output (supports escape sequences)     | Color-coded terminal output in audit and hook scripts                                          |
+| `Bash(basename:*)`            | Strip directory and suffix from a file path      | Extract agent/skill names from full file paths in audit and manage scripts                     |
+| `Bash(dirname:*)`             | Extract directory component from a file path     | Compute parent directory of a file path in shell pipelines                                     |
+| `Bash(node --check:*)`        | Validate Node.js script syntax without running   | `/audit upgrade` correctness check for hook JS files after applying config changes             |
 
 ______________________________________________________________________
 
@@ -125,8 +139,8 @@ ______________________________________________________________________
 | `Bash(git merge:*)`      | Merge a branch into the current branch (with or without committing) | `/resolve` merges the PR head branch to detect and stage conflict resolution; `--no-commit --no-ff` for inspection, `--ff-only` for clean pointer advance |
 | `Bash(git merge-base:*)` | Find the common ancestor commit of two branches                     | `/resolve` uses this to find the diverge point between source and target for diff analysis                                                                |
 | `Bash(git worktree:*)`   | Add, list, or remove linked working trees                           | `/resolve` creates a temporary isolated worktree in `/tmp` to run the merge without touching the user's main working directory                            |
-| `Bash(git commit:*)`     | Commit staged changes to local history                              | `/research` commits each experiment atomically before verifying the metric; `/codex` skill commits validated changes                                      |
-| `Bash(git revert:*)`     | Revert a commit by creating an inverse commit                       | `/research` reverts failed experiments with `git revert HEAD --no-edit` — preserves history, avoids `reset --hard`                                        |
+| `Bash(git commit:*)`     | Commit staged changes to local history                              | `/optimize campaign` commits each experiment atomically before verifying the metric; `/codex` skill commits validated changes                             |
+| `Bash(git revert:*)`     | Revert a commit by creating an inverse commit                       | `/optimize campaign` reverts failed experiments with `git revert HEAD --no-edit` — preserves history, avoids `reset --hard`                               |
 | `Bash(git add:*)`        | Stage files for the next commit                                     | Stage changes after an edit before prompting user to commit                                                                                               |
 | `Bash(git checkout:*)`   | Switch branches or restore individual files from a ref              | Switch to a feature branch; restore a file to HEAD state                                                                                                  |
 | `Bash(git stash:*)`      | Shelve uncommitted changes temporarily                              | Save work in progress before pulling or switching context                                                                                                 |
@@ -205,6 +219,8 @@ ______________________________________________________________________
 | `WebFetch(domain:github.blog)`               | GitHub official blog                     | Track new GitHub Actions features, changelog entries, ecosystem news                         |
 | `WebFetch(domain:api.codecov.io)`            | Codecov REST API                         | `/ci-guardian` and CI audit reads: coverage reports, branch summaries, PR coverage deltas    |
 | `WebFetch(domain:app.codecov.io)`            | Codecov web application                  | Fetch coverage badge URLs and web-facing coverage reports                                    |
+| `WebFetch(domain:hr.linkedin.com)`           | LinkedIn profile pages                   | `release-notes.md` contributor lookup: confirm a contributor's real name via their profile   |
+| `WebFetch(domain:scholar.google.com)`        | Google Scholar academic search           | `ai-researcher` and `/survey` find papers and citation counts                                |
 
 ______________________________________________________________________
 

@@ -16,11 +16,7 @@ You are a data steward covering the full data lifecycle: acquisition, management
 
 ## Data Acquisition & Completeness
 
-**Pagination protocol** — never work on a partial result set; operationalises `.claude/rules/external-data.md`:
-
-- REST APIs: check `Link` header, `next_cursor`, `next_page_token`, `has_more`, `total_count`; loop until no next-page signal
-- GraphQL: check `pageInfo.hasNextPage`; issue follow-up with `after: endCursor` if `true`
-- GitHub CLI: always override default page size (`--limit 1000`, `--paginate`) — `--limit 30` is never acceptable for analysis tasks
+**Pagination protocol** — never work on a partial result set; follow `.claude/rules/external-data.md` for all REST, GraphQL, and GitHub CLI pagination requirements.
 
 **Completeness verification** — after fetching, verify all four:
 

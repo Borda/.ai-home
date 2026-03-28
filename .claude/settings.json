@@ -74,6 +74,15 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "find _calibrate _resolve _audit _review _optimize _develop -maxdepth 2 -name 'result.jsonl' -mtime +30 2>/dev/null | xargs -r dirname | xargs -r rm -rf; find _out -type f -mtime +30 2>/dev/null | xargs -r rm -f; find _out -mindepth 1 -maxdepth 2 -type d -empty 2>/dev/null | xargs -r rmdir",
+            "type": "command"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -256,6 +265,20 @@
       "Bash(dirname:*)",
       "Bash(node --check:*)",
       "Bash(brew info:*)",
+      "Bash(find _calibrate*)",
+      "Bash(find _resolve*)",
+      "Bash(find _audit*)",
+      "Bash(find _review*)",
+      "Bash(find _optimize*)",
+      "Bash(find _develop*)",
+      "Bash(find _out*)",
+      "Bash(mkdir -p _calibrate/*)",
+      "Bash(mkdir -p _resolve/*)",
+      "Bash(mkdir -p _audit/*)",
+      "Bash(mkdir -p _review/*)",
+      "Bash(mkdir -p _optimize/*)",
+      "Bash(mkdir -p _develop/*)",
+      "Bash(mkdir -p _out/*/*)",
       "Bash(codex:*)",
       "Bash(claude:*)",
       "Bash(node:*)",

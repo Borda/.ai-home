@@ -25,6 +25,20 @@ paths:
 
 - No hardcoded absolute user paths (`/Users/<name>/` or `/home/<name>/`) — use `.claude/`, `~/`, or `git rev-parse --show-toplevel`
 - statusLine and hook paths in home `settings.json` use `$HOME`: `node $HOME/.claude/hooks/statusline.js`
+- **Artifact dirs** belong at the project root, not inside `.claude/` — canonical pattern: `_<skill>/$(date -u +%Y-%m-%dT%H-%M-%SZ)/`; see `.claude/rules/artifact-lifecycle.md`
+
+## Worktree Commands
+
+When running commands inside a git worktree, use **two separate Bash calls** rather than `cd /path && command`:
+
+```bash
+cd /path/to/worktree
+uv run pytest tests/
+```
+
+Required because Claude Code's permission matcher checks only the **first token** of a Bash command. Applies to `uv run`, `python`, `pytest`, `git`, etc. Alternative: spawn an agent with `isolation: "worktree"` — its CWD is the worktree root.
+
+Worktrees land under `.claude/worktrees/<id>/`. Permissions in `settings.local.json` are snapshotted at worktree-creation time — not updated retroactively.
 
 ## Sync
 

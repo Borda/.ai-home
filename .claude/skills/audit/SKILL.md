@@ -119,7 +119,7 @@ Record the full file list — this becomes the audit scope for Steps 3–4. Cros
 Set up the run directory once before spawning any agents:
 
 ```bash
-RUN_DIR="/tmp/audit-$(date +%s)"
+RUN_DIR="_audit/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 mkdir -p "$RUN_DIR"
 echo "Run dir: $RUN_DIR"
 ```

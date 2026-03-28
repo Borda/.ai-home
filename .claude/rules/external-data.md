@@ -52,6 +52,5 @@ Rules:
 | Signal                                           | Action                                                  |
 | ------------------------------------------------ | ------------------------------------------------------- |
 | Response includes `total_count` or `total` field | Compare against items received; fetch more if not equal |
-| Default limit not explicitly overridden          | Always override — never rely on the default             |
 | Task involves counting, ranking, or "all X"      | Mandate complete data before proceeding                 |
 | First response looks suspiciously small          | Verify — check for truncation before continuing         |

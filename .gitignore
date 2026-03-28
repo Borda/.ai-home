@@ -12,8 +12,14 @@ tasks/
 .claude/state/
 .claude/logs/
 
-# Calibration run artifacts (ephemeral benchmarks)
-.claude/calibrate/runs/
+# Skill run artifacts and temp outputs (ephemeral, TTL-managed)
+_calibrate/
+_resolve/
+_audit/
+_review/
+_optimize/
+_develop/
+_out/
 
 # Agent auto-memory (machine-local, not source)
 .claude/agent-memory/

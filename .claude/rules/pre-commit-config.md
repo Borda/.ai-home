@@ -34,7 +34,5 @@ Do NOT check only GitHub releases for ruff/mypy — pypi.org reflects the publis
 
 ## Prohibited Patterns
 
-- `rev: v0.5.0` in a template (hardcoded real version)
 - `rev: latest` (not a valid git ref pattern; ambiguous)
 - Using `pip install --upgrade <pkg>` to determine the hook rev (wrong ecosystem)
-- Checking GitHub releases instead of pypi.org for ruff and mypy

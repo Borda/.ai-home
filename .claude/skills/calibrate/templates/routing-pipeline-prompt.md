@@ -3,7 +3,7 @@ You are a routing calibration pipeline runner. Complete all phases in sequence.
 <!-- Substitutions: TIMESTAMP=run timestamp (YYYYMMDDTHHMMSSZ), MODE=fast|full, N=problem count (fast=5, full=10) -->
 
 Mode: `<MODE>`
-Run dir: `.claude/calibrate/runs/<TIMESTAMP>/routing/`
+Run dir: `_calibrate/<TIMESTAMP>/routing/`
 
 <!-- All paths are relative to the project root. The pipeline runner must have project root as its working directory. -->
 
@@ -17,7 +17,7 @@ Build an agent roster string with one line per agent:
 <name>: <description>
 ```
 
-Use Bash `mkdir -p` to create the run dir, then write the roster to `.claude/calibrate/runs/<TIMESTAMP>/routing/roster.txt`.
+Use Bash `mkdir -p` to create the run dir, then write the roster to `_calibrate/<TIMESTAMP>/routing/roster.txt`.
 
 ### Phase 2 — Generate routing problems
 
@@ -37,11 +37,11 @@ Rules:
 - Difficulty distribution: ~40% easy, ~40% medium, ~20% hard (adjust to cover all agents)
 - Return a valid JSON array only (no prose)
 
-Write the JSON array to `.claude/calibrate/runs/<TIMESTAMP>/routing/problems.json`.
+Write the JSON array to `_calibrate/<TIMESTAMP>/routing/problems.json`.
 
 ### Phase 3 — Run routing selection (parallel)
 
-Read the agent roster from `.claude/calibrate/runs/<TIMESTAMP>/routing/roster.txt`.
+Read the agent roster from `_calibrate/<TIMESTAMP>/routing/roster.txt`.
 
 For each problem in `problems.json`, spawn a `general-purpose` selector subagent. Issue ALL spawns in a **single response** — no waiting between spawns.
 
@@ -65,13 +65,13 @@ Each selector receives this prompt (substitute `<ROSTER>`, `<TASK_PROMPT>`, `<PR
 
 **Context discipline**: each selector writes to disk and returns a single-line acknowledgment. The pipeline reads from disk in Phase 4.
 
-**Phase timeout**: create a checkpoint before spawning (`touch /tmp/calibrate-routing-<TIMESTAMP>`). After issuing all spawns, every 5 min run `find .claude/calibrate/runs/<TIMESTAMP>/routing/ -newer /tmp/calibrate-routing-<TIMESTAMP> -name "selection-*.md" | wc -l` to count newly written files. If progress is evident (new files appearing), grant one +5-min extension. Hard cutoff: 15 min of no new files → mark remaining problems as `{"selected":null,"timed_out":true}` with ⏱ in the report.
+**Phase timeout**: create a checkpoint before spawning (`touch /tmp/calibrate-routing-<TIMESTAMP>`). After issuing all spawns, every 5 min run `find _calibrate/<TIMESTAMP>/routing/ -newer /tmp/calibrate-routing-<TIMESTAMP> -name "selection-*.md" | wc -l` to count newly written files. If progress is evident (new files appearing), grant one +5-min extension. Hard cutoff: 15 min of no new files → mark remaining problems as `{"selected":null,"timed_out":true}` with ⏱ in the report.
 
 ### Phase 4 — Score
 
 <!-- Design note: for fast mode (N=5) and full mode (N=10), selection files are tiny (~100 bytes each), well under the 2K inline threshold. Inline reading here is intentional. If N is ever increased beyond ~20, refactor Phase 4 to use a consolidator subagent. -->
 
-For each problem, read `selection-<problem_id>.md` from `.claude/calibrate/runs/<TIMESTAMP>/routing/`. Parse the JSON to extract `selected` and `reasoning`. Compare against `expected_agent` from `problems.json`:
+For each problem, read `selection-<problem_id>.md` from `_calibrate/<TIMESTAMP>/routing/`. Parse the JSON to extract `selected` and `reasoning`. Compare against `expected_agent` from `problems.json`:
 
 - `selected` == `expected_agent` → `correct: true`, `error_type: null`
 - `selected` == `confusion_pair` → `correct: false`, `error_type: "confusion"`
@@ -91,7 +91,7 @@ Verdict:
 - `routing_accuracy ≥ 0.80` but below threshold OR `hard_accuracy < 0.80` → `borderline`
 - `routing_accuracy < 0.80` → `needs-improvement`
 
-Write the full report to `.claude/calibrate/runs/<TIMESTAMP>/routing/report.md`:
+Write the full report to `_calibrate/<TIMESTAMP>/routing/report.md`:
 
 ```
 ## Routing Benchmark — <date> — <MODE>
@@ -122,7 +122,7 @@ pattern when applicable — adding "NOT for X" to one agent in the pair is often
 minimal effective fix.
 ```
 
-Write result JSONL to `.claude/calibrate/runs/<TIMESTAMP>/routing/result.jsonl`:
+Write result JSONL to `_calibrate/<TIMESTAMP>/routing/result.jsonl`:
 
 `{"ts":"<TIMESTAMP>","target":"routing","mode":"<MODE>","routing_accuracy":0.N,"confusion_rate":0.N,"hard_accuracy":0.N,"problems":<N>,"verdict":"calibrated|borderline|needs-improvement","confused_pairs":["expected→selected",...]}`
 

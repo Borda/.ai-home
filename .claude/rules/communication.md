@@ -4,29 +4,20 @@ description: Response style, framing, and output routing rules
 
 ## Re: Anchor
 
-Start every reply with a Unicode box, left-aligned content, output as literal text
-(no code fences, no blockquote prefix). Width = 100 chars (98 inner + 2 border).
+Start every reply with a 2-row single-column Markdown table. The renderer reflows it to terminal width automatically — no fixed widths, no padding needed.
 
 Example (the actual template — copy this structure, replace bracketed text):
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ [one-sentence summary of what was asked]                                                         │
-├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [opening line of response]                                                                       │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+| [one-sentence summary of what was asked] |
+|---|
+| [full response here — use `<br>` for paragraph breaks] |
 ```
-
-Padding rule — left-align only, never right-align:
-
-- Cell content = `│ ` + text + trailing spaces + `│`
-- Keep text under 90 chars; trailing spaces fill the remainder to 98 inner chars
-- Never exceed 98 inner chars — overflow pushes the right `│` out
 
 Rules:
 
-- Top cell: neutral factual gist of what the user asked — not a full restatement, no labels
-- Bottom cell: opening sentence only; full response continues as normal text below the box
+- Top row (header): neutral factual gist of what the user asked — not a full restatement, no labels
+- Bottom row: full response; use `<br>` between paragraphs for multi-line content; no text after the table
 - No exceptions — apply to every response including short ones
 
 ## Progress and Transparency

@@ -19,7 +19,7 @@ Personal AI coding assistant configuration for Python/ML OSS development. Versio
 
 ## 🎯 Why
 
-Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 14 calibrated specialist agents and 15 slash-command skill workflows in a version-controlled, continuously benchmarked setup optimized for:
+Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 14 calibrated specialist agents and 14 slash-command skill workflows in a version-controlled, continuously benchmarked setup optimized for:
 
 - Python/ML OSS libraries requiring SemVer discipline and deprecation cycles
 - ML training and inference codebases needing GPU profiling and data pipeline validation
@@ -96,23 +96,22 @@ Agents and skills for [Claude Code](https://claude.ai/code) (Anthropic's AI codi
 
 Skills are multi-agent workflows invoked via slash commands. Each skill composes several agents in a defined topology.
 
-| Skill          | What It Does                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| **review**     | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts comment   |
-| **analyse**    | GitHub thread analysis; `health` = repo overview + duplicate clustering                         |
-| **brainstorm** | Interactive spec: clarifying questions → approaches → spec → self-mentor review → approval gate |
-| **develop**    | TDD-first features, reproduce-first fixes, test-first refactors, scope analysis, debugging      |
-| **resolve**    | Resolve PR conflicts or apply review comments via Codex                                         |
-| **calibrate**  | Synthetic benchmarks measuring recall vs confidence bias                                        |
-| **audit**      | Config audit: broken refs, inventory drift, docs freshness; `upgrade` applies improvements      |
-| **release**    | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                        |
-| **survey**     | SOTA literature survey with implementation plan                                                 |
-| **research**   | Autonomous metric-driven iteration loop with auto-rollback; `--team` and `--colab` supported    |
-| **optimize**   | Measure-change-measure performance loop                                                         |
-| **manage**     | Create, rename, delete agents/skills with cross-ref propagation and routing calibration         |
-| **sync**       | Drift-detect and sync project `.claude/` → home `~/.claude/`                                    |
-| **codex**      | Delegate mechanical coding tasks to Codex CLI                                                   |
-| **distill**    | Suggest new agents/skills, prune memory, consolidate lessons into rules                         |
+| Skill          | What It Does                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **review**     | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts comment                                           |
+| **analyse**    | GitHub thread analysis; `health` = repo overview + duplicate clustering                                                                 |
+| **brainstorm** | Interactive spec: clarifying questions → approaches → spec → self-mentor review → approval gate                                         |
+| **develop**    | TDD-first features, reproduce-first fixes, test-first refactors, scope analysis, debugging                                              |
+| **resolve**    | Resolve PR conflicts or apply review comments via Codex                                                                                 |
+| **calibrate**  | Synthetic benchmarks measuring recall vs confidence bias                                                                                |
+| **audit**      | Config audit: broken refs, inventory drift, docs freshness; `upgrade` applies improvements                                              |
+| **release**    | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                                                                |
+| **survey**     | SOTA literature survey with implementation plan                                                                                         |
+| **optimize**   | Two modes: `perf` = profiling deep-dive; `campaign` = metric-driven iteration loop with auto-rollback; `--team` and `--colab` supported |
+| **manage**     | Create, rename, delete agents/skills with cross-ref propagation and routing calibration                                                 |
+| **sync**       | Drift-detect and sync project `.claude/` → home `~/.claude/`                                                                            |
+| **codex**      | Delegate mechanical coding tasks to Codex CLI                                                                                           |
+| **distill**    | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                 |
 
 → Full command reference, orchestration flows, rules (11 auto-loaded rule files), architecture internals, status line — see [`.claude/README.md` → Skills](.claude/README.md#-skills)
 
@@ -179,22 +178,22 @@ Skills chain naturally — the output of one becomes the input for the next.
 <summary><strong>Autonomous metric improvement campaign</strong></summary>
 
 ```
-/research plan "increase test coverage to 90%"   # interactive config wizard
-/research "increase test coverage to 90%"        # run 20-iteration loop; auto-rollback on regression
-/research resume                                  # resume after crash or manual stop
-/review                                           # validate kept commits
+/optimize campaign plan "increase test coverage to 90%"   # interactive config wizard
+/optimize campaign "increase test coverage to 90%"        # run 20-iteration loop; auto-rollback on regression
+/optimize campaign resume                                  # resume after crash or manual stop
+/review                                                    # validate kept commits
 ```
 
 </details>
 
 <details>
-<summary><strong>Survey SOTA → research toward metric</strong></summary>
+<summary><strong>Survey SOTA → optimize toward metric</strong></summary>
 
 ```
-/survey "knowledge distillation for small models"   # find best approach
-/research plan "improve F1 from 0.82 to 0.87"       # configure metric + guard + agent
-/research "improve F1 from 0.82 to 0.87" --team     # parallel exploration across axes
-/review                                              # quality pass on kept changes
+/survey "knowledge distillation for small models"            # find best approach
+/optimize campaign plan "improve F1 from 0.82 to 0.87"       # configure metric + guard + agent
+/optimize campaign "improve F1 from 0.82 to 0.87" --team     # parallel exploration across axes
+/review                                                       # quality pass on kept changes
 ```
 
 </details>
@@ -243,10 +242,10 @@ Preferred flow for maintainers responding to external contributions:
 
 # or if you need the full deep review first:
 /review 42 --reply        # 7-agent + Codex co-review + draft overall comment + inline comments table
-                          # output: tasks/output-reply-pr-42-<date>.md
+                          # output: _out/YYYY/MM/output-reply-pr-42-<date>.md
 
 # post when ready:
-gh pr comment 42 --body "$(cat tasks/output-reply-pr-42-<date>.md)"
+gh pr comment 42 --body "$(cat _out/YYYY/MM/output-reply-pr-42-<date>.md)"
 ```
 
 Both `--reply` flags produce the same two-part oss-shepherd output: an overall PR comment (prose, warm, decisive) and an inline comments table (file | line | 1–2 sentence fix). The `/analyse` path is faster for routine triage; `/review` path gives deeper findings for complex PRs.

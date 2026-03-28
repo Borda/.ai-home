@@ -155,7 +155,7 @@ Maximum 3 cycles. Applied after the quality stack.
 
 - Fix critical/high findings from Cycle 1
 - Re-run quality stack on modified files only
-- Set up a run directory for file-based handoff: `RUN_DIR="/tmp/develop-review-$(date +%s)"; mkdir -p "$RUN_DIR"`
+- Set up a run directory for file-based handoff: `RUN_DIR="_develop/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"`
 - For each agent type in `agents_with_findings`: spawn that agent directly (not `/review`) with a focused prompt scoped to modified files + prior findings. Each agent prompt must end with: "Write your full findings to `$RUN_DIR/<agent-name>.md` using the Write tool. Return ONLY a compact JSON envelope: `{\"status\":\"done\",\"findings\":N,\"severity\":{\"critical\":N,\"high\":N,\"medium\":N,\"low\":N},\"file\":\"$RUN_DIR/<agent-name>.md\",\"confidence\":0.N,\"summary\":\"<agent-name>: N critical, N high\"}`"
   ```bash
   # Health monitoring (CLAUDE.md §8): create checkpoint after spawns
@@ -221,7 +221,7 @@ Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree 
    - **No task tracking in teammate prompts** — teammates signal completion via delta message status; the lead owns all TaskCreate/TaskUpdate calls
 5. **Progressive task completion**: as each teammate's delta message arrives, immediately call `TaskUpdate(completed)` for the corresponding task before processing the next step — never batch task completions at the end; the task list is the user's live feed
 6. Lead coordinates outputs, then runs shared quality stack + progressive review loop; mark each shared step's task complete as it finishes (quality stack → Codex pre-pass → review loop → final report)
-7. Team shutdown via `SendMessage shutdown_request` after the final report
+7. After the final report, the team concludes — in-process teammates terminate automatically via `TeammateIdle`; no explicit shutdown call needed
 
 **When to trigger team mode (per mode):**
 
@@ -240,7 +240,7 @@ Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree 
 - Related agents: `sw-engineer` (analysis + implementation), `qa-specialist` (tests + security), `doc-scribe` (documentation), `linting-expert` (type safety + style)
 - Follow-up chains:
   - Feature changes public API → `/release` to prepare CHANGELOG + migration guide
-  - Feature/fix is performance-sensitive → `/optimize` for baseline + bottleneck analysis
+  - Feature/fix is performance-sensitive → `/optimize perf` for baseline + bottleneck analysis
   - Any mode touches `.claude/` config files → spawn `self-mentor` on changed files, then `/sync` to propagate
   - Mechanical follow-up beyond Codex step → `/codex` to delegate additional tasks
   - External validation → `/review` if an independent multi-agent review is desired beyond the built-in self-review gates

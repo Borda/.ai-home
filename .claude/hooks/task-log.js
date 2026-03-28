@@ -110,7 +110,7 @@ process.stdin.on("end", () => {
           } catch (_) {}
         }
       } else if (tool_name === "Bash") {
-        // Also track Bash calls that run codex directly (e.g. /resolve, /research metric timeout)
+        // Also track Bash calls that run codex directly (e.g. /resolve, /optimize campaign metric timeout)
         // Matches: "codex …" and "timeout <N> codex …"
         const cmd = tool_input?.command || "";
         if (/^(?:timeout\s+\S+\s+)?codex(\s|$)/m.test(cmd) && data.tool_use_id) {

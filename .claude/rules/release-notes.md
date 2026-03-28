@@ -40,9 +40,8 @@ paths:
 - LinkedIn link: include only if found in step 2 with high confidence; use the direct profile URL returned by web-explorer
 - Format when name confirmed: `* **Full Name** (@handle) ([LinkedIn](url)) – *description*`
 - Format when name not confirmed: `* @handle – *description*`
-- LinkedIn link only if found via lookup; never construct a URL by guessing
 - Description is brief and italicised, focused on what they built/fixed
-- Always include `* @Borda – *release coordination*` as the final contributor entry; omit only if Borda made zero commits, reviews, or coordination work for this release (rare)
+- Always include `* @Borda – *release coordination*` as the final contributor entry; omit only if Borda made zero commits, reviews, or coordination work for this release (rare) — update this handle if the release coordinator changes
 
 ## Last Line (required)
 
