@@ -13,6 +13,7 @@ tasks/
 .claude/logs/
 
 # Skill run artifacts and temp outputs (ephemeral, TTL-managed)
+docs/
 _calibrate/
 _resolve/
 _audit/

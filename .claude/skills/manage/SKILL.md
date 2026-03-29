@@ -1,14 +1,14 @@
 ---
 name: manage
-description: Create, update, or delete agents and skills with full cross-reference propagation. Also manages settings.json permissions atomically with permissions-guide.md via add/remove perm operations.
-argument-hint: <create|update|delete> <agent|skill> <name> | add perm <rule> "desc" "use-case" | remove perm <rule>
+description: Create, update, or delete agents, skills, and rules with full cross-reference propagation. Content editing (not just renames) is applied inline by the parent model. Also manages settings.json permissions atomically with permissions-guide.md via add/remove perm operations.
+argument-hint: create <agent|skill|rule> <name> "desc" | update <name> [new-name|"change"|spec.md] | delete <name> | add perm <rule> "desc" "use-case" | remove perm <rule>
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 ---
 
 <objective>
 
-Manage the lifecycle of agents and skills in the `.claude/` directory. Handles creation with rich domain content, atomic updates (renames) with cross-reference propagation, and clean deletion with broken-reference cleanup. Keeps the MEMORY.md inventory in sync with what actually exists on disk.
+Manage the lifecycle of agents, skills, and rules in the `.claude/` directory. Handles creation with rich domain content, atomic renames with cross-reference propagation, inline content editing (parent model applies changes directly), and clean deletion with broken-reference cleanup. Keeps the MEMORY.md inventory in sync with what actually exists on disk.
 
 </objective>
 
@@ -17,10 +17,11 @@ Manage the lifecycle of agents and skills in the `.claude/` directory. Handles c
 - **$ARGUMENTS**: required, one of:
   - `create agent <name> "description"` — create a new agent with generated domain content
   - `create skill <name> "description"` — create a new skill with workflow scaffold
-  - `update agent <old-name> <new-name>` — rename agent file + update all cross-refs
-  - `update skill <old-name> <new-name>` — rename skill directory + update all cross-refs
-  - `delete agent <name>` — delete agent file + clean broken refs
-  - `delete skill <name>` — delete skill directory + clean broken refs
+  - `create rule <name> "description"` — create a new rule file with frontmatter and sections
+  - `update <name> <new-name>` — rename; type auto-detected from disk
+  - `update <name> "change description"` — content-edit inline; type auto-detected from disk
+  - `update <name> <spec-file.md>` — content-edit from spec file inline; type auto-detected from disk
+  - `delete <name>` — delete; type auto-detected from disk; asks user if ambiguous
   - `add perm <rule> "description" "use case"` — add a permission to settings.json allow list and permissions-guide.md
   - `remove perm <rule>` — remove a permission from settings.json allow list and permissions-guide.md
 - Names must be **kebab-case** (lowercase, hyphens only)
@@ -28,20 +29,28 @@ Manage the lifecycle of agents and skills in the `.claude/` directory. Handles c
 - Permission rules use the Claude Code format: `WebSearch`, `Bash(cmd:*)`, `WebFetch(domain:example.com)`
 - `--skip-audit` — optional flag: skip the Step 9 `/audit` validation (use when running inside an `audit fix` loop to avoid recursion)
 
-**Agent examples:**
+**Update/delete mode** — the name is looked up across agents, skills, and rules automatically:
+
+- Exactly one match on disk → proceed with that type
+- Multiple matches (e.g., an agent and a skill share the same name) → use `AskUserQuestion` to ask: (a) agent, (b) skill, (c) rule
+- No match → report error and stop
+
+**Update second-argument discrimination**:
+
+- Two bare kebab-case args (second arg no spaces, no `.md` extension) → **rename mode**
+- One name + quoted string → **content-edit mode** (parent model applies change directly)
+- One name + path ending in `.md` → **content-edit mode** (parent model reads spec file and applies change)
+
+**Examples:**
 
 - `/manage create agent task-planner "Planning specialist for decomposing epics into actionable tasks"`
-- `/manage update agent example-agent example-agent-v2`
-- `/manage delete agent old-agent-name`
-
-**Skill examples:**
-
 - `/manage create skill benchmark "Benchmark orchestrator for measuring and comparing performance across commits"`
-- `/manage update skill debug trace-logger`
-- `/manage delete skill old-skill`
-
-**Permission examples:**
-
+- `/manage create rule torch-patterns "PyTorch coding patterns — compile, AMP, distributed"`
+- `/manage update example-agent example-agent-v2`
+- `/manage update my-agent "add a section on error handling patterns"`
+- `/manage update optimize docs/specs/2026-03-29-optimize-campaign-program-md.md`
+- `/manage update testing "add a section on snapshot testing with syrupy"`
+- `/manage delete old-agent-name`
 - `/manage add perm "Bash(jq:*)" "Parse and filter JSON" "Extract fields from REST API responses"`
 - `/manage remove perm "Bash(jq:*)"`
 
@@ -51,6 +60,7 @@ Manage the lifecycle of agents and skills in the `.claude/` directory. Handles c
 
 - AGENTS_DIR: `.claude/agents`
 - SKILLS_DIR: `.claude/skills`
+- RULES_DIR: `.claude/rules`
 - USED_COLORS: blue, green, purple, lime, orange, yellow, cyan, violet, teal, indigo, magenta, pink
 - AVAILABLE_COLORS: coral, gold, olive, navy, salmon, red, maroon, aqua, brown
 
@@ -69,26 +79,43 @@ Extract operation, type, name, and optional arguments from `$ARGUMENTS`.
 **Validation rules:**
 
 - Name must match `^[a-z][a-z0-9-]*$` (kebab-case)
-- For `create`: name must NOT already exist on disk
+- For `create`: name must NOT already exist on disk; description is required
 - For `update`/`delete`: name MUST already exist on disk
-- For `update`: new-name must NOT already exist on disk
-- For `create`: description is required
+- For `update` rename: new-name must NOT already exist on disk
 - For `add perm`: rule must NOT already exist in settings.json allow list; description and use case are required
 - For `remove perm`: rule MUST already exist in settings.json allow list
 
-Use the Glob tool to check existence:
+**Type auto-detection** (for `update` and `delete`): run all three Glob checks in parallel:
 
-- Agent: pattern `agents/<name>.md`, path `.claude/` — non-empty result means it exists
-- Skill: pattern `skills/<name>/SKILL.md`, path `.claude/` — non-empty result means it exists
+- Agent: pattern `agents/<name>.md`, path `.claude/`
+- Skill: pattern `skills/<name>/SKILL.md`, path `.claude/`
+- Rule: pattern `rules/<name>.md`, path `.claude/`
+
+Results:
+
+- Exactly one non-empty result → resolved type; proceed
+- Multiple non-empty results → use `AskUserQuestion`: "Multiple entities named `<name>` found. Which one? (a) agent (b) skill (c) rule"
+- All empty → report "No agent, skill, or rule named `<name>` found" and stop
+
+For `create`, check only the relevant type's path.
 
 ```bash
 # Check permission existence (for add perm / remove perm)
 python3 -c "import json,sys; d=json.load(open('.claude/settings.json')); sys.exit(0 if '<rule>' in d['permissions']['allow'] else 1)" 2>/dev/null
 ```
 
+**Update second-argument discrimination** — apply after type is resolved:
+
+- Two bare kebab-case arguments (second arg no spaces, no `.md` extension) → **rename mode**: validate new-name does NOT already exist
+- One name + quoted string → **content-edit mode**: validate spec is non-empty; no new-name uniqueness check
+- One name + path ending in `.md` → **content-edit mode**: validate the spec file exists on disk; no new-name uniqueness check
+
 If validation fails, report the error and stop.
 
-**For perm operations**: skip Steps 2, 3, 5, 6, 7, 8, 9 — go directly from Step 1 → Step 4 → Step 10.
+**Step skip rules**:
+
+- **Perm operations**: skip Steps 2, 3, 5, 6, 7, 8, 9 — go directly from Step 1 → Step 4 → Step 10
+- **Content-edit operations**: skip Step 2 (entity already exists); skip Step 3 color inventory (no create); in Steps 5–7 only update cross-refs and README if the name or description changed
 
 ## Step 2: Overlap review (create only)
 
@@ -117,11 +144,14 @@ ls .claude/agents/*.md | xargs -n1 basename | sed 's/\.md$//' | sort
 
 # Current skills (Glob provides paths; Bash extracts sorted names)
 ls -d .claude/skills/*/ | xargs -n1 basename | sort
+
+# Current rules (Glob provides paths; Bash extracts sorted names)
+ls .claude/rules/*.md | xargs -n1 basename | sed 's/\.md$//' | sort
 ```
 
 ## Step 4: Execute operation
 
-Branch into one of six modes:
+Branch into one of these modes:
 
 ### Mode: Create Agent
 
@@ -214,6 +244,82 @@ rm .claude/agents/<name>.md
 rm -r .claude/skills/<name>
 ```
 
+### Mode: Content-Edit Agent
+
+1. Read `.claude/agents/<name>.md` using the Read tool.
+2. Determine the change directive:
+   - Quoted description → use as-is
+   - Spec file path → Read the spec file; use its content as the directive
+3. Apply changes directly using the Edit tool:
+   - Preserve frontmatter fields (name, description, tools, model, color) unless the change explicitly targets them
+   - Preserve XML tag structure (`<role>`, `<core_knowledge>`, `<workflow>`, `<notes>`)
+   - Make targeted edits — do not rewrite unchanged sections
+   - If the change modifies the agent's purpose: also update the `description:` frontmatter field
+   - After editing: verify XML tag balance, step numbering, and internal cross-reference validity
+
+### Mode: Content-Edit Skill
+
+1. Read `.claude/skills/<name>/SKILL.md` using the Read tool.
+2. Determine the change directive (same as Content-Edit Agent).
+3. Apply changes directly using the Edit tool:
+   - Preserve frontmatter fields (name, description, argument-hint, disable-model-invocation, allowed-tools)
+   - Preserve XML tag structure (`<objective>`, `<inputs>`, `<workflow>`, `<notes>`)
+   - Make targeted edits — do not rewrite unchanged sections
+   - If the change modifies the skill's purpose: also update the `description:` frontmatter field
+   - After editing: verify XML tag balance, step numbering, and workflow gate completeness
+
+### Mode: Content-Edit Rule
+
+1. Read `.claude/rules/<name>.md` using the Read tool.
+2. Determine the change directive (same as Content-Edit Agent).
+3. Apply changes directly using the Edit tool:
+   - Preserve YAML frontmatter (description, paths) unless the change explicitly targets them
+   - Rule files are free-form markdown with `##` sections — no XML tags
+   - Make targeted edits — do not rewrite unchanged sections
+   - If adding a new section: match the heading level and style of existing sections
+   - If the change modifies the rule's scope: also update the `description:` and `paths:` frontmatter fields
+   - After editing: verify YAML frontmatter is valid, no broken internal references
+
+### Mode: Create Rule
+
+No schema fetch needed — rule files are simpler than agents/skills (only frontmatter + free-form markdown sections).
+
+Write `.claude/rules/<name>.md` with this structure:
+
+```markdown
+---
+description: <one-line description from user>
+paths:
+  - '<glob pattern matching the rule's scope>'
+---
+
+## <First Section Title>
+
+[Real domain-specific rules derived from the description — not generic boilerplate. 20-60 lines total.]
+```
+
+Content rules:
+
+- Generate real domain content from the description (e.g., for "torch-patterns": actual PyTorch patterns, not generic "write clean code")
+- Use `##` sections for major topics, bullets for individual rules
+- Include code examples only when they carry domain-specific patterns
+- Match the tone and density of existing rules files (terse, imperative, no padding)
+
+### Mode: Update Rule (rename)
+
+Atomic update — write new file before deleting old:
+
+1. Read `.claude/rules/<old-name>.md` using the Read tool.
+2. Rule files have no `name:` frontmatter field — the filename IS the identifier. Write a new file at `.claude/rules/<new-name>.md` with identical content.
+3. Verify new file exists.
+4. Delete old file only after new file is confirmed: `rm .claude/rules/<old-name>.md`
+
+### Mode: Delete Rule
+
+```bash
+rm .claude/rules/<name>.md
+```
+
 ### Mode: Add Permission
 
 Adds a rule to both `settings.json` and `permissions-guide.md` atomically.
@@ -293,10 +399,11 @@ Use the Grep tool to find all references to the name across the config:
 
 - Pattern `<name>`, glob `agents/*.md`, path `.claude/`, output mode `content`
 - Pattern `<name>`, glob `skills/*/SKILL.md`, path `.claude/`, output mode `content`
+- Pattern `<name>`, glob `rules/*.md`, path `.claude/`, output mode `content`
 - Pattern `<name>`, file `.claude/CLAUDE.md`, output mode `content`
 - Pattern `<name>`, file `README.md`, output mode `content`
 
-**For update:** Use the Edit tool to replace every occurrence of `<old-name>` with `<new-name>` in each file that references it.
+**For update (rename):** Use the Edit tool to replace every occurrence of `<old-name>` with `<new-name>` in each file that references it.
 
 **For delete:** Review each reference. If the deleted name appears in:
 
@@ -306,13 +413,15 @@ Use the Grep tool to find all references to the name across the config:
 
 **For create:** No cross-ref propagation needed (new names have no existing references).
 
+**For content-edit:** Run cross-ref propagation only if the entity's `description:` frontmatter changed — propagate the new description text to any MEMORY.md or README summary lines that quote it. Skip entirely if only internal content (workflow steps, rules) changed.
+
 ## Step 6: Update MEMORY.md roster (auto-memory)
 
 MEMORY.md is Claude Code's auto-memory file — it is **not** stored under `.claude/`. It is injected into the conversation context at session start. The absolute path appears near the top of the system prompt (e.g. `~/.claude/projects/.../memory/MEMORY.md`). Use that absolute path with the Edit tool.
 
 Regenerate the inventory lines from what actually exists on disk:
 
-Use Glob (`agents/*.md`, path `.claude/`) for agents and Glob (`skills/*/`, path `.claude/`) for skills to get file paths, then feed into Bash for name extraction and comma-joining (no dedicated tool for aggregate string joining):
+Use Glob (`agents/*.md`, path `.claude/`) for agents, Glob (`skills/*/`, path `.claude/`) for skills, and Glob (`rules/*.md`, path `.claude/`) for rules to get file paths, then feed into Bash for name extraction and comma-joining:
 
 ```bash
 # Get current agent list (Glob provides paths; Bash joins names)
@@ -320,23 +429,40 @@ ls .claude/agents/*.md | xargs -n1 basename | sed 's/\.md$//' | paste -sd', ' -
 
 # Get current skill list (Glob provides paths; Bash joins names)
 ls -d .claude/skills/*/ | xargs -n1 basename | paste -sd', ' -
+
+# Get current rule count and list (Glob provides paths; Bash joins names)
+ls .claude/rules/*.md | xargs -n1 basename | sed 's/\.md$//' | paste -sd', ' -
 ```
 
-Use the Edit tool with the **absolute auto-memory path** from the conversation context to update these two roster lines in MEMORY.md — they must stay in sync with disk state:
+Use the Edit tool with the **absolute auto-memory path** from the conversation context to update these roster lines in MEMORY.md — they must stay in sync with disk state:
 
 - `- Agents: oss-shepherd, sw-engineer, ...` (the roster line, not the path line)
 - `- Skills: review, survey, ...`
+- `- Rules (N): artifact-lifecycle, ...` (update count N when rules are created or deleted)
+
+**For content-edit operations:** MEMORY.md roster update is only needed if the entity's description changed (it may appear in a MEMORY.md summary). If only internal content changed, skip this step.
 
 ## Step 7: Update README.md
 
-Update the agent or skill table in `README.md`:
+Update the agent, skill, or rule tables as needed:
+
+**`README.md` (project root):**
 
 - **create agent**: add a new row to the `### Agents` table — columns: `| **name** | Short tagline | Key capabilities |`
 - **create skill**: add a new row to the `### Skills` table — columns: `| **name** | \`/name\` | Description |\`
 - **update (rename)**: find and replace the old name in the table row with the new name
 - **delete**: remove the row for the deleted name
 
-The README tables are self-documenting — keep descriptions concise (one line) and consistent in tone with the surrounding rows. Do not add/remove table columns.
+**`.claude/README.md` (config README) — Rules table only:**
+
+- **create rule**: add a new row to the Rules reference table — columns: `| rule-file | Applies to | What it governs |`
+- **update rule (rename)**: replace the old name in the Rules table row
+- **update rule (content-edit)**: update the "What it governs" column if the rule's description changed
+- **delete rule**: remove the row for the deleted rule
+
+All README tables are self-documenting — keep descriptions concise (one line), consistent in tone with surrounding rows. Do not add/remove table columns.
+
+**For content-edit (agent/skill):** Update README only if the entity's description changed. Skip if only internal workflow/content changed.
 
 ## Step 8: Verify integrity
 
@@ -355,11 +481,19 @@ ls -d .claude/skills/*/ | xargs -n1 basename
 
 Use Grep to search for the specific changed name and confirm:
 
-- **Update**: zero hits for old name, appropriate hits for new name
+- **Update (rename)**: zero hits for old name, appropriate hits for new name
 - **Delete**: zero hits for deleted name (or flagged references noted)
 - **Create**: new file exists with valid structure
+- **Content-edit**: target file has valid structure (XML tag balance for agents/skills; YAML frontmatter for rules)
 
-For **create** and **update** operations, also verify tool efficiency: cross-check the agent/skill's declared tools (`tools:` or `allowed-tools:`) against the tool names that actually appear in the workflow body. Any declared tool not referenced anywhere in the content should be flagged as a cleanup candidate in the Step 10 final report (report only — do not block the operation) (unnecessary permission surface).
+Add rules to the on-disk inventory check:
+
+```bash
+# On-disk rule names
+ls .claude/rules/*.md | xargs -n1 basename | sed 's/\.md$//'
+```
+
+For **create** and **update (rename)** operations, also verify tool efficiency: cross-check the agent/skill's declared tools (`tools:` or `allowed-tools:`) against the tool names that actually appear in the workflow body. Any declared tool not referenced anywhere in the content should be flagged as a cleanup candidate in the Step 10 final report (report only — do not block the operation).
 
 ## Step 9: Audit
 
@@ -397,18 +531,22 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - **Atomic updates**: always write-before-delete to prevent data loss on interruption
 - **Perm operations are dual-file**: `add perm` and `remove perm` MUST update both `settings.json` and `permissions-guide.md` — they must stay in sync. Never update one without the other.
 - **settings.json format**: Python json.load/json.dump with indent=2 is the safe editing path — avoids fragile sed/awk surgery on JSON. The output format (2-space indent, no trailing commas) matches the existing file style.
-- **No auto-edit for agent/skill operations**: this skill only mentions when new permissions might be needed for create/update/delete — it does not mutate settings.json for those operations
-- **README.md tables**: Step 7 updates the agent/skill tables in the project README.md — keep the row format consistent with existing rows
+- **No auto-edit for agent/skill/rule operations**: this skill only mentions when new permissions might be needed for create/update/delete — it does not mutate settings.json for those operations
+- **README.md tables**: Step 7 updates agent/skill tables in `README.md` and rules table in `.claude/README.md` — keep row format consistent with existing rows
 - **Color pool**: the AVAILABLE_COLORS list provides unused colors for new agents; if exhausted, reuse colors with a note
 - **Cross-ref grep is broad**: searches bare kebab-case names across all markdown files — catches backtick references, prose mentions, spawn directives, and inventory lists
 - **MEMORY.md inventory**: always regenerated from disk (`ls`), never manually calculated — this prevents drift
+- **Rule files have no `name:` frontmatter** — the filename IS the identifier. Renames only change the file on disk and update cross-references; there is no frontmatter `name:` field to update.
+- **Content-edit runs inline** — the parent model (executing this skill via `disable-model-invocation: true`) reads the target file and applies changes directly with the Edit tool. No subagent is spawned. Cross-reference propagation remains the manage skill's responsibility (Step 5).
+- **Type auto-detection**: `update` and `delete` search all three dirs in parallel; the name is the unique identifier. If two entities share a name (rare), `AskUserQuestion` resolves the ambiguity.
+- **Content-edit vs rename discrimination**: bare kebab-case second arg = rename; quoted string or `.md` path = content-edit. Unambiguous because names never contain spaces or end in `.md`.
 - Follow-up chains:
   - After any create/update/delete → `/audit` to verify config integrity, then `/sync apply` to propagate
   - After creating a new agent/skill → `/review` to validate generated content quality; for testing whether skill trigger descriptions fire correctly (trigger accuracy, A/B description testing), check the Anthropic skills repository for a `skill-creator` tool
   - After updating agent instructions (especially `\<antipatterns_to_flag>`) → `/calibrate <agent>` to measure whether recall and confidence calibration improved
-  - **After any agent create/update/delete** → `/calibrate routing fast` to confirm routing accuracy is unaffected; a new agent changes the roster and its description must disambiguate from neighbors; deletion removes a valid routing target; rename changes the `subagent_type` identifier
+  - **After any agent create/update/delete or content-edit that changes description** → `/calibrate routing fast` to confirm routing accuracy is unaffected
   - After `add perm`/`remove perm` → `/sync apply` to propagate updated settings.json and permissions-guide.md to `~/.claude/`
   - Recommended sequence for agent operations: `/manage <op>` → `/audit` → `/calibrate <name>` (quality) → `/calibrate routing fast` (routing) → `/sync apply`
-  - Recommended sequence for skill operations: `/manage <op>` → `/audit` → `/calibrate <name>` (quality) → `/sync apply`
+  - Recommended sequence for skill/rule operations: `/manage <op>` → `/audit` → `/calibrate <name>` (quality) → `/sync apply`
 
 </notes>

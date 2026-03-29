@@ -1,7 +1,7 @@
 ---
 name: audit
-description: Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness, and upgrade proposals. Reports by severity; auto-fixes at the requested level — 'fix high' (critical+high), 'fix medium' (critical+high+medium), 'fix all' (all findings including low); 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes.
-argument-hint: '[agents|skills|rules|communication] [fix [high|medium|all]] | upgrade'
+description: Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness. Two mutually exclusive action modes: 'fix [high|medium|all]' auto-fixes at the requested severity level; 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes.
+argument-hint: '[agents|skills|rules|communication] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 ---
@@ -14,18 +14,19 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
 
 <inputs>
 
-- **$ARGUMENTS**: optional
+- **$ARGUMENTS**: optional — **`fix` and `upgrade` are mutually exclusive; never combine them**
   - No argument: full sweep, report only — lists all findings, no changes made (default)
   - `fix high` — fix `critical` and `high` findings; `medium` and `low` reported only
   - `fix medium` — fix `critical`, `high`, and `medium` findings; `low` reported only
   - `fix all` — fix all findings including `low`
   - `fix` (no level) — alias for `fix medium` (backward compatible)
+  - `upgrade` — fetch latest Claude Code docs, filter new features by genuine value, then apply: **config** changes (apply + correctness check), **capability** changes (calibrate before → apply → calibrate after → accept if Δrecall ≥ 0 and ΔF1 ≥ 0). Skip to **Mode: upgrade**.
   - `agents` — restrict sweep to agent files only, report only
   - `skills` — restrict sweep to skill files only, report only
   - `rules` — restrict sweep to rule files only, report only
   - `communication` — restrict sweep to communication governance files: `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
   - Scope and fix level can be combined: `agents fix medium`, `rules fix all` — scope always precedes `fix`
-  - `upgrade` — fetch latest Claude Code docs, filter new features by genuine value, then apply: **config** changes (apply + correctness check), **capability** changes (calibrate before → apply → calibrate after → accept if Δrecall ≥ 0 and ΔF1 ≥ 0). Skip to **Mode: upgrade**.
+  - **Invalid combinations** (report error and stop): `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade`
 
 </inputs>
 

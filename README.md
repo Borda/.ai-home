@@ -96,22 +96,22 @@ Agents and skills for [Claude Code](https://claude.ai/code) (Anthropic's AI codi
 
 Skills are multi-agent workflows invoked via slash commands. Each skill composes several agents in a defined topology.
 
-| Skill          | What It Does                                                                                                                            |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **review**     | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts comment                                           |
-| **analyse**    | GitHub thread analysis; `health` = repo overview + duplicate clustering                                                                 |
-| **brainstorm** | Interactive spec: clarifying questions → approaches → spec → self-mentor review → approval gate                                         |
-| **develop**    | TDD-first features, reproduce-first fixes, test-first refactors, scope analysis, debugging                                              |
-| **resolve**    | Resolve PR conflicts or apply review comments via Codex                                                                                 |
-| **calibrate**  | Synthetic benchmarks measuring recall vs confidence bias                                                                                |
-| **audit**      | Config audit: broken refs, inventory drift, docs freshness; `upgrade` applies improvements                                              |
-| **release**    | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                                                                |
-| **survey**     | SOTA literature survey with implementation plan                                                                                         |
-| **optimize**   | Two modes: `perf` = profiling deep-dive; `campaign` = metric-driven iteration loop with auto-rollback; `--team` and `--colab` supported |
-| **manage**     | Create, rename, delete agents/skills with cross-ref propagation and routing calibration                                                 |
-| **sync**       | Drift-detect and sync project `.claude/` → home `~/.claude/`                                                                            |
-| **codex**      | Delegate mechanical coding tasks to Codex CLI                                                                                           |
-| **distill**    | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                 |
+| Skill          | What It Does                                                                                                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **review**     | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts comment                                                                                                 |
+| **analyse**    | GitHub thread analysis; `health` = repo overview + duplicate clustering                                                                                                                       |
+| **brainstorm** | Interactive spec: clarifying questions → approaches → spec → self-mentor review → approval gate                                                                                               |
+| **develop**    | TDD-first features, reproduce-first fixes, test-first refactors, scope analysis, debugging                                                                                                    |
+| **resolve**    | Resolve PR conflicts or apply review comments via Codex                                                                                                                                       |
+| **calibrate**  | Synthetic benchmarks measuring recall vs confidence bias                                                                                                                                      |
+| **audit**      | Config audit: broken refs, inventory drift, docs freshness; `fix [high\|medium\|all]` auto-fixes by severity; `upgrade` applies docs-sourced improvements (mutually exclusive)                |
+| **release**    | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                                                                                                                      |
+| **survey**     | SOTA literature survey with implementation plan                                                                                                                                               |
+| **optimize**   | Four modes: `plan` = config wizard → `program.md`; `campaign` = metric-driven iteration loop; `resume` = continue after crash; `perf` = profiling deep-dive; `--team` and `--colab` supported |
+| **manage**     | Create, update (inline content-edit or rename), delete agents/skills/rules with auto type-detection and cross-ref propagation                                                                 |
+| **sync**       | Drift-detect and sync project `.claude/` → home `~/.claude/`                                                                                                                                  |
+| **codex**      | Delegate mechanical coding tasks to Codex CLI                                                                                                                                                 |
+| **distill**    | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                                                                       |
 
 → Full command reference, orchestration flows, rules (11 auto-loaded rule files), architecture internals, status line — see [`.claude/README.md` → Skills](.claude/README.md#-skills)
 
@@ -178,9 +178,9 @@ Skills chain naturally — the output of one becomes the input for the next.
 <summary><strong>Autonomous metric improvement campaign</strong></summary>
 
 ```
-/optimize campaign plan "increase test coverage to 90%"   # interactive config wizard
-/optimize campaign "increase test coverage to 90%"        # run 20-iteration loop; auto-rollback on regression
-/optimize campaign resume                                  # resume after crash or manual stop
+/optimize plan "increase test coverage to 90%"    # interactive config wizard → program.md
+/optimize campaign "increase test coverage to 90%"  # run 20-iteration loop; auto-rollback on regression
+/optimize resume                                    # resume after crash or manual stop
 /review                                                    # validate kept commits
 ```
 
@@ -191,8 +191,8 @@ Skills chain naturally — the output of one becomes the input for the next.
 
 ```
 /survey "knowledge distillation for small models"            # find best approach
-/optimize campaign plan "improve F1 from 0.82 to 0.87"       # configure metric + guard + agent
-/optimize campaign "improve F1 from 0.82 to 0.87" --team     # parallel exploration across axes
+/optimize plan "improve F1 from 0.82 to 0.87"              # configure metric + guard + agent
+/optimize campaign "improve F1 from 0.82 to 0.87" --team    # parallel exploration across axes
 /review                                                       # quality pass on kept changes
 ```
 

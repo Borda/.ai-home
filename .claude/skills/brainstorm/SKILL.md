@@ -128,9 +128,10 @@ Show the spec path and a one-paragraph summary of the spec. Then call `AskUserQu
 
 **Gate**: do not exit until the user approves. On (b): revise the spec and loop back to Step 5. On (c): loop back to Step 2.
 
-On approval suggest the natural next step:
+On approval suggest the natural next step based on what the spec targets:
 
-> "Next: `/develop plan docs/specs/<file>` to break this into an implementation plan."
+- **Spec targets `.claude/` config** (an agent, skill, or rule described in `agents/`, `skills/`, or `rules/`): suggest `/manage update <name> docs/specs/<file>` to apply the spec inline, or `/manage create <type> <name> "description"` for a new entity.
+- **Spec targets application code or other non-config changes**: suggest `/develop plan docs/specs/<file>` to break this into an implementation plan.
 
 </workflow>
 
@@ -140,6 +141,6 @@ On approval suggest the natural next step:
 - **`disable-model-invocation: true`** — the skill is conversational; the parent model drives all steps turn by turn
 - **self-mentor scope in Step 5** — the spawn prompt must constrain scope to spec quality explicitly; do not let it audit `.claude/` config files
 - **docs/specs/ directory** — created if absent; spec filenames use `YYYY-MM-DD-<kebab-slug>.md` format
-- **Follow-up**: on spec approval → `/develop plan <spec-file>` for task decomposition; `/develop feature` once the plan is in place
+- **Follow-up**: on spec approval → if targeting `.claude/` config (agent/skill/rule): `/manage update <name> <spec-file>` (type auto-detected) or `/manage create <type> <name> "desc"`; otherwise: `/develop plan <spec-file>` for task decomposition, then `/develop feature` to implement
 
 </notes>

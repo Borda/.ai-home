@@ -94,22 +94,22 @@ Key relationships:
 
 ### Reference table
 
-| Skill          | Command                                                     | What It Does                                                                                                                                  |
-| -------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **review**     | `/review [file\|PR#] [--reply]`                             | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts contributor comment                                     |
-| **analyse**    | `/analyse <N\|health\|ecosystem> [--reply]`                 | GitHub thread analysis (auto-detects issue/PR/discussion); `health` = repo overview + duplicate clustering                                    |
-| **brainstorm** | `/brainstorm <idea>`                                        | Interactive design-first spec: clarifying questions → 2–3 approaches → spec → self-mentor review → approval gate                              |
-| **develop**    | `/develop feature\|fix\|refactor\|plan\|debug <goal>`       | TDD-first feature dev, reproduce-first bug fixing, test-first refactor, scope analysis (`plan`), or investigation-first debugging (`debug`)   |
-| **resolve**    | `/resolve <PR#\|comment>`                                   | Resolve PR merge conflicts or apply review comments via Codex                                                                                 |
-| **calibrate**  | `/calibrate [target] [fast\|full] [apply]`                  | Synthetic benchmarks measuring recall vs confidence bias; `routing` and `communication` modes available                                       |
-| **audit**      | `/audit [fix\|upgrade]`                                     | Config audit: broken refs, inventory drift, docs freshness; `upgrade` applies sourced improvements                                            |
-| **release**    | `/release <mode> [range]`                                   | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                                                                      |
-| **survey**     | `/survey [topic]`                                           | SOTA literature survey with implementation plan                                                                                               |
-| **optimize**   | `/optimize perf <target> \| campaign [plan\|resume] <goal>` | Two modes: `perf` = profiling deep-dive; `campaign` = metric-driven iteration loop with auto-rollback; `--team` and `--colab` (GPU) supported |
-| **manage**     | `/manage <op> <type>`                                       | Create, rename, or delete agents/skills with cross-ref propagation and routing calibration                                                    |
-| **sync**       | `/sync [apply]`                                             | Drift-detect and sync project `.claude/` → home `~/.claude/`                                                                                  |
-| **codex**      | `/codex <task> [target]`                                    | Delegate mechanical coding tasks to Codex CLI                                                                                                 |
-| **distill**    | `/distill`                                                  | One-time snapshot: suggest new agents/skills, review roster, prune memory, or consolidate lessons                                             |
+| Skill          | Command                                                 | What It Does                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **review**     | `/review [file\|PR#] [--reply]`                         | Parallel review across arch, tests, perf, docs, lint, security, API; `--reply` drafts contributor comment                                                                                                |
+| **analyse**    | `/analyse <N\|health\|ecosystem> [--reply]`             | GitHub thread analysis (auto-detects issue/PR/discussion); `health` = repo overview + duplicate clustering                                                                                               |
+| **brainstorm** | `/brainstorm <idea>`                                    | Interactive design-first spec: clarifying questions → 2–3 approaches → spec → self-mentor review → approval gate                                                                                         |
+| **develop**    | `/develop feature\|fix\|refactor\|plan\|debug <goal>`   | TDD-first feature dev, reproduce-first bug fixing, test-first refactor, scope analysis (`plan`), or investigation-first debugging (`debug`)                                                              |
+| **resolve**    | `/resolve <PR#\|comment>`                               | Resolve PR merge conflicts or apply review comments via Codex                                                                                                                                            |
+| **calibrate**  | `/calibrate [target] [fast\|full] [apply]`              | Synthetic benchmarks measuring recall vs confidence bias; `routing` and `communication` modes available                                                                                                  |
+| **audit**      | `/audit [scope] fix [high\|medium\|all] \| upgrade`     | Config audit: broken refs, inventory drift, docs freshness; `fix` auto-fixes at the requested severity level; `upgrade` applies docs-sourced improvements (mutually exclusive with `fix`)                |
+| **release**    | `/release <mode> [range]`                               | Notes, changelog, migration, full prepare pipeline, or readiness `audit`                                                                                                                                 |
+| **survey**     | `/survey [topic]`                                       | SOTA literature survey with implementation plan                                                                                                                                                          |
+| **optimize**   | `/optimize plan\|campaign\|resume\|perf <goal\|target>` | Four modes: `plan` = config wizard → `program.md`; `campaign` = metric-driven iteration loop; `resume` = continue after crash/stop; `perf` = profiling deep-dive; `--team` and `--colab` (GPU) supported |
+| **manage**     | `/manage <op> <type>`                                   | Create, rename, or delete agents/skills with cross-ref propagation and routing calibration                                                                                                               |
+| **sync**       | `/sync [apply]`                                         | Drift-detect and sync project `.claude/` → home `~/.claude/`                                                                                                                                             |
+| **codex**      | `/codex <task> [target]`                                | Delegate mechanical coding tasks to Codex CLI                                                                                                                                                            |
+| **distill**    | `/distill`                                              | One-time snapshot: suggest new agents/skills, review roster, prune memory, or consolidate lessons                                                                                                        |
 
 ### Orchestration flow by skill
 
@@ -182,16 +182,25 @@ per-config-file: self-mentor (reads file, writes findings to /tmp/audit-<ts>/<fi
 <summary><strong>`/optimize` — Performance deep-dive and campaign mode</strong></summary>
 
 ```bash
+# plan mode — interactive config wizard → program.md
+/optimize plan "increase test coverage to 90%"
+/optimize plan "improve F1 from 0.82 to 0.87" coverage.md  # write to custom path
+
+# campaign mode — sustained metric-improvement loop
+/optimize campaign "increase test coverage to 90%"        # run from text goal (20-iteration loop; auto-rollback on regression)
+/optimize campaign coverage.md                            # run from program.md config file
+
+# resume mode — continue after crash or manual stop
+/optimize resume                                          # reads program_file from state.json
+/optimize resume coverage.md                             # resume specific campaign
+
+# flags (plan/campaign/resume)
+/optimize campaign "reduce training time by 20%" --team   # parallel exploration across axes
+/optimize campaign "improve validation accuracy" --colab  # GPU workloads via Colab MCP (opt-in)
+
 # perf mode — single profiling session
 /optimize perf src/mypackage/dataloader.py
 /optimize perf src/mypackage/train.py
-
-# campaign mode — sustained metric-improvement loop
-/optimize campaign plan "increase test coverage to 90%"   # interactive config wizard
-/optimize campaign "increase test coverage to 90%"        # run 20-iteration loop; auto-rollback on regression
-/optimize campaign resume                                  # resume after crash or manual stop
-/optimize campaign "reduce training time by 20%" --team   # parallel exploration across axes
-/optimize campaign "improve validation accuracy" --colab  # GPU workloads via Colab MCP (opt-in)
 ```
 
 > **Colab MCP is opt-in.** `.mcp.json` defines the server but does not start it. To enable: add `"colab-mcp"` to `enabledMcpjsonServers` in `.claude/settings.local.json`, then restart Claude Code.
@@ -470,6 +479,7 @@ Agent Teams is Claude Code's experimental multi-agent feature. Teams are always 
 | `/develop feature --team`   | Cross-layer feature needing impl + QA + docs in parallel                  |
 | `/survey --team`            | Multiple competing method families to evaluate                            |
 | `/optimize campaign --team` | Goal spans multiple optimization axes (speed = arch + pipeline + compute) |
+| `/optimize plan --team`     | Wizard + parallel exploration: teammates each own a different axis        |
 | `/optimize`                 | Directory or system-wide scope → Claude proposes team (heuristic)         |
 | `/develop refactor`         | Directory or system-wide scope → Claude proposes team (heuristic)         |
 

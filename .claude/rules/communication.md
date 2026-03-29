@@ -4,20 +4,20 @@ description: Response style, framing, and output routing rules
 
 ## Re: Anchor
 
-Start every reply with a 2-row single-column Markdown table. The renderer reflows it to terminal width automatically — no fixed widths, no padding needed.
+Start every reply with a bold anchor line summarising what was asked, then the response on the next line.
 
 Example (the actual template — copy this structure, replace bracketed text):
 
 ```
-| [one-sentence summary of what was asked] |
-|---|
-| [full response here — use `<br>` for paragraph breaks] |
+**Re: [one-sentence summary of what was asked]**
+
+[full response here]
 ```
 
 Rules:
 
-- Top row (header): neutral factual gist of what the user asked — not a full restatement, no labels
-- Bottom row: full response; use `<br>` between paragraphs for multi-line content; no text after the table
+- Bold line: neutral factual gist of what the user asked — not a full restatement, no labels
+- Blank line between the bold summary and the response
 - No exceptions — apply to every response including short ones
 
 ## Progress and Transparency
