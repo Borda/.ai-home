@@ -53,8 +53,10 @@ Before returning, self-review:
 ## Output Routing
 
 - **Long output** (multi-item analysis, 5+ findings, or any prose exceeding ~10 lines) →
-  write to `_outputs/YYYY/MM/output-<slug>-<YYYY-MM-DD>.md` (**new file — never overwrite an
-  existing file; append a counter suffix if the date-slug already exists**, e.g. `-2.md`);
+  write to `_outputs/YYYY/MM/output-<slug>-<branch>-<YYYY-MM-DD>.md` where `<branch>` is
+  `$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` (**new file —
+  never overwrite an existing file; append a counter suffix if the branch-date slug already
+  exists**, e.g. `-2.md`);
   print compact terminal summary (verdict · 2–3 sentences · critical points · confidence · `→ file`)
 - **Short inline status** (single result, pass/fail, one-sentence finding) → terminal only;
   do **not** create a file

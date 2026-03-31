@@ -4,14 +4,15 @@
 // PURPOSE
 //   Renders a two-line live status display in the Claude Code terminal, refreshed
 //   on every hook event.  Gives an at-a-glance view of model, cost, context usage,
-//   active subagents, running Codex sessions, and current tool activity.
+//   active subagents, running codex plugin sessions, and current tool activity.
 //
 // OUTPUT FORMAT
 //   Line 1 — session metadata:
 //     <model>  <project-dir>  <billing>  <context-bar pct%>  [📨 N when queue > 0]
 //
 //   Line 2 — runtime activity (always shown, "none" when idle):
-//     🕵 N agent(s) (<type> [×N], …)  │  🤖 <codex>  │  🔧 <tools>
+//     🕵 N agent(s) (<type> [×N], …)  │  🤖 <codex-type> [×N]  │  🔧 <tools>
+//     codex:* subagents are excluded from 🕵 and shown in 🤖 by short name
 //
 // LINE 1 DETAILS
 //   model       display_name or id from session JSON
@@ -28,9 +29,11 @@
 //               Groups by type; specialized agents shown in their declared color
 //               (from agent frontmatter color: field); general-purpose shown in gray.
 //               Safety-net: ignores entries older than 10 min (SubagentStop crash/hang).
-//   🤖 codex    reads state/codex/*.json written by task-log.js PreToolUse/PostToolUse.
-//               Shows count of active /codex skill sessions.
-//               Safety-net: ignores entries older than 30 min.
+//   🤖 codex    reads state/codex/*.json written by task-log.js PreToolUse/PostToolUse and
+//               SubagentStart/Stop. Shows short name of each active codex session
+//               (e.g. "codex-rescue", "adversarial-review"). codex:* Agent subagents are
+//               excluded from 🕵 and shown here instead. Safety-net: ignores entries older
+//               than 30 min.
 //   🔧 tools    reads state/tools/*.json written by task-log.js PreToolUse.
 //               Shows tool types active within the last 30 s with per-type call counts.
 //               Each tool type has a fixed ANSI color for visual stability.
@@ -167,7 +170,10 @@ process.stdin.on("end", () => {
           return [];
         }
       });
-      const agents = allAgents.filter((a) => !a.since || now - new Date(a.since).getTime() < MAX_AGE_MS);
+      // Exclude codex:* agents — they are shown in the 🤖 section instead
+      const agents = allAgents.filter(
+        (a) => (!a.since || now - new Date(a.since).getTime() < MAX_AGE_MS) && !(a.type && a.type.startsWith("codex:")),
+      );
       if (agents.length > 0) {
         // Specialized + pinned model → type name, normal color
         // Specialized + inherit model → type name, gray (no special model assigned)
@@ -203,16 +209,21 @@ process.stdin.on("end", () => {
       const codexDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/codex");
       const codexFiles = fs.readdirSync(codexDir).filter((f) => f.endsWith(".json"));
       const MAX_CODEX_AGE_MS = 30 * 60 * 1000; // 30-min safety net
-      const activeCodex = codexFiles.filter((f) => {
+      // Collect active entries with their short type names (e.g. "codex-rescue", "review")
+      const activeCodexTypes = codexFiles.flatMap((f) => {
         try {
           const c = JSON.parse(fs.readFileSync(path.join(codexDir, f), "utf8"));
-          return !c.since || now - new Date(c.since).getTime() < MAX_CODEX_AGE_MS;
+          if (c.since && now - new Date(c.since).getTime() >= MAX_CODEX_AGE_MS) return [];
+          return [c.type || "codex"];
         } catch (_) {
-          return false;
+          return [];
         }
       });
-      if (activeCodex.length > 0) {
-        codexPart = `\x1b[33m🤖 codex ×${activeCodex.length}\x1b[0m`; // yellow
+      if (activeCodexTypes.length > 0) {
+        const groups = new Map();
+        for (const n of activeCodexTypes) groups.set(n, (groups.get(n) || 0) + 1);
+        const items = [...groups.entries()].map(([n, cnt]) => (cnt > 1 ? `${n} ×${cnt}` : n));
+        codexPart = `\x1b[33m🤖 ${items.join(", ")}\x1b[0m`;
       } else {
         codexPart = `\x1b[33m🤖\x1b[0m \x1b[2mnone\x1b[0m`;
       }

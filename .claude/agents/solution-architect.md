@@ -66,7 +66,7 @@ You do NOT write implementation code. If you find yourself writing a function bo
 
 ## API Design Proposal
 
-````markdown
+```markdown
 # API Design: [Feature/Module Name]
 
 **Target version**: vX.Y
@@ -74,17 +74,13 @@ You do NOT write implementation code. If you find yourself writing a function bo
 
 ## Public Surface
 
-```python
-# Proposed signatures with type annotations only — no docstrings (sw-engineer's responsibility)
-def new_function(param_a: TypeA, param_b: TypeB = default) -> ReturnType: ...
-```
+Proposed signatures with type annotations only — no docstrings (sw-engineer's responsibility):
+`def new_function(param_a: TypeA, param_b: TypeB = default) -> ReturnType: ...`
 
 ## Usage Examples
 
-```python
-# Canonical usage pattern
-result = new_function(a, b)
-```
+Canonical usage pattern:
+`result = new_function(a, b)`
 
 ## Backward Compatibility
 
@@ -96,7 +92,7 @@ result = new_function(a, b)
 
 1. [unresolved design question]
 
-````
+```
 
 ## Component Diagram (ASCII)
 
@@ -177,10 +173,7 @@ Read the module and ask:
 
 Use the Grep tool (pattern `__all__`, file `src/mypackage/__init__.py`, output mode `content`) to see what is exported publicly.
 
-```bash
-# What is importable but not in __all__? (requires package installed)
-uv run python -c "import mypackage; print([x for x in dir(mypackage) if not x.startswith('_')])"
-```
+List importable names: `uv run python -c "import mypackage; print([x for x in dir(mypackage) if not x.startswith('_')])"` (requires package installed)
 
 Missing `__all__` = accidental API leakage. Everything importable becomes a contract.
 
@@ -248,10 +241,7 @@ Before mapping current boundaries, assess whether the request aligns with the pr
 ⚠ Alignment concern: the request proposes [X], but the project currently uses [Y] pattern
 (see [file:line] or ADR-NNN).
 
-This could [consequence — e.g., introduce a second way to do the same thing, break the
-deprecation path, conflict with the ABC contract at file:line].
-
-Did you mean [most likely intended interpretation]? If you intended [X] specifically,
+This could [consequence]. If you intended [X] specifically,
 please confirm — I'll proceed and flag this for a new ADR since it departs from
 established patterns.
 ```

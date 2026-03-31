@@ -24,6 +24,6 @@ Each subagent receives the pipeline template from `.claude/skills/calibrate/temp
 - `<MODE>` = `fast` or `full`
 - `<AB_MODE>` = `true` or `false`
 
-Only skills with deterministic, measurable outputs are currently calibrated. Orchestration-heavy or context-dependent skills (e.g. `codex`, `resolve`, `manage`) are excluded because their ground truth cannot be established synthetically without significant test infrastructure.
+Only skills with deterministic, measurable outputs are currently calibrated. Orchestration-heavy or context-dependent skills (e.g. `resolve`, `manage`) are excluded because their ground truth cannot be established synthetically without significant test infrastructure.
 
 Run dir per skill: `_calibrations/<TIMESTAMP>/<TARGET>/` (strip `/` from target name for the dir, e.g. `audit` or `review`)

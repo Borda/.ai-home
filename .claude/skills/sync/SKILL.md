@@ -171,6 +171,17 @@ echo ".claude files: $(cd "$PROJECT" && git ls-files .claude/ | wc -l | tr -d ' 
 echo ".codex files:  $(cd "$PROJECT" && git ls-files .codex/  | wc -l | tr -d ' ')"
 ```
 
+```bash
+# Plugin presence check
+if claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then
+  echo "✓ codex (openai-codex) plugin: installed"
+else
+  echo "⚠ codex (openai-codex) plugin: NOT installed on this machine"
+  echo "  Run in Claude Code: /plugin marketplace add openai/codex-plugin-cc"
+  echo "  Then: /plugin install codex@openai-codex && /reload-plugins"
+fi
+```
+
 ```
 ## Sync Outcome — <date>
 

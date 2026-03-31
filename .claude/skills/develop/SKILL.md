@@ -120,24 +120,16 @@ Mandatory after the quality stack completes. Gracefully degrades if Codex is una
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the changes.
 
-## Codex pre-pass: additional inline steps (steps 1–2 are in the shared file)
+## Codex pre-pass: additional inline steps (step 1 is in the shared file)
 
-3. **Validate**: if Codex made changes, re-run the quality stack on affected files only:
-   ```bash
-   CODEX_CHANGED=$(git diff HEAD --name-only | grep '\.py$' | tr '\n' ' ')
-   [ -n "$CODEX_CHANGED" ] && uv run ruff check $CODEX_CHANGED --fix && uv run pytest <test_dir> -q 2>&1 | tail -10
-   ```
-   - Tests pass → accept Codex corrections
-   - Tests fail → revert Codex changes (`git restore .`) and note in final report
-4. **Collect findings**: build `CODEX_FINDINGS` — a bullet list of every applied fix and every flagged-but-not-fixed issue. If nothing was found or the step was skipped, set `CODEX_FINDINGS=""`.
-5. **Co-authorship rule**: add `Co-Authored-By: OpenAI Codex <codex@openai.com>` to the commit when Codex made an intellectual contribution — correctly identifying a bug or issue and producing the right fix — regardless of whether its bytes landed in the file directly or were applied by Claude. The bar is the reasoning and the patch content, not file I/O mechanics. Do NOT add it when Codex found no issues or was skipped.
+3. **Collect findings**: build `CODEX_FINDINGS` — a bullet list of every flagged issue from the `codex:review` output. If nothing was found or the step was skipped, set `CODEX_FINDINGS=""`. The review is read-only — no working-tree changes are made.
+4. **Co-authorship rule**: add `Co-Authored-By: OpenAI Codex <codex@openai.com>` to the commit only when Codex finds real issues that are subsequently fixed (either by Claude acting on the findings, or via later `codex:codex-rescue` delegation). Do NOT add it when Codex found no issues or was skipped.
 
 Include a `### Codex Pre-pass` section in the final report:
 
-- Available + fixes applied: list what Codex fixed
+- Available + findings: list what Codex flagged (these become the `CODEX_FINDINGS` seed)
 - Available + no issues: "Codex pre-pass: no issues found"
-- Skipped (unavailable): "Codex not installed — pre-pass skipped"
-- Reverted (tests broke): "Codex corrections reverted — {reason}"
+- Skipped (unavailable): "codex plugin (openai-codex) not installed — pre-pass skipped"
 
 ## Shared Step: Progressive review loop
 
@@ -240,7 +232,7 @@ Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree 
   - Feature changes public API → `/release` to prepare CHANGELOG + migration guide
   - Feature/fix is performance-sensitive → `/optimize perf` for baseline + bottleneck analysis
   - Any mode touches `.claude/` config files → spawn `self-mentor` on changed files, then `/sync` to propagate
-  - Mechanical follow-up beyond Codex step → `/codex` to delegate additional tasks
+  - Mechanical follow-up beyond Codex step → `/codex:rescue` to delegate additional tasks
   - External validation → `/review` if an independent multi-agent review is desired beyond the built-in self-review gates
 
 </notes>

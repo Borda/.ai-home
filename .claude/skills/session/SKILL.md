@@ -246,8 +246,6 @@ Derive the project slug via: `git rev-parse --show-toplevel | sed 's|[/.]|-|g'`
 
 **Session-start behavior**: open-loop items are NOT surfaced automatically at session start. They appear only when `/session resume` is explicitly invoked. Do not add a session-start hygiene step for this in CLAUDE.md.
 
-**Phase 2 (deferred)**: status-line badge (`🅿 N` in Row 1, yellow, shown when N ≥ 1 open items) — implement in `statusline.js` after Phase 1 is validated. Track in `tasks/_plans/active/todo_session-skill-phase2.md`.
-
 **Resolution log**: `.claude/logs/session-archive.jsonl` is project-local and append-only. It stays in the git-tracked project directory as an audit trail; it is separate from the home-scoped memory files intentionally.
 
 **Scope**: parked ideas are scoped to the current project only — they do not appear across projects. Memory isolation is enforced by the per-project slug directory under `~/.claude/projects/`.

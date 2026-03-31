@@ -108,7 +108,6 @@ Key relationships:
 | **optimize**    | `/optimize plan\|campaign\|resume\|perf <goal\|target>` | Four modes: `plan` = config wizard → `program.md`; `campaign` = metric-driven iteration loop; `resume` = continue after crash/stop; `perf` = profiling deep-dive; `--team` and `--colab` (GPU) supported |
 | **manage**      | `/manage <op> <type>`                                   | Create, update, delete agents/skills/rules; manage `settings.json` permissions (`add perm`/`remove perm`); auto type-detection and cross-ref propagation                                                 |
 | **sync**        | `/sync [apply]`                                         | Drift-detect and sync project `.claude/` and `.codex/` → home `~/.claude/` and `~/.codex/`                                                                                                               |
-| **codex**       | `/codex <task> [target]`                                | Delegate mechanical coding tasks to Codex CLI                                                                                                                                                            |
 | **investigate** | `/investigate <symptom>`                                | Systematic diagnosis for unknown failures — env, tools, hooks, CI divergence; ranks hypotheses and hands off to the right skill                                                                          |
 | **session**     | `/session [resume\|archive\|summary]`                   | Parking lot for diverging ideas — auto-parks unanswered questions and deferred threads; `resume` shows pending, `archive` closes, `summary` digests the session                                          |
 | **distill**     | `/distill`                                              | One-time snapshot: suggest new agents/skills, review roster, prune memory, or consolidate lessons                                                                                                        |
@@ -301,17 +300,6 @@ Each mode enforces a validation gate *before* writing implementation code:
 </details>
 
 <details>
-<summary><strong>`/codex` — Delegate mechanical work to Codex</strong></summary>
-
-```bash
-/codex "add Google-style docstrings to all undocumented public functions" "src/mypackage/"
-/codex "rename BatchLoader to DataBatcher throughout the package" "src/mypackage/"
-/codex "add return type annotations to all functions missing them" "src/mypackage/utils.py"
-```
-
-</details>
-
-<details>
 <summary><strong>`/resolve` — Resolve a PR end-to-end</strong></summary>
 
 ```bash
@@ -426,22 +414,21 @@ ______________________________________________________________________
 
 Every skill that reviews or validates code uses a three-tier pipeline. Cheaper tiers gate the expensive ones:
 
-| Tier                    | What                                                                   | Cost | When                               |
-| ----------------------- | ---------------------------------------------------------------------- | ---- | ---------------------------------- |
-| **0 — Mechanical gate** | `git diff --stat` — skip trivial diffs                                 | Zero | Always (built into codex-prepass)  |
-| **1 — Codex pre-pass**  | Diff-focused review (~60s) — flags bugs, edge cases, logic errors      | Low  | Before expensive agent spawns      |
-| **2 — Claude agents**   | Specialized parallel agents (opus for reasoning, sonnet for execution) | High | Full review, audit, implementation |
+| Tier                          | What                                                                   | Cost | When                               |
+| ----------------------------- | ---------------------------------------------------------------------- | ---- | ---------------------------------- |
+| **0 — Mechanical gate**       | `git diff --stat` — skip trivial diffs                                 | Zero | Always (built into codex-prepass)  |
+| **1 — codex:review pre-pass** | Diff-focused review (~60s) — flags bugs, edge cases, logic errors      | Low  | Before expensive agent spawns      |
+| **2 — Claude agents**         | Specialized parallel agents (opus for reasoning, sonnet for execution) | High | Full review, audit, implementation |
 
-| Skill                                  | Tier 0 | Tier 1 (Codex pre-pass) | Tier 2 (Claude agents) |
-| -------------------------------------- | :----: | :---------------------: | :--------------------: |
-| `/develop` (feature/fix/refactor/plan) |   ✓    |            ✓            |           ✓            |
-| `/review`                              |   ✓    |           ✓ †           |           ✓            |
-| `/optimize`                            |   ✓    |            ✓            |           ✓            |
-| `/audit fix`                           |   ✓    |            ✓            |           ✓            |
-| `/resolve`                             |   —    |            —            |           ✓            |
-| `/codex`                               |   —    |            ✓            |           —            |
+| Skill                                  | Tier 0 | Tier 1 (codex:review) | Tier 2 (Claude agents) |
+| -------------------------------------- | :----: | :-------------------: | :--------------------: |
+| `/develop` (feature/fix/refactor/plan) |   ✓    |           ✓           |           ✓            |
+| `/review`                              |   ✓    |          ✓ †          |           ✓            |
+| `/optimize`                            |   ✓    |           ✓           |           ✓            |
+| `/audit fix`                           |   ✓    |           ✓           |           ✓            |
+| `/resolve`                             |   —    |           —           |           ✓            |
 
-† For `/review`, Codex runs as a full **co-reviewer** alongside Tier 2 agents — its findings are independently consolidated, not used to seed agent prompts (unbiased review).
+† For `/review`, the codex plugin runs as a full **co-reviewer** alongside Tier 2 agents — its findings are independently consolidated, not used to seed agent prompts (unbiased review).
 
 ______________________________________________________________________
 
@@ -451,22 +438,22 @@ ______________________________________________________________________
 
 **Event → action mapping:**
 
-| Event           | Action                                                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `PreToolUse`    | Logs Task/Agent and Skill invocations to `logs/invocations.jsonl`; opens Codex session file; increments per-tool-type state file |
-| `PostToolUse`   | Closes Codex session file when Skill(codex) or Bash(codex …) completes                                                           |
-| `SubagentStart` | Creates `state/agents/<id>.json` with agent type, model, color, start timestamp — one file per agent (no race)                   |
-| `SubagentStop`  | Deletes per-agent file; appends completion entry to `invocations.jsonl`                                                          |
-| `PreCompact`    | Appends to `logs/compactions.jsonl`; extracts modified file paths from transcript; writes `state/session-context.md`             |
-| `Stop`          | Clears `state/tools/` — resets the 🔧 row between turns (agents intentionally NOT cleared — may still be running)                |
-| `SessionEnd`    | Clears `state/agents/`, `state/tools/`, `state/codex/`; runs `git worktree prune`; removes orphaned worktrees >2h                |
+| Event           | Action                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `PreToolUse`    | Logs Task/Agent and Skill invocations to `logs/invocations.jsonl`; opens codex plugin session file; increments per-tool-type state file |
+| `PostToolUse`   | Closes codex plugin session file when any Skill(codex:\*) completes                                                                     |
+| `SubagentStart` | Creates `state/agents/<id>.json` with agent type, model, color, start timestamp — one file per agent (no race)                          |
+| `SubagentStop`  | Deletes per-agent file; appends completion entry to `invocations.jsonl`                                                                 |
+| `PreCompact`    | Appends to `logs/compactions.jsonl`; extracts modified file paths from transcript; writes `state/session-context.md`                    |
+| `Stop`          | Clears `state/tools/` — resets the 🔧 row between turns (agents intentionally NOT cleared — may still be running)                       |
+| `SessionEnd`    | Clears `state/agents/`, `state/tools/`, `state/codex/`; runs `git worktree prune`; removes orphaned worktrees >2h                       |
 
 **State files layout:**
 
 ```
 .claude/state/
 ├── agents/<id>.json        # one per active subagent (created at start, deleted at stop)
-├── codex/<id>.json         # one per active /codex session
+├── codex/<id>.json         # one per active codex plugin session
 ├── tools/<tool>.json       # one per tool type fired this turn (cleared at Stop)
 └── session-context.md      # modified-file breadcrumb (survives compaction)
 
@@ -478,7 +465,7 @@ ______________________________________________________________________
 **Age-out rules:**
 
 - Agents: 10-minute safety-net — files older than 10 min with no corresponding Stop event indicate a crashed agent; statusline excludes them
-- Codex sessions: 30-minute cutoff — stalled Codex processes are treated as timed out
+- Codex plugin sessions: 30-minute cutoff — stalled plugin sessions are treated as timed out
 - Worktrees: 2-hour cutoff in SessionEnd cleanup
 
 ______________________________________________________________________
@@ -526,19 +513,26 @@ A lightweight hook (`hooks/statusline.js`) adds a persistent two-row status bar 
 
 ```
 Row 1:  claude-sonnet-4-6 │ Borda.ai-home │ Pro ~$1.20 │ ████░░░░░░ 38% │ 📨 2
-Row 2:  🕵 5 agents (self-mentor ×3, opus, sw-engineer) │ 🤖 codex ×2 │ 🔧 Bash ×3 · Edit · Read ×12
+Row 2:  🕵 2 agents (self-mentor, sw-engineer) │ 🤖 codex-rescue │ 🔧 Bash ×3 · Edit · Read ×12
 ```
 
 **Row 1** — model name · project directory · billing indicator · 10-segment context bar (green → yellow → red) · pending input queue badge `📨 N` (yellow; only shown when N ≥ 1)
 
-**Row 2** — agent count · Codex sessions · active tools (last 30 seconds)
+**Row 2** — native agent count · Codex sessions (separate) · active tools (last 30 seconds)
 
-**Agent row details:**
+**Agent row (`🕵`) details:**
 
 - Specialized agents (have a `.claude/agents/` file) → shown by type name in their declared `color:` from frontmatter
 - General-purpose agents → shown by model name in gray (`opus`, `sonnet`)
 - Same-type agents grouped with `×N` count
-- Codex sessions appended as `codex ×N` in yellow
+- **`codex:*` subagents are excluded here** — they appear in `🤖` instead
+
+**Codex row (`🤖`) details:**
+
+- Shows the short name of each active codex session, without the `codex:` prefix (e.g., `codex-rescue`, `review`, `adversarial-review`)
+- Sources: both `Skill(codex:*)` invocations and `Agent(subagent_type="codex:*")` subagents
+- Multiple sessions of the same type grouped as `<name> ×N`
+- Safety-net: sessions older than 30 min are treated as timed out and excluded
 
 **Tool row colors:** `Read` (blue) · `Write` (bright green) · `Edit` (green) · `Bash` (yellow) · `Grep` (cyan) · `Glob` (bright cyan) · `WebFetch` (magenta) · `WebSearch` (bright magenta) · `Task`/`Agent` (bright blue) · `Skill` (bright yellow)
 
@@ -551,20 +545,40 @@ Row 2:  🕵 5 agents (self-mentor ×3, opus, sw-engineer) │ 🤖 codex ×2 �
 
 ## 🤝 Integration with Codex
 
-→ Codex's perspective on this integration: [`.codex/README.md` — Integration with Claude](../.codex/README.md#-integration-with-claude) · Full architecture: [root README](../README.md#-claude--codex-integration)
+→ Full architecture: [root README → Claude + Codex integration](../README.md#-claude--codex-integration)
 
-**What Claude delegates to Codex:**
+### Setup
 
-- Mechanical, diff-scoped tasks: add docstrings, rename symbols, add type annotations across a module
-- PR review comment application (via `/resolve`)
-- Codex pre-pass in the tiered review pipeline (Tier 1) — independent diff review before Claude's parallel agents
+Install the Codex plugin in Claude Code — not an MCP server, a local plugin:
+
+```bash
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex@openai-codex
+/reload-plugins
+```
+
+Skills check availability at runtime: `claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'`. If the plugin is absent, each skill skips its Codex step gracefully rather than failing.
+
+**Invocation map** — every place Claude dispatches to Codex and why:
+
+| Skill                              | Site                          | Purpose                                                                              | Plugin command                            |
+| ---------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `/develop fix`, `/develop feature` | `_shared/codex-prepass.md`    | Tier 1 pre-pass: review staged diff for bugs before Claude's review cycle            | `codex:review --wait`                     |
+| `/review`                          | Step 2 co-review              | Adversarial diff review seeding agent prompts with pre-flagged issues                | `codex:adversarial-review --wait <focus>` |
+| `/review`, `/optimize campaign`    | `_shared/codex-delegation.md` | Delegate mechanical follow-up: docstrings, type annotations, test stubs              | `codex:codex-rescue` (agent)              |
+| `/resolve`                         | Step 8 action items           | Apply PR review feedback to the codebase                                             | `codex:codex-rescue` (agent)              |
+| `/resolve`                         | Step 12a comment dispatch     | Apply a specific review comment                                                      | `codex:codex-rescue` (agent)              |
+| `/resolve`                         | Step 12 review loop           | Review applied changes for issues before committing                                  | `codex:review --wait`                     |
+| `/optimize campaign --codex`       | Phase 2b ideation             | Fallback: generate + apply one atomic optimization when Claude's change was reverted | `codex:codex-rescue` (agent)              |
+| `/calibrate`                       | Phase 1a problem gen          | Generate synthetic calibration problems (JSON array written to run dir)              | `codex:codex-rescue` (agent)              |
+| `/calibrate`                       | Phase 2 scoring               | Score calibration responses against ground truth (JSON written to run dir)           | `codex:codex-rescue` (agent)              |
 
 **What Claude retains:**
 
 - Long-horizon planning and research (`/research`, `/optimize campaign`, `/develop plan`)
 - Orchestration of multiple agents in defined topologies
 - Judgment calls: design decisions, spec approval, test validity assessment
-- Final validation: Claude always reviews Codex output with lint + tests before marking work complete
+- Final validation: Claude always verifies Codex output via `git diff HEAD` before accepting changes
 
 **Why the division works:** Claude has a mental model of which files are "in scope" for a task; Codex reads the diff and codebase independently, without that context. Their blind spots are complementary — the union of both passes catches more than either alone.
 

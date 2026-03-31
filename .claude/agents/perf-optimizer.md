@@ -251,6 +251,7 @@ model = torch.compile(model, mode="max-autotune")  # max speed, slower compile
 - **Premature vectorization**: rewriting Python loops to NumPy/torch before profiling confirms the loop is the actual hotspot — premature optimization adds complexity and potential numerical differences without guaranteed gain
 - **Silently skipping un-vectorisable loops**: when an outer Python loop is intentionally not flagged as a vectorisation target (e.g., ragged arrays with variable row length, Python-object records, non-numeric types), add an explicit note in the findings section — "Outer loop over `records` not flagged: rows have variable length; vectorisation would require padding or a ragged-tensor library (e.g., `torch.nested_tensor`)." Do not leave the omission unexplained or bury it only in the Confidence gaps.
 - **Asserting tensor shape consequences without verification**: claiming that a specific tensor operation creates an N×N×D intermediate allocation (or similar memory-bound consequence) without first verifying the actual broadcast semantics — e.g., `cosine_similarity(a.unsqueeze(0), b.unsqueeze(1), dim=-1)` with shapes (1,1,D) and (N,1,D) does NOT create an N×N×D intermediate; it produces shape (N,1). Always trace through shape arithmetic before reporting Out of Memory (OOM) risk as a confirmed finding; if uncertain, mark as "unconfirmed — verify shapes before citing".
+- **Missing secondary low-severity issues**: after identifying the primary bottleneck, also scan for: double dict lookups (`d.get(k, v1)` followed by `d.get(k, v2)` on the same key within one function call), inconsistent default values in recursive functions, and deduplication opportunities in loop inputs. These rank below primary bottlenecks but must be reported to achieve full issue coverage.
 - **Injecting informational observations on out-of-scope tasks**: when a task is outside the agent's domain and correctly declined, do not include any performance observations — even framed as "informational only" or "background note". An out-of-scope response should contain only: (1) the scope declaration, (2) the redirect to the correct agent. Observations added "for completeness" are not findings, but they create ambiguity for callers who may act on them and inflate the apparent FP surface. If a genuinely critical performance issue is visible in out-of-scope code, note it in a single sentence under a clearly labelled `## Out-of-Scope Performance Observation` heading — do not embed it in the main response body.
 
 \</antipatterns_to_flag>
@@ -313,31 +314,17 @@ Apply the optimization hierarchy from `<optimization_hierarchy>`. **Never recomm
 # Only then consider: mixed precision → torch.compile → distributed
 ```
 
-**Low-severity issues**: after identifying the primary bottleneck, scan for secondary issues including: double dict lookups (`d.get(k, v1)` followed by `d.get(k, v2)` on the same key within one function call), inconsistent default values in recursive functions, and deduplication opportunities in loop inputs. These rank below primary bottlenecks but must be reported to achieve full issue coverage.
+**Low-severity issues**: after identifying the primary bottleneck, scan for secondary issues — see `<antipatterns_to_flag>` for the full list. Report secondary findings below primary bottlenecks.
 
 ### Step 3 — Profile the identified bottleneck
 
-For the single top bottleneck, run the appropriate profiler (use `run_in_background: true` for long-running runs):
-
-```bash
-python -m cProfile -s cumtime <script.py> | head -30   # CPU hotspots
-py-spy record -o profile.svg -- python <script.py>     # flame graph for live process
-```
-
-For ML training loops, use the PyTorch profiler (see `<ml_gpu_profiling>` section).
+For the single top bottleneck, run the appropriate profiler from `<profiling_tools>` or `<ml_gpu_profiling>` (use `run_in_background: true` for long-running runs). For ML training loops, use the PyTorch profiler in `<ml_gpu_profiling>`.
 
 ### Step 4 — Fill the output template for each finding
 
-Every recommendation MUST use the `<output_format>` template. Never report an optimization without filling [Before] and [After] — if profiling data is unavailable, mark them "unconfirmed — measure before merging":
+Every recommendation MUST use the `<output_format>` template. Never report an optimization without filling [Before] and [After] — if profiling data is unavailable, mark them "unconfirmed — measure before merging". Example filled row:
 
-```
-[Bottleneck]  DataLoader: num_workers=0, single-process loading starves GPU
-[Severity]    high
-[Before]      GPU util 23%, step time 4.2s (data load: 3.1s, forward+backward: 1.1s)
-[Fix]         num_workers=8, pin_memory=True, persistent_workers=True
-[After]       unconfirmed — expected GPU util >80%, step time ~1.3s
-[Impact]      ~3× throughput (static analysis) — confirm with profiling
-```
+`DataLoader: num_workers=0` → Severity: high | Before: GPU util 23%, step 4.2s | Fix: num_workers=8, pin_memory=True, persistent_workers=True | After: unconfirmed | Impact: ~3× throughput
 
 ### Step 5 — One-change loop
 

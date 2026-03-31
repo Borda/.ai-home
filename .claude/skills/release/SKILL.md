@@ -19,7 +19,7 @@ Mode comes **first**; range or version follows:
 | -------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `/release notes [range]`         | optional git range (default: last-tag..HEAD) | `PUBLIC-NOTES.md`                                                                           |
 | `/release changelog [range]`     | optional git range                           | Prepends `CHANGELOG.md`                                                                     |
-| `/release summary [range]`       | optional git range                           | `_outputs/<year>/<month>/output-release-summary-<date>.md`                                  |
+| `/release summary [range]`       | optional git range                           | `_outputs/<year>/<month>/output-release-summary-<branch>-<date>.md`                         |
 | `/release migration <from> <to>` | two version tags, e.g. `v1.2 v2.0`           | Terminal only                                                                               |
 | `/release prepare <version>`     | version to stamp, e.g. `v1.3.0`              | All artifacts: audit → `PUBLIC-NOTES.md` + `CHANGELOG.md` + summary + migration if breaking |
 | `/release audit [version]`       | optional target version                      | Terminal readiness report                                                                   |
@@ -95,7 +95,7 @@ Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes 
 Filter out: merge commits, minor dep bumps, CI config, comment typos.
 Always include: any breaking change, any behavior change, any new API surface.
 
-## Step 2.5: Explore interesting changes
+## Step 3: Explore interesting changes
 
 For the top 3–5 most significant classified changes (features, breaking changes,
 major behaviour changes), read the actual diff or changed files:
@@ -111,7 +111,7 @@ real functionality, not just commit subject lines.
 
 Skip this for trivial changes (typos, dep bumps, CI config).
 
-## Step 3: Choose output format
+## Step 4: Choose output format
 
 Before writing, fetch the last 2–3 releases from the repo to check for project-specific formatting conventions:
 
@@ -147,7 +147,7 @@ Read the internal release summary template from .claude/skills/release/templates
 
 Read the migration guide template from .claude/skills/release/templates/MIGRATION.tmpl.md and use it as the format.
 
-## Step 4: Writing guidelines
+## Step 5: Writing guidelines
 
 Read the writing guidelines from .claude/skills/release/guidelines/writing-rules.md and follow them.
 
@@ -155,10 +155,10 @@ After applying the guidelines above to polish the output, write to disk per mode
 
 - **`notes`**: write to `PUBLIC-NOTES.md` at the repo root. Notify: `→ written to PUBLIC-NOTES.md`
 - **`changelog`**: prepend the entry to `CHANGELOG.md` after the `# Changelog` heading (create the file with that heading if it does not exist). Notify: `→ prepended to CHANGELOG.md`
-- **`summary`**: save to `_outputs/$(date +%Y)/$(date +%m)/output-release-summary-$(date +%Y-%m-%d).md`. Notify: `→ saved to _outputs/<year>/<month>/output-release-summary-<date>.md`
+- **`summary`**: extract branch first — `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` — then save to `_outputs/$(date +%Y)/$(date +%m)/output-release-summary-$BRANCH-$(date +%Y-%m-%d).md`. Notify: `→ saved to _outputs/<year>/<month>/output-release-summary-<branch>-<date>.md`
 - **`migration`**: print to terminal only
 
-## Step 5: Publish (after writing notes)
+## Step 6: Publish (after writing notes)
 
 **Human gate** — stop here and hand off to the user: the GitHub release must be created with project-level tooling (e.g. `gh release create`). Refer to the project's CLAUDE.md or `oss-shepherd` agent for the exact command. Resume after the release is live.
 
@@ -228,8 +228,6 @@ Write each artifact in sequence:
 3. Commit, push, open PR
 4. On merge: create GitHub release from PUBLIC-NOTES.md
 ```
-
-End your response with a `## Confidence` block per CLAUDE.md output standards.
 
 ## Mode: audit
 

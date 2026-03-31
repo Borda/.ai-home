@@ -138,7 +138,7 @@ Run all checks before touching code. Fail fast with a clear message if any fail:
 3. **Metric command produces numeric output**: run `metric_cmd` once; parse stdout for a float. If no float found: show the output and stop.
 4. **Guard command passes**: run `guard_cmd` once; must exit 0. If it fails: show the output and stop.
 5. **`--colab` check** (if flag present): verify Colab MCP tools are available by checking for `mcp__colab-mcp__runtime_execute_code`. If unavailable, print setup instructions (see Colab MCP section) and stop.
-6. **`--codex` check** (if flag present): verify `which codex` returns a path (`command -v codex`). If unavailable: print "⚠ codex not found — proceeding without Codex ideation (Claude-only mode)" and clear the `--codex` flag for this run. Graceful degradation — not a hard stop.
+6. **`--codex` check** (if flag present): verify `claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'`. If unavailable: print "⚠ codex plugin not found — proceeding without Codex ideation (Claude-only mode)" and clear the `--codex` flag for this run. Graceful degradation — not a hard stop.
 
 ### Step C3: Select ideation agent
 
@@ -229,15 +229,14 @@ Run Phase 2b **only when `--codex` is active** AND the Claude specialist's resul
 
 When Phase 2b runs, `git revert` has already restored the working tree to the pre-Phase-2 state. Run Codex ideation on the clean tree:
 
-```bash
-CODEX_OUT=".claude/state/optimize/<run-id>/codex-ideation-<i>.md"
-timeout <CODEX_IDEATION_TIMEOUT_SEC> codex exec \
-  "Goal: <goal>. Current metric: <metric_key>=<current_value> (baseline: <baseline>, direction: <higher|lower>). Scope files: <scope_files>. Read context from .claude/state/optimize/<run-id>/context-<i>.md. Propose and implement ONE atomic optimization change most likely to improve the metric without breaking <guard_cmd>. Write your full reasoning to $CODEX_OUT." \
-  --sandbox workspace-write 2>/dev/null
-EXIT=$?
+```
+Agent(
+  subagent_type="codex:codex-rescue",
+  prompt="Goal: <goal>. Current metric: <metric_key>=<current_value> (baseline: <baseline>, direction: <higher|lower>). Scope files: <scope_files>. Read context from .claude/state/optimize/<run-id>/context-<i>.md. Propose and implement ONE atomic optimization change most likely to improve the metric without breaking <guard_cmd>. Write your full reasoning to .claude/state/optimize/<run-id>/codex-ideation-<i>.md."
+)
 ```
 
-- If `EXIT != 0` or no files changed: append `status: codex-no-op` to JSONL with `ideation_source: "codex"`, continue loop
+- If Agent returns no file changes: append `status: codex-no-op` to JSONL with `ideation_source: "codex"`, continue loop
 - If files changed: proceed through Phases 3–7 exactly as for a Claude ideation — commit, verify metric, run guard, decide keep/revert
 - Set `"ideation_source": "codex"` in the Phase 8 JSONL record
 
@@ -323,7 +322,9 @@ Update `state.json`: `iteration = i`, `status = running`.
 
 ### Step C6: Results report
 
-Write full report to `_outputs/$(date +%Y)/$(date +%m)/output-optimize-campaign-$(date +%Y-%m-%d).md` using the Write tool. Do not print the full report to terminal.
+Pre-compute the branch before writing: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+
+Write full report to `_outputs/$(date +%Y)/$(date +%m)/output-optimize-campaign-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool. Do not print the full report to terminal.
 
 **Report structure:**
 

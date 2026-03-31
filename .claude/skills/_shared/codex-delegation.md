@@ -8,15 +8,13 @@ Delegate only small, bounded tasks that require reading and understanding the co
 For each qualifying task, read the target code, form an accurate brief, then spawn:
 
 ```
-Task(
-  subagent_type="general-purpose",
-  prompt="Read .claude/skills/codex/SKILL.md and follow its workflow exactly.
-Task: use the <agent> to <specific task with accurate description of what the code does>.
-Target: <file>."
+Agent(
+  subagent_type="codex:codex-rescue",
+  prompt="<specific task with accurate description of what the code does>. Target: <file>."
 )
 ```
 
-The subagent handles pre-flight, dispatch, validation, and patch capture. If Codex is unavailable it reports gracefully — do not block on this step.
+The plugin agent writes directly to the working tree. Inspect changes via `git diff HEAD` after it returns. If the plugin is unavailable it reports gracefully — do not block on this step.
 
 **Do not delegate to Codex:**
 

@@ -41,8 +41,7 @@ GUARD_REWORK_MAX:           2 attempts before revert
 VERIFY_TIMEOUT_SEC:         120 (local), 300 (--colab)
 SUMMARY_INTERVAL:           10 iterations
 DIMINISHING_RETURNS_WINDOW: 5 iterations < 0.5% each → warn user and suggest stopping
-STATE_DIR:                  .claude/state/optimize/
-CODEX_IDEATION_TIMEOUT_SEC:  300 (timeout for codex exec ideation call per iteration)
+STATE_DIR:                  _optimizations/state/
 ```
 
 **Agent strategy mapping** (`agent_strategy` in config → ideation agent to spawn):

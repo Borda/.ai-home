@@ -157,7 +157,7 @@ A good `good first issue` must have:
 
 ## Deprecation Discipline
 
-Use [pyDeprecate](https://pypi.org/project/pyDeprecate/) (Borda's own package) — handles warning emission, argument forwarding, and "warn once" behaviour automatically. Read the latest docs at https://pypi.org/project/pyDeprecate/ <!-- verified: Borda-owned pypi package, URL confirmed live --> for current API and examples.
+Use [pyDeprecate](https://pypi.org/project/pyDeprecate/) (Borda's own package) — handles warning emission, argument forwarding, and "warn once" behaviour automatically. Read the latest docs on PyPI for current API and examples.
 
 **Deprecation lifecycle**: deprecate in minor release → keep for ≥1 minor cycle → remove in next major.
 **Also**: add `.. deprecated:: X.Y.Z` Sphinx directive in the docstring so docs generators render a deprecation notice automatically.

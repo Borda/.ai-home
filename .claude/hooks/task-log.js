@@ -7,7 +7,7 @@
 //   other hooks (statusline.js) read to render the live status line:
 //
 //     agents/   — which subagents are currently running
-//     codex/    — which /codex skill sessions are active
+//     codex/    — which codex plugin sessions are active
 //     tools/    — which tool types fired in the current turn (for the 🔧 line)
 //
 //   It also appends to append-only audit logs so you have a full history of every
@@ -17,14 +17,14 @@
 //
 //   PreToolUse
 //     • Logs Task/Agent and Skill invocations to invocations.jsonl.
-//     • Opens a codex session file when Skill(codex) or a Bash codex command
-//       starts (keyed by tool_use_id so concurrent sessions don't collide).
+//     • Opens a codex session file when Skill(codex:*) or Agent(codex:*) starts
+//       (keyed by tool_use_id so concurrent sessions don't collide).
 //     • Writes/increments a per-tool-type file in state/tools/ for the 🔧 display.
 //       Agent and Task tool calls are excluded here — they are tracked via the
 //       dedicated SubagentStart/Stop events to avoid double-counting.
 //
 //   PostToolUse
-//     • Closes the codex session file when Skill(codex) or Bash(codex …) completes,
+//     • Closes the codex session file when Skill(codex:*) or Agent(codex:*) completes,
 //       so the 🤖 counter drops back to zero immediately after the run finishes.
 //
 //   SubagentStart
@@ -63,7 +63,7 @@
 //   .claude/logs/invocations.jsonl      — append-only audit log (agents + skills)
 //   .claude/logs/compactions.jsonl      — compaction events log
 //   .claude/state/agents/<id>.json      — one file per active subagent
-//   .claude/state/codex/<id>.json       — one file per active /codex skill session
+//   .claude/state/codex/<id>.json       — one file per active codex plugin session
 //   .claude/state/tools/<tool>.json     — one file per tool type, current turn only
 //   .claude/state/queue/<ts>.json       — one file per pending user input (cleared on Stop)
 //   .claude/state/session-context.md    — modified-files breadcrumb for compaction
@@ -106,26 +106,15 @@ process.stdin.on("end", () => {
         const skill = tool_input?.skill || "unknown";
         const args = tool_input?.args || "";
         appendLog(logFile, logsDir, { ts, event: "invoked", tool: "Skill", skill, args });
-        // Track codex sessions for statusline display (tool_use_id is the stable key)
-        if (skill === "codex" && data.tool_use_id) {
+        // Track codex plugin sessions for statusline display (tool_use_id is the stable key)
+        // Matches any codex: plugin command (codex:review, codex:adversarial-review, codex:rescue, etc.)
+        if (skill && skill.startsWith("codex:") && data.tool_use_id) {
           try {
             fs.mkdirSync(codexDir, { recursive: true });
+            const shortName = skill.slice("codex:".length);
             fs.writeFileSync(
               path.join(codexDir, `${data.tool_use_id}.json`),
-              JSON.stringify({ id: data.tool_use_id, since: ts }),
-            );
-          } catch (_) {}
-        }
-      } else if (tool_name === "Bash") {
-        // Also track Bash calls that run codex directly (e.g. /resolve, /optimize campaign metric timeout)
-        // Matches: "codex …" and "timeout <N> codex …"
-        const cmd = tool_input?.command || "";
-        if (/^(?:timeout\s+\S+\s+)?codex(\s|$)/m.test(cmd) && data.tool_use_id) {
-          try {
-            fs.mkdirSync(codexDir, { recursive: true });
-            fs.writeFileSync(
-              path.join(codexDir, `${data.tool_use_id}.json`),
-              JSON.stringify({ id: data.tool_use_id, since: ts, via: "bash" }),
+              JSON.stringify({ id: data.tool_use_id, since: ts, type: shortName }),
             );
           } catch (_) {}
         }
@@ -145,13 +134,10 @@ process.stdin.on("end", () => {
         } catch (_) {}
       }
     } else if (hook_event_name === "PostToolUse") {
-      // Remove codex session tracking when any Skill(codex) or Bash call completes.
-      // For Bash: always attempt unlink by tool_use_id — ENOENT is silently swallowed for
-      // non-codex calls. This avoids re-parsing tool_input.command which may be absent.
+      // Remove codex plugin session tracking when any Skill(codex:*) completes.
       if (data.tool_use_id) {
-        const isCodexSkill = tool_name === "Skill" && tool_input?.skill === "codex";
-        const isBash = tool_name === "Bash";
-        if (isCodexSkill || isBash) {
+        const isCodexSkill = tool_name === "Skill" && tool_input?.skill?.startsWith("codex:");
+        if (isCodexSkill) {
           try {
             fs.unlinkSync(path.join(codexDir, `${data.tool_use_id}.json`));
           } catch (_) {}
@@ -170,12 +156,22 @@ process.stdin.on("end", () => {
           path.join(agentsDir, `${id}.json`),
           JSON.stringify({ id, type: agent_type || "unknown", model, color, since: ts }),
         );
+        // Also track codex:* agents in state/codex/ so statusline shows them in the 🤖 section
+        if (agent_type && agent_type.startsWith("codex:")) {
+          fs.mkdirSync(codexDir, { recursive: true });
+          const shortName = agent_type.slice("codex:".length);
+          fs.writeFileSync(path.join(codexDir, `${id}.json`), JSON.stringify({ id, since: ts, type: shortName }));
+        }
       } catch (_) {}
     } else if (hook_event_name === "SubagentStop") {
       // Delete the per-agent file
       try {
         const id = agent_id || ts;
         fs.unlinkSync(path.join(agentsDir, `${id}.json`));
+        // Also clean up codex tracking entry if this was a codex:* agent
+        try {
+          fs.unlinkSync(path.join(codexDir, `${id}.json`));
+        } catch (_) {}
       } catch (_) {}
       // Capture last assistant message (up to 500 chars) for post-mortem debugging
       const lastMsg = (data.last_assistant_message || "").slice(0, 500) || undefined;

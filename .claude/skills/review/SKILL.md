@@ -94,23 +94,14 @@ mkdir -p "$RUN_DIR"
 Check availability:
 
 ```bash
-which codex &>/dev/null && echo "codex available" || echo "⚠ Codex not found — skipping co-review"
+claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "codex (openai-codex) available" || echo "⚠ codex (openai-codex) not found — skipping co-review"
 ```
 
 If Codex is available, run a comprehensive review on the diff:
 
 ```bash
 CODEX_OUT="$RUN_DIR/codex.md"
-codex exec "Review the git diff. Run: git diff HEAD~1 HEAD 2>/dev/null || git diff HEAD. For each changed Python file check:
-1. Bugs and logic errors — wrong conditions, off-by-one, incorrect state transitions, incorrect assumptions
-2. Missed edge cases — None inputs, empty collections, boundary values, integer overflow
-3. Error handling — unhandled exceptions, swallowed errors (bare except/pass), missing cleanup on exception
-4. Security — SQL injection, path traversal, hardcoded secrets, insecure defaults, missing input validation
-5. Type safety — incorrect type assumptions, runtime type errors
-6. Missing test coverage — new public functions with no test, critical error paths not covered
-For each finding produce exactly one line: file:line: [SEVERITY] description — SEVERITY is CRITICAL, HIGH, MEDIUM, or LOW. Skip cosmetic nits.
-Write ALL findings to $CODEX_OUT starting with a count header: 'Findings: N (C critical, H high, M medium, L low)'.
-If no issues found, write: 'Findings: 0 — no issues found.'" --sandbox workspace-write
+Skill("codex:adversarial-review", args="--wait look for bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns")
 ```
 
 After Codex writes `$RUN_DIR/codex.md`, extract a compact seed list (≤10 items, `[{"loc":"file:line","note":"..."}]`) to inject into agent prompts in Step 3 as pre-flagged issues to verify or dismiss. If Codex was skipped or found nothing, proceed with an empty seed.
@@ -184,7 +175,7 @@ While agents from Step 3 are completing, run these two independent checks simult
 # Rate-limit guard: if gh api returns HTTP 429, wait 10 seconds and retry once.
 # If still rate-limited, log "rate-limited — downstream search may be incomplete" and continue.
 # --paginate is available for large result sets but increases rate-limit exposure; omit unless completeness is critical.
-CHANGED_EXPORTS=$(git diff HEAD~1 HEAD -- "src/**/__init__.py" | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u)
+CHANGED_EXPORTS=$(git diff $(git merge-base HEAD origin/main) HEAD -- "src/**/__init__.py" | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u)
 for export in $CHANGED_EXPORTS; do
   echo "=== $export ==="
   gh api "search/code" --field "q=$export language:python" --jq '.items[:5] | .[].repository.full_name' 2>/dev/null
@@ -192,23 +183,23 @@ for export in $CHANGED_EXPORTS; do
 done
 
 # Check if deprecated APIs have migration guides
-git diff HEAD~1 HEAD | grep -A2 "deprecated"
+git diff $(git merge-base HEAD origin/main) HEAD | grep -A2 "deprecated"
 ```
 
 ### 4b: Open Source Software (OSS) checks
 
 ```bash
 # Check for new dependencies — license compatibility
-git diff HEAD~1 HEAD -- pyproject.toml requirements*.txt
+git diff $(git merge-base HEAD origin/main) HEAD -- pyproject.toml requirements*.txt
 
 # Check for secrets accidentally committed
-git diff HEAD~1 HEAD | grep -iE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}"
+git diff $(git merge-base HEAD origin/main) HEAD | grep -iE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}"
 
 # Check for API stability: are public APIs being removed without deprecation?
-git diff HEAD~1 HEAD -- "src/**/__init__.py"
+git diff $(git merge-base HEAD origin/main) HEAD -- "src/**/__init__.py"
 
 # Check CHANGELOG was updated
-git diff HEAD~1 HEAD -- CHANGELOG.md CHANGES.md
+git diff $(git merge-base HEAD origin/main) HEAD -- CHANGELOG.md CHANGES.md
 ```
 
 ## Step 5: Cross-validate critical/blocking findings
@@ -295,7 +286,10 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 
 After parsing confidence scores: if any agent scored < 0.7, prepend **⚠ LOW CONFIDENCE** to that agent's findings section and explicitly state the gap. Do not silently drop uncertain findings — flag them so the reviewer can decide whether to investigate further.
 
-Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **PR Summary** template with the **Extended Fields (review only)** addendum. Replace `[entity-line]` with `Review — [target]` and replace `[skill-specific path]` with `_outputs/$(date +%Y)/$(date +%m)/output-review-$(date +%Y-%m-%d).md`.
+Before constructing the output path, extract the current branch:
+`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+
+Read the compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use the **PR Summary** template with the **Extended Fields (review only)** addendum. Replace `[entity-line]` with `Review — [target]` and replace `[skill-specific path]` with `_outputs/$(date +%Y)/$(date +%m)/output-review-$BRANCH-$(date +%Y-%m-%d).md`.
 
 ## Step 7: Delegate implementation follow-up (optional)
 
@@ -328,7 +322,7 @@ Spawn the **oss-shepherd** agent with:
 
 - The review output file path from Step 6
 - The PR number and contributor handle (if known from Step 1)
-- Prompt: "Read the review report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block: (1) overall PR comment in GitHub Markdown (full MD: headers, bullets, code blocks, `> blockquotes`, links) — one prose paragraph per blocking/high issue; items also in the inline table get one clause only, not a full paragraph; nit/low items bundled as a single 'Minor:' line; decisive close; (2) inline comments table with columns `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; ordered high → medium → low, then most confident first within each tier; nit/low items omitted from the table entirely. Use all blocking and high findings. No column-width line-wrapping in prose. Write your full output to `tasks/output-reply-<PR#>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `overall=N_issues blocking=N | inline=N_rows | → tasks/output-reply-<PR#>-<date>.md`"
+- Prompt: "Read the review report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block: (1) overall PR comment in GitHub Markdown (full MD: headers, bullets, code blocks, `> blockquotes`, links) — one prose paragraph per blocking/high issue; items also in the inline table get one clause only, not a full paragraph; nit/low items bundled as a single 'Minor:' line; decisive close; (2) inline comments table with columns `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; ordered high → medium → low, then most confident first within each tier; nit/low items omitted from the table entirely. Use all blocking and high findings. No column-width line-wrapping in prose. Write your full output to `_outputs/$(date +%Y)/$(date +%m)/output-reply-<PR#>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `overall=N_issues blocking=N | inline=N_rows | → _outputs/<YYYY>/<MM>/output-reply-<PR#>-<date>.md`"
 
 Print compact terminal summary:
 
@@ -336,7 +330,7 @@ Print compact terminal summary:
   Overall comment  — N issues (M blocking, K minor)
   Inline comments  — N rows
 
-  Reply:  tasks/output-reply-<PR#>-<date>.md
+  Reply:  _outputs/<YYYY>/<MM>/output-reply-<PR#>-<date>.md
 ```
 
 End your response with a `## Confidence` block per CLAUDE.md output standards. For static analysis of complete, self-contained code (no missing imports needed to reason about the findings), a baseline confidence of 0.88+ is appropriate; reserve scores below 0.80 for cases where runtime behaviour, external dependencies, or execution traces are genuinely needed to validate a finding. This is always the very last thing, whether or not `--reply` was used.
@@ -353,8 +347,8 @@ End your response with a `## Confidence` block per CLAUDE.md output standards. F
   - `[blocking]` bugs or regressions → `/develop fix` to reproduce with test and apply targeted fix
   - Structural or quality issues → `/develop refactor` for test-first improvements
   - Security findings in auth/input/deps → run `pip-audit` for dependency Common Vulnerabilities and Exposures (CVEs); address Open Web Application Security Project (OWASP) issues inline via `/develop fix`
-  - Mechanical issues beyond what Step 6 auto-fixed → `/codex` to delegate additional tasks
-  - Docstrings, type annotations, renames, and other mechanical findings → `/codex "<task description>"` per finding to delegate to Codex
+  - Mechanical issues beyond what Step 6 auto-fixed → `/codex:rescue <task>` to delegate additional tasks
+  - Docstrings, type annotations, renames, and other mechanical findings → `/codex:rescue <task description>` per finding to delegate to Codex
   - PR feedback to be shared directly with a contributor → use `--reply` to auto-draft via oss-shepherd; or invoke oss-shepherd manually for custom framing
 
 </notes>

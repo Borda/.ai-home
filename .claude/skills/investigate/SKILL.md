@@ -2,7 +2,7 @@
 name: investigate
 description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop debug) or config quality (/audit).
 argument-hint: <symptom, question, or failing command>
-allowed-tools: Read, Bash, Grep, Glob, TaskCreate, TaskUpdate
+allowed-tools: Read, Bash, Grep, Glob, TaskCreate, TaskUpdate, AskUserQuestion
 ---
 
 <objective>
@@ -17,7 +17,7 @@ NOT for: known Python test failures with a traceback (use `/develop debug`); `.c
 
 - **$ARGUMENTS**: required — symptom, question, or failing command, e.g.:
   - `"hooks not firing on Save"`
-  - `"codex exec exits 127 on this machine"`
+  - `"codex:codex-rescue agent exits 127 on this machine"`
   - `"/calibrate times out every run"`
   - `"CI fails but passes locally"`
   - `"uv run pytest can't find conftest.py"`
@@ -48,7 +48,7 @@ Collect evidence in parallel — do NOT form hypotheses yet.
 which python3 && python3 --version
 which uv 2>/dev/null && uv --version 2>/dev/null || echo "uv: not found"
 node --version 2>/dev/null || echo "node: not found"
-which codex 2>/dev/null && codex --version 2>/dev/null || echo "codex: not found"
+claude plugin list 2>/dev/null | grep 'codex@openai-codex' || echo "codex (openai-codex): not found"
 ```
 
 ```bash

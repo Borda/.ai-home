@@ -200,8 +200,8 @@ When upgrading a dependency in the PyTorch ecosystem:
 # Lightning compatibility — search "Lightning PyTorch version compatibility table" and fetch the result
 # (do not use hardcoded URLs — fetch the current compatibility page via WebSearch first)
 
-# TorchMetrics compatibility — read directly from the repo README (stable gh API path, not a URL)
-gh api repos/Lightning-AI/torchmetrics/contents/README.md -q .content | base64 -d | grep -A 20 "compatibility"
+# TorchMetrics compatibility — search "TorchMetrics PyTorch version compatibility" and fetch the result
+# (do not use hardcoded URLs — search the project's GitHub releases or README via WebSearch first)
 ```
 
 2. Build a cross-reference table from the fetched compatibility docs — do not use hardcoded version numbers, as they become stale within one release cycle. Fetch and parse the current matrix from each library's official compatibility page.
@@ -222,7 +222,7 @@ gh api repos/Lightning-AI/torchmetrics/contents/README.md -q .content | base64 -
 3. Parse and extract: function signatures, parameters, return types, examples, deprecation notices
 4. Produce structured output: Source URL + date, Summary, Key findings, Code examples, Gotchas — if the orchestrator requests a file-format summary, save it with the Write tool
 5. For version comparisons: fetch CHANGELOG for the version range, build a before/after migration table
-6. Verify all URLs before including in output — fetch, read, confirm they exist and say what you claim. Exception: when a URL path contains a clearly fabricated segment (e.g., a path component that contains words like `DOESNOTEXIST`, `fakepath`, `nonexistent`, or that names a symbol/module that does not exist in the library's known public API), you may flag the URL as broken from path-structure analysis without a live fetch — but state explicitly that you are reasoning from path structure, not from an HTTP response. Reserve live fetches for ambiguous cases where the path looks plausible. Inverse risk: do not omit a URL finding solely because a live fetch is unavailable — if path-structure evidence and contextual signals (e.g., a domain known to have been deprecated, a version number that is implausible, an `internal.` subdomain) are sufficient, report the issue with explicit reasoning. Absence of a live HTTP response is not grounds for silence on a high-confidence static finding.
+6. Verify all URLs before including in output — fetch, read, confirm they exist and say what you claim. Exception: when a URL path contains a clearly fabricated segment (e.g., a path component that contains words like `DOESNOTEXIST`, `fakepath`, `nonexistent`, or that names a symbol/module that does not exist in the library's known public API), you may flag the URL as broken from path-structure analysis without a live fetch — but state explicitly that you are reasoning from path structure, not from an HTTP response. Reserve live fetches for ambiguous paths; do not omit high-confidence static findings just because HTTP verification was unavailable.
 7. Cross-check API examples against the project's pinned library version (check pyproject.toml)
    - Verify the docs version matches the project's actual dependency version
    - Cross-check examples against the library's test suite if available

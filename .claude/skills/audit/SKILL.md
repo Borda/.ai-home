@@ -496,48 +496,23 @@ Apply model reasoning to the collected descriptions:
 
 Severity: 12a/12b = **medium**; 12c = **low**. Fix reference: run `/calibrate routing` to verify whether description overlap translates to actual routing confusion, then refine descriptions accordingly.
 
-**Check 13 — Codex integration smoke-test**
+**Check 13 — codex plugin integration check**
 
-Skip if codex is not installed (`command -v codex` returns non-zero).
+Skip if codex (openai-codex) plugin is not installed.
 
 ```bash
 RED='\033[1;31m'; GRN='\033[0;32m'; YEL='\033[1;33m'; NC='\033[0m'
-if ! command -v codex &>/dev/null; then
-  printf "${YEL}⚠ SKIPPED${NC}: Check 13 — codex not installed\n"
+if ! claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then
+  printf "${YEL}⚠ SKIPPED${NC}: Check 13 — codex (openai-codex) plugin not installed\n"
 else
-  SMOKE_FILE="/tmp/audit-codex-smoke-$$.py"
-  SMOKE_OUT="/tmp/audit-codex-smoke-$$.out"
-  # Run a trivial generation task: write a function that checks if n is prime
-  codex exec "Write a Python function is_prime(n: int) -> bool that returns True if n is prime. Put it in $SMOKE_FILE. Include a quick sanity-check: assert is_prime(7) and not is_prime(4)." \
-    --sandbox workspace-write 2>"$SMOKE_OUT"
-  EXIT=$?
-  if [ $EXIT -ne 0 ]; then
-    printf "${RED}! BREAKING${NC}: Check 13 — codex exec exited with code %d\n" "$EXIT"
-    printf "  stderr: %s\n" "$(tail -5 $SMOKE_OUT)"
-  elif [ ! -f "$SMOKE_FILE" ]; then
-    printf "${RED}! BREAKING${NC}: Check 13 — codex ran but produced no output file\n"
-  else
-    # Basic output review: file must contain 'def is_prime', at least 3 lines, no syntax error
-    HAS_DEF=$(grep -c 'def is_prime' "$SMOKE_FILE" || true)
-    LINES=$(wc -l < "$SMOKE_FILE" | tr -d ' ')
-    python3 -m py_compile "$SMOKE_FILE" 2>"$SMOKE_OUT"
-    SYNTAX=$?
-    if [ "$HAS_DEF" -lt 1 ] || [ "$LINES" -lt 3 ] || [ "$SYNTAX" -ne 0 ]; then
-      printf "${RED}! BREAKING${NC}: Check 13 — codex output failed review (def_found=%s lines=%s syntax_ok=%s)\n" \
-        "$HAS_DEF" "$LINES" "$([ $SYNTAX -eq 0 ] && echo yes || echo no)"
-      printf "  output: %s\n" "$(head -5 $SMOKE_FILE)"
-    else
-      printf "${GRN}✓ OK${NC}: Check 13 — codex integration live (generated %d-line function, syntax valid)\n" "$LINES"
-    fi
-  fi
-  rm -f "$SMOKE_FILE" "$SMOKE_OUT"
+  printf "${GRN}✓ OK${NC}: Check 13 — codex (openai-codex) plugin present\n"
+  printf "  Behavioral verification: run \`/calibrate skills\` to confirm codex:codex-rescue dispatches correctly.\n"
 fi
 ```
 
-- Codex not installed → **skipped** (not a finding)
-- Codex exits non-zero or produces no file → **critical** (integration broken; `/codex` skill will silently fail)
-- Output file missing `def is_prime` or fails `py_compile` → **high** (codex running but producing invalid output)
-- All checks pass → logged as `✓ OK`, no finding
+- codex not installed → **skipped** (not a finding)
+- Plugin present but dispatches fail → **high** (verify with `/calibrate skills`)
+- Plugin present → logged as `✓ OK`, no finding
 
 **Check 14 — Rules integrity and efficiency**
 
@@ -756,7 +731,7 @@ Output a structured audit report before fixing anything:
 - Agents audited: N
 - Skills audited: N
 - Rules audited: N
-- System-wide checks: inventory drift, README sync, permissions, infinite loops, hardcoded paths, CLAUDE.md consistency, docs freshness, permissions-guide drift, model tier appropriateness, agent color drift, memory health, agent routing alignment, codex integration smoke-test, rules integrity, cross-file content duplication, file length, Bash misuse / native tool substitution, stale allow entries
+- System-wide checks: inventory drift, README sync, permissions, infinite loops, hardcoded paths, CLAUDE.md consistency, docs freshness, permissions-guide drift, model tier appropriateness, agent color drift, memory health, agent routing alignment, codex plugin integration check, rules integrity, cross-file content duplication, file length, Bash misuse / native tool substitution, stale allow entries
 
 ### Findings by Severity
 

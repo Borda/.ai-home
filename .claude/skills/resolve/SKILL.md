@@ -45,11 +45,11 @@ preflight_pass(){ mkdir -p .claude/state/preflight; date +%s > ".claude/state/pr
 # codex — optional; intelligence + conflict resolution work without it
 CODEX_AVAILABLE=false
 if preflight_ok codex; then
-  CODEX_AVAILABLE=true && echo "codex: ok (cached)"
-elif which codex &>/dev/null; then
-  preflight_pass codex && CODEX_AVAILABLE=true && echo "codex: ok"
+  CODEX_AVAILABLE=true && echo "codex (openai-codex): ok (cached)"
+elif claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then
+  preflight_pass codex && CODEX_AVAILABLE=true && echo "codex (openai-codex): ok"
 else
-  echo "codex: missing — action item implementation (Step 8) will be skipped"
+  echo "codex (openai-codex): missing — action item implementation (Step 8) will be skipped"
 fi
 
 # gh binary + auth — required; cached for 4h (auth won't change within a session)
@@ -65,6 +65,22 @@ fi
 
 # Show current remotes — confirms we are in the right repo and surfaces any existing fork remotes
 git remote -v
+
+# Sync with remote tracking branch before any git work.
+# When local is 1 commit ahead and remote is also 1 commit ahead, git pull merges cleanly.
+# This prevents the downstream `git merge --continue --no-edit` from being called out of state.
+UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null)
+if [ -n "$UPSTREAM" ]; then
+  git fetch origin 2>/dev/null || true
+  REMOTE_AHEAD=$(git log HEAD..@{u} --oneline 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$REMOTE_AHEAD" -gt 0 ]; then
+    echo "Remote is $REMOTE_AHEAD commit(s) ahead — running git pull..."
+    git pull || { echo "Pre-flight failed: git pull had conflicts — resolve manually before running /resolve"; exit 1; }
+    echo "✓ git pull: merged"
+  else
+    echo "✓ git: up to date"
+  fi
+fi
 ```
 
 If gh is missing or not authenticated: stop (error printed above)
@@ -400,7 +416,7 @@ test -z "$(git status --porcelain)" || { echo "⚠ dirty tree before item #<id> 
 git diff HEAD --stat
 
 # Dispatch to Codex
-codex exec "Apply this review feedback to the codebase. Implement exactly what is requested and nothing more. If the change is already present or there is nothing actionable, make no changes and explain why. Feedback from @<author>: <full_comment_text>" --sandbox workspace-write
+Agent(subagent_type="codex:codex-rescue", prompt="Apply this review feedback to the codebase. Implement exactly what is requested and nothing more. If the change is already present or there is nothing actionable, make no changes and explain why. Feedback from @<author>: <full_comment_text>")
 
 # Check whether code changed
 git diff HEAD --stat
@@ -439,18 +455,7 @@ Agent(linting-expert): "Review all files changed in the current branch since ori
 Agent(qa-specialist, maxTurns: 15): "Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
 ```
 
-```bash
-# Health monitoring — passive: Claude awaits agent responses; no blocking poll needed.
-# If an agent does not return within ~15 min, surface partial results from the run dir.
-LAUNCH_AT=$(date +%s)
-RESOLVE_CHECK="/tmp/resolve-check-$LAUNCH_AT"
-touch "$RESOLVE_CHECK"
-NEW=$(find "$RUN_DIR" -newer "$RESOLVE_CHECK" -type f 2>/dev/null | wc -l | tr -d ' ')
-ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
-if [ "$NEW" -eq 0 ] && [ "$ELAPSED" -ge 15 ]; then
-  echo "⏱ resolve agents timed out after ${ELAPSED}min — surfacing partial results"
-fi
-```
+> **Health monitoring**: Agent calls are synchronous; Claude awaits responses natively. If no response within ~15 min, surface partial results from `$RUN_DIR` with ⏱.
 
 Wait for both. Then:
 
@@ -525,6 +530,8 @@ Mark the task `completed`, then print:
 
 ______________________________________________________________________
 
+# Independent entry point for comment-dispatch mode — not a continuation of the main PR workflow
+
 ## Step 12: Comment dispatch + Codex review loop
 
 Reached when $ARGUMENTS is bare comment text (not a PR number or URL).
@@ -539,12 +546,12 @@ TaskCreate(
 )
 ```
 
-If `CODEX_AVAILABLE=false`: stop with `⚠ codex not found — install: npm install -g @openai/codex` and mark the task completed.
+If `CODEX_AVAILABLE=false`: stop with `⚠ codex plugin not found — install: /plugin marketplace add openai/codex-plugin-cc && /plugin install codex@openai-codex && /reload-plugins` and mark the task completed.
 
 ### 12a: Dispatch
 
 ```bash
-codex exec "Apply this review comment to the codebase. If the change is already present, or the comment has no actionable code change, make no changes and briefly explain why. Comment: $ARGUMENTS" --sandbox workspace-write
+Agent(subagent_type="codex:codex-rescue", prompt="Apply this review comment to the codebase. If the change is already present, or the comment has no actionable code change, make no changes and briefly explain why. Comment: $ARGUMENTS")
 ```
 
 Record the initial dispatch outcome (code changed or no change + reason).
@@ -562,8 +569,9 @@ Otherwise:
 ```bash
 for REVIEW_PASS in 1 2 3 4 5; do
 
+  # Orchestrator pseudocode — Skill() is a Claude Code tool call, not a bash command; CODEX_OUT captures the tool output conceptually
   # Review phase
-  CODEX_OUT=$(codex exec "Review all changes in git diff HEAD. List every non-cosmetic issue (bug, logic error, regression, missed edge case) as a numbered list. Do NOT list cosmetic nits. End with: ISSUES_FOUND=<count>." --sandbox workspace-write 2>&1)
+  CODEX_OUT=$(Skill("codex:review", args="--wait") 2>&1)
   ISSUES_FOUND=$(echo "$CODEX_OUT" | grep -oE 'ISSUES_FOUND=[0-9]+' | tail -1 | cut -d= -f2)
   ISSUES_FOUND=${ISSUES_FOUND:-0}
   echo "$CODEX_OUT"
@@ -573,7 +581,7 @@ for REVIEW_PASS in 1 2 3 4 5; do
   fi
 
   # Fix phase — apply each issue returned by the review above
-  codex exec "Apply this fix to the codebase: <issue description>" --sandbox workspace-write
+  Agent(subagent_type="codex:codex-rescue", prompt="Apply this fix to the codebase: <issue description>")
 
 done
 
@@ -598,20 +606,7 @@ Agent(linting-expert): "Review all files changed in HEAD (git diff HEAD~N..HEAD 
 Agent(qa-specialist, maxTurns: 15): "Review all files changed in the most recent commits for correctness, edge cases, and regressions. Flag any blocking issues. Write your full findings to $RUN_DIR/qa-specialist-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
 ```
 
-```bash
-# Health monitoring — same pattern as Step 9 (intentional: each step's monitoring is
-# self-contained to preserve step independence; duplication is by design).
-# Passive: Claude awaits agent responses; no blocking poll needed.
-# If an agent does not return within ~15 min, surface partial results from the run dir.
-LAUNCH_AT=$(date +%s)
-RESOLVE_CHECK="/tmp/resolve-check-$LAUNCH_AT"
-touch "$RESOLVE_CHECK"
-NEW=$(find "$RUN_DIR" -newer "$RESOLVE_CHECK" -type f 2>/dev/null | wc -l | tr -d ' ')
-ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
-if [ "$NEW" -eq 0 ] && [ "$ELAPSED" -ge 15 ]; then
-  echo "⏱ resolve agents timed out after ${ELAPSED}min — surfacing partial results"
-fi
-```
+> **Health monitoring**: Agent calls are synchronous; Claude awaits responses natively. If no response within ~15 min, surface partial results from `$RUN_DIR` with ⏱.
 
 - If `linting-expert` made changes → commit: `lint: auto-fix violations after resolve cycle`
 - If `qa-specialist` reports blocking issues → fix inline, then re-run once; surface any unresolved issues in the report
@@ -641,6 +636,7 @@ Mark the task `completed`, then print:
 
 <notes>
 
+- **Pre-flight git pull** — Step 1 fetches the current branch's remote tracking ref and pulls if the remote is ahead; the common 1-local-ahead / 1-remote-ahead divergence merges cleanly without user intervention; if `git pull` has conflicts the skill exits with a clear message to resolve manually first — this prevents `git merge --continue` being called with no in-progress merge
 - **Branch safety** — `gh pr checkout <PR#>` always switches to the PR's HEAD branch, never to `main`/`master`; all commits land on the PR branch by design. Never push directly to the default branch — if for any reason the PR branch turns out to be the default branch, abort and surface the issue to the user
 - **OSS fork support** — `gh pr checkout <PR#>` works identically for same-repo branches and forks; for forks it adds the contributor's remote (named after their login) and configures tracking; plain `git push` then targets the fork branch correctly with no manual remote setup
 - **Merge direction** — the skill merges `origin/BASE_REF` INTO `HEAD_REF` (updating the PR branch), NOT the reverse; this preserves the PR branch as the source of truth and keeps the GitHub merge clean; the maintainer still clicks Merge (or runs `gh pr merge`) after reviewing
@@ -653,7 +649,7 @@ Mark the task `completed`, then print:
 - **`gh pr merge` flags**: `--merge` preserves all commits and history; `--squash` collapses to one (loses individual action-item commits); never suggest `--rebase` (rewrites SHAs); default recommendation is `--merge` unless project convention says otherwise
 - **Escape hatch**: `git merge --abort` undoes the entire conflict state and returns the PR branch to pre-merge state; use `git push --force-with-lease` (never plain `--force`) if push is rejected after local amending
 - **5-iteration cap** on the Step 12 Codex review loop overrides the global 3-iteration default — skill-declared bounds take precedence (CLAUDE.md §3 "Safety breaks for loops")
-- **`codex exec` timeout**: allow up to 2 minutes per call; background health monitoring (CLAUDE.md §8) does not apply because Codex runs sequentially, not as a spawned background agent
+- **Codex agent health**: `Agent(subagent_type="codex:codex-rescue", ...)` calls are background agents subject to CLAUDE.md §8 health monitoring — 15-min hard cutoff, ⏱ marker on timeout; surface partial results via `tail -100` on the output file if the agent stalls
 - **Worktree cleanup safety net**: `SessionEnd` hook runs `git worktree prune` — catches any orphaned worktrees from prior sessions
 - **Review → resolve handoff**: `/review <PR#>` writes its consolidated findings to `_outputs/YYYY/MM/output-review-YYYY-MM-DD.md`. `/resolve` (no arguments) reads the most recent file from this path, extracts the PR number, and proceeds in **pr mode** — fetching live GitHub comments and implementing them. The review report serves as the PR number lookup only; the action item list comes from live GitHub comments. The review output file persists across turns.
 - **`report` mode**: use when you want to implement the `/review` agent findings directly, without going back to GitHub. Action items are derived from the report's structured sections; CRITICAL/HIGH become `[req]`, MEDIUM become `[suggest]`. If the report header contains a PR number, the PR branch is checked out first; otherwise the current branch is used. No GitHub API calls are made.

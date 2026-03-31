@@ -26,6 +26,7 @@ This skill is NOT for deep single-paper analysis or experiment design — use th
 <constants>
 HARD_CUTOFF: 900   # 15 min — if ai-researcher does not return, surface partial results from _outputs/
 EXTENSION:   300   # one +5 min extension if output file explains the delay
+# Deviation from §8: Agent tool is synchronous; no file-activity poll available; timeout enforced by HARD_CUTOFF only
 </constants>
 
 <workflow>
@@ -48,11 +49,14 @@ Task the ai-researcher with a single objective: find the top 5 papers for `$ARGU
 
 Use this prompt scaffold (adapt the constraints from Step 1):
 
+Note: pre-compute output paths before spawning — the orchestrator must extract the branch and evaluate date expressions, then substitute concrete paths into all spawn prompts:
+`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+
 ```
 Research the literature on: <$ARGUMENTS>
 Codebase constraints: <framework, Python version, compute budget, existing dependencies from Step 1>
 Deliver: comparison table (method, key idea, benchmarks, compute, code available), recommendation for best method, a 3-step implementation plan for this codebase, key hyperparameters (name, typical range, what it controls) for the recommended method, and common gotchas (failure modes and how to avoid them).
-Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-research-agent-$(date +%Y-%m-%d).md` using the Write tool.
+Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-research-agent-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool.
 Then return ONLY a compact JSON envelope on your final line — nothing else after it:
 {"status":"done","papers":N,"recommendation":"<method name>","file":"_outputs/YYYY/MM/output-research-agent-<date>.md","confidence":0.N}
 ```
@@ -113,7 +117,7 @@ Use the Grep tool to search the codebase for any existing related code:
 | ai-researcher | [score] | [gaps] |
 ```
 
-Write the full report to `_outputs/$(date +%Y)/$(date +%m)/output-research-$(date +%Y-%m-%d).md` using the Write tool — **do not print the full report to terminal**.
+Write the full report to `_outputs/$(date +%Y)/$(date +%m)/output-research-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool — **do not print the full report to terminal**.
 
 Then print a compact terminal summary:
 
@@ -155,13 +159,13 @@ You are an ai-researcher teammate researching: [topic].
 Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your cluster: [method family N] (e.g., "attention-free architectures" vs "linear attention variants").
 Research the top 3 methods in your cluster: comparison table + recommendation given constraints.
-Write your full findings (comparison table, analysis, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-research-<teammate-name>-$(date +%Y-%m-%d).md` using the Write tool.
+Write your full findings (comparison table, analysis, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-research-<teammate-name>-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool.
 Report completion with deltaT# HOOK:verify and include: papers=N recommendation="<method>" confidence=0.N file=_outputs/$(date +%Y)/$(date +%m)/output-research-<teammate-name>-<date>.md
 Compact Instructions: preserve paper titles, benchmarks, code links. Discard protocol handshakes.
 Task tracking: call TaskUpdate(in_progress) when you start your assigned task; call TaskUpdate(completed) when done, before sending your delta message.
 ```
 
-Lead synthesizes by reading teammate file paths from their delta messages. For 3 teammates, spawn a consolidator ai-researcher agent: "Read the research files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `_outputs/$(date +%Y)/$(date +%m)/output-research-$(date +%Y-%m-%d).md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
+Lead synthesizes by reading teammate file paths from their delta messages. For 3 teammates, spawn a consolidator ai-researcher agent: "Read the research files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `_outputs/$(date +%Y)/$(date +%m)/output-research-$BRANCH-$(date +%Y-%m-%d).md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
 
 ## Plan Mode
 
@@ -193,14 +197,14 @@ Analyze the current codebase to map the recommended method against existing code
 4. Flag conflicts: existing patterns that would need to change
 5. Estimate complexity per integration point (low/medium/high)
 
-Write your full analysis to `_outputs/$(date +%Y)/$(date +%m)/output-research-codebase-$(date +%Y-%m-%d).md` using the Write tool.
+Write your full analysis to `_outputs/$(date +%Y)/$(date +%m)/output-research-codebase-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool.
 Return ONLY a compact JSON envelope on your final line — nothing else after it:
 {"status":"done","integration_points":N,"conflicts":N,"file":"_outputs/YYYY/MM/output-research-codebase-<date>.md","confidence":0.N,"summary":"N integration points, N conflicts"}
 ```
 
 ### Step R3: Synthesize plan
 
-Read both files (research findings from R1 + codebase analysis from R2). Produce a phased plan and write it to `_outputs/$(date +%Y)/$(date +%m)/output-research-plan-$(date +%Y-%m-%d).md`:
+Read both files (research findings from R1 + codebase analysis from R2). Produce a phased plan and write it to `_outputs/$(date +%Y)/$(date +%m)/output-research-plan-$BRANCH-$(date +%Y-%m-%d).md`:
 
 ```
 ## Implementation Roadmap: [method name]

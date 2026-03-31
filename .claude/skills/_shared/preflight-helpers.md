@@ -50,13 +50,13 @@ fi
 
 ## Key Registry
 
-| Key          | Check                                        | Used by            |
-| ------------ | -------------------------------------------- | ------------------ |
-| `git`        | `command -v git` — git on PATH               | `codex`, `audit`   |
-| `codex`      | `which codex` — Codex CLI on PATH            | `codex`, `resolve` |
-| `gh`         | `which gh` — GitHub CLI on PATH              | `resolve`          |
-| `jq`         | `command -v jq` — jq on PATH                 | `audit`            |
-| `pre-commit` | `command -v pre-commit` — pre-commit on PATH | `audit`            |
+| Key          | Check                                             | Used by   |
+| ------------ | ------------------------------------------------- | --------- |
+| `git`        | `command -v git` — git on PATH                    | `audit`   |
+| `codex`      | `claude plugin list \| grep 'codex@openai-codex'` | `resolve` |
+| `gh`         | `which gh` — GitHub CLI on PATH                   | `resolve` |
+| `jq`         | `command -v jq` — jq on PATH                      | `audit`   |
+| `pre-commit` | `command -v pre-commit` — pre-commit on PATH      | `audit`   |
 
 **Update this table** when adding a new cacheable check to any skill.
 

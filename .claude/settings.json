@@ -285,7 +285,6 @@
       "Bash(mkdir -p _optimizations/*)",
       "Bash(mkdir -p _developments/*)",
       "Bash(mkdir -p _outputs/*/*)",
-      "Bash(codex:*)",
       "Bash(claude:*)",
       "Bash(node:*)",
       "Bash(python3:*)",

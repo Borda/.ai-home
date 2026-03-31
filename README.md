@@ -83,7 +83,6 @@ Specialist roles with deep domain knowledge — requested by name, or auto-selec
 | **qa-specialist**      | ✓      | ✓     | pytest, hypothesis, mutation testing, ML test patterns        |
 | **self-mentor**        | ✓      | —     | Config quality review, duplication detection, cross-ref audit |
 | **solution-architect** | ✓      | —     | System design, ADRs, API surface, migration plans             |
-| **squeezer**           | —      | ✓     | Profile-first optimization, GPU throughput, memory efficiency |
 | **sw-engineer**        | ✓      | ✓     | Architecture, implementation, SOLID principles, type safety   |
 | **web-explorer**       | ✓      | —     | API version comparison, migration guides, PyPI tracking       |
 
@@ -101,7 +100,7 @@ Skills are multi-agent workflows invoked via slash commands. Each skill composes
 | **analyse**     | GitHub thread analysis; `health` = repo overview + duplicate clustering                                                                                                                       |
 | **brainstorm**  | Interactive spec: clarifying questions → approaches → spec → self-mentor review → approval gate                                                                                               |
 | **develop**     | TDD-first features, reproduce-first fixes, test-first refactors, scope analysis, debugging                                                                                                    |
-| **resolve**     | OSS fast-close: conflicts + review comments via Codex; three source modes: `pr` (live GitHub), `report` (/review findings), `pr + report` (aggregated + deduplicated in one pass)             |
+| **resolve**     | OSS fast-close: conflicts + review comments via codex-plugin-cc; three source modes: `pr` (live GitHub), `report` (/review findings), `pr + report` (aggregated + deduplicated in one pass)   |
 | **calibrate**   | Synthetic benchmarks measuring recall vs confidence bias                                                                                                                                      |
 | **audit**       | Config audit: broken refs, inventory drift, docs freshness; `fix [high\|medium\|all]` auto-fixes by severity; `upgrade` applies docs-sourced improvements (mutually exclusive)                |
 | **release**     | Notes, changelog, summary, migration, full prepare pipeline, or readiness `audit`                                                                                                             |
@@ -109,7 +108,6 @@ Skills are multi-agent workflows invoked via slash commands. Each skill composes
 | **optimize**    | Four modes: `plan` = config wizard → `program.md`; `campaign` = metric-driven iteration loop; `resume` = continue after crash; `perf` = profiling deep-dive; `--team` and `--colab` supported |
 | **manage**      | Create, update, delete agents/skills/rules; manage `settings.json` permissions; auto type-detection and cross-ref propagation                                                                 |
 | **sync**        | Drift-detect and sync project `.claude/` and `.codex/` → home `~/.claude/` and `~/.codex/`                                                                                                    |
-| **codex**       | Delegate mechanical coding tasks to Codex CLI                                                                                                                                                 |
 | **investigate** | Systematic diagnosis for unknown failures — env, tools, hooks, CI divergence; ranks hypotheses and hands off to the right skill                                                               |
 | **session**     | Parking lot for diverging ideas — auto-parks unanswered questions and deferred threads; `resume` shows pending, `archive` closes, `summary` digests the session                               |
 | **distill**     | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                                                                       |
@@ -213,21 +211,10 @@ Skills chain naturally — the output of one becomes the input for the next.
 </details>
 
 <details>
-<summary><strong>Delegate mechanical work to Codex</strong></summary>
-
-```
-/codex "add Google-style docstrings to all undocumented public functions" "src/mypackage/"
-# Codex executes; Claude validates with lint + tests
-/review                                   # full quality pass on Codex output
-```
-
-</details>
-
-<details>
 <summary><strong>PR review feedback → resolve → verify</strong></summary>
 
 ```
-/resolve 42   # auto-detect conflicts → resolve semantically → apply review comments via Codex
+/resolve 42   # auto-detect conflicts → resolve semantically → apply review comments via codex-plugin-cc
 /review       # full quality pass on all applied changes
 ```
 
@@ -345,7 +332,7 @@ cp -r .codex/ ~/.codex/         # activate globally
 
 Claude and Codex complement each other — Claude handles long-horizon reasoning, orchestration, and judgment calls; Codex handles focused, mechanical in-repo coding tasks with direct shell access.
 
-Every skill that reviews or validates code uses a three-tier pipeline: **Tier 0** (mechanical `git diff --stat` gate), **Tier 1** (Codex pre-pass, ~60s, diff-focused), **Tier 2** (specialized Claude agents). Cheaper tiers gate the expensive ones — this keeps full agent spawns reserved for diffs that actually need them. → Full architecture with skill-tier matrix: [`.claude/README.md` → Tiered review pipeline](.claude/README.md#tiered-review-pipeline)
+Every skill that reviews or validates code uses a three-tier pipeline: **Tier 0** (mechanical `git diff --stat` gate), **Tier 1** (codex:review pre-pass, ~60s, diff-focused), **Tier 2** (specialized Claude agents). Cheaper tiers gate the expensive ones — this keeps full agent spawns reserved for diffs that actually need them. → Full architecture with skill-tier matrix: [`.claude/README.md` → Tiered review pipeline](.claude/README.md#tiered-review-pipeline)
 
 **Why unbiased review matters / Real example**: Claude makes targeted changes with intentionality — it has a mental model of which files are "in scope". Codex has no such context: it reads the diff and the codebase independently. During one session, Claude applied a docstring-style mandate across 6 files and scored its own confidence at 0.88. The Codex pre-pass then found `skills/develop/modes/feature.md` still referencing the old style — a direct miss. The union of both passes is more complete than either alone.
 
@@ -353,32 +340,31 @@ Every skill that reviews or validates code uses a three-tier pipeline: **Tier 0*
 
 1. **Offloading mechanical tasks from Claude to Codex**
 
-   Claude identifies what needs to change and delegates execution to Codex. Claude keeps its context clean and validates the output.
+   Claude identifies what needs to change and delegates execution to the plugin agent. Claude keeps its context clean and validates the output via `git diff HEAD`.
 
-   ```bash
-   /codex "add Google-style docstrings to all undocumented public functions" "src/mypackage/"
-   /codex "rename BatchLoader to DataBatcher throughout the package" "src/mypackage/"
-   /codex "add return type annotations to all functions missing them" "src/mypackage/utils.py"
-   /review   # Claude then reviews with lint + tests
-   ```
+   Dispatched automatically by `/review`, `/resolve`, `/calibrate`, and `/optimize campaign` via `codex-delegation.md`. The plugin agent has full working-tree access.
 
 2. **Codex reviewing staged work**
 
-   After Claude stages changes, Codex serves as a second pass — examining the diff, applying review comments, or resolving PR conflicts. The `/resolve` skill automates this: it resolves conflicts semantically (Claude) then applies review comments (Codex).
+   After Claude stages changes, `codex:review --wait` serves as a second pass — examining the diff, applying review comments, or resolving PR conflicts. The `/resolve` skill automates this: it resolves conflicts semantically (Claude) then applies review comments (plugin agent).
 
    ```bash
-   /resolve 42   # Claude resolves conflicts → Codex applies review comments
+   /resolve 42   # Claude resolves conflicts → plugin agent applies review comments
    /resolve "rename the `fit` method to `train` throughout the module"
    ```
 
 <details>
-<summary><strong>Pre-flight requirements</strong></summary>
+<summary><strong>Setup requirement</strong></summary>
+
+Install the Codex plugin in Claude Code:
 
 ```bash
-npm install -g @anthropic-ai/claude-code && npm install -g @openai/codex
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex@openai-codex
+/reload-plugins
 ```
 
-Without `codex`: `/codex` fails at pre-flight; `/resolve`'s review-comment step is skipped (conflict resolution works with Claude alone).
+Without the plugin: pre-pass review is skipped gracefully (skills check with `claude plugin list | grep 'codex@openai-codex'`); `/resolve`'s review-comment step is skipped (conflict resolution works with Claude alone).
 
 </details>
 

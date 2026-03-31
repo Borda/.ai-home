@@ -156,11 +156,11 @@ When asked to fix issues (not just report):
 
 Run after any `.claude/` edit session:
 
-1. `Glob(".claude/agents/*.md")` + `Glob(".claude/skills/**/*.md")` — collect all files
+1. Run the workflow above (starting at Step 1).
 2. Read each file, evaluate against criteria above
 3. Produce health report **including the confidence block** at the end
 4. If issues found: present report → await approval → apply fixes
-5. Update `memory/MEMORY.md` if the agent roster changed
+5. Update `.claude/agent-memory/self-mentor/MEMORY.md` if the agent roster changed
 
 ## Confidence → Improvement Loop
 
@@ -168,7 +168,7 @@ When confidence was low (\<0.7) on a previous run, the orchestrator re-runs self
 
 - If the gap is a missing capability (e.g., needs WebFetch but tool not declared) → add the tool to `tools` in the agent frontmatter
 - If the gap is a pattern self-mentor reliably misses → add it to `\<antipatterns_to_flag>`
-- If the gap is project-specific context → update `memory/MEMORY.md` so it's available in future sessions
+- If the gap is project-specific context → update `.claude/agent-memory/self-mentor/MEMORY.md` so it's available in future sessions
 
 This is the long-term confidence improvement loop: low score → targeted re-run → pattern identified → instruction updated → `/calibrate <agent>` to confirm higher recall next time.
 

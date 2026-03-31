@@ -103,7 +103,11 @@ Describe *what*, not *how*. No implementation details.
 
 ## Step 5: Spec review
 
-Spawn **self-mentor** with a spec-focused prompt scoped to spec quality only — not a full config audit:
+Before spawning, pre-compute the output path:
+`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+`OUTPUT_PATH="_outputs/$(date +%Y)/$(date +%m)/output-brainstorm-review-$BRANCH-$(date +%s).md"`
+
+Spawn **self-mentor** with a spec-focused prompt scoped to spec quality only — not a full config audit (inject the pre-computed `$OUTPUT_PATH` into the prompt in place of `<output-path>`):
 
 ```
 Read docs/specs/<spec-file>. Audit for spec quality only:
@@ -111,7 +115,7 @@ Read docs/specs/<spec-file>. Audit for spec quality only:
 - Ambiguity: any section vague enough that two implementers would build different things?
 - Scope creep: does the Proposed design exceed the stated Goal?
 - Placeholders: any "[TBD]" or "[TODO]" that must be filled before approval?
-First run `date +%Y` and `date +%m` via Bash to construct the output path, then write your full findings to `_outputs/<YYYY>/<MM>/output-brainstorm-review-<ts>.md` using the Write tool (replace <YYYY>, <MM>, <ts> with the resolved values).
+Write your full findings to <output-path> using the Write tool.
 Return ONLY a compact JSON envelope: {"status":"done","findings":N,"file":"<path>","confidence":0.N,"summary":"<one-line>"}
 ```
 

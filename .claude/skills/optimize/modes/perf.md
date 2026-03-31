@@ -23,6 +23,9 @@ Record the baseline numbers — they are the benchmark for all improvements.
 
 ## Step P2: Spawn perf-optimizer agent
 
+Pre-compute the branch before spawning — the orchestrator must evaluate this expression and substitute the concrete value into the spawn prompt:
+`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+
 Task the `perf-optimizer` agent with:
 
 1. Read all relevant code files in and around `$ARGUMENTS`
@@ -30,7 +33,7 @@ Task the `perf-optimizer` agent with:
 3. Identify the **single biggest bottleneck** — not a laundry list
 4. Implement a targeted fix for that bottleneck
 5. Identify 2 additional bottlenecks to address next
-6. Write your full analysis (bottleneck identification, optimization reasoning, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-optimize-perf-$(date +%Y-%m-%d).md` using the Write tool
+6. Write your full analysis (bottleneck identification, optimization reasoning, Confidence block) to `_outputs/$(date +%Y)/$(date +%m)/output-optimize-perf-$BRANCH-$(date +%Y-%m-%d).md` using the Write tool
 7. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{"status":"done","bottleneck":"<description>","files_modified":[],"confidence":0.N,"file":"_outputs/YYYY/MM/output-optimize-perf-<date>.md"}`
 
 > **Note**: the `perf-optimizer` spawn is synchronous — the Agent tool awaits the response before proceeding. CLAUDE.md §8 background monitoring does not apply.

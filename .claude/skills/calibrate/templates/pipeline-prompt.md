@@ -9,13 +9,8 @@ Run dir: `_calibrations/<TIMESTAMP>/<TARGET>/`
 Check Codex availability once at pipeline start and set `CODEX_AVAILABLE` for use throughout all phases:
 
 ```bash
-if which codex >/dev/null 2>&1; then CODEX_AVAILABLE=true; else CODEX_AVAILABLE=false; fi
-# timeout (GNU coreutils) or gtimeout (macOS brew) — optional safety net
-if which timeout >/dev/null 2>&1; then TIMEOUT_CMD="timeout"
-elif which gtimeout >/dev/null 2>&1; then TIMEOUT_CMD="gtimeout"
-else TIMEOUT_CMD=""
-fi
-echo "Codex: $CODEX_AVAILABLE | Timeout: ${TIMEOUT_CMD:-none}"
+if claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then CODEX_AVAILABLE=true; else CODEX_AVAILABLE=false; fi
+echo "Codex plugin: $CODEX_AVAILABLE"
 ```
 
 Codex integration is active only for `agents` and `skills` modes. If the pipeline was spawned for `routing`, `communication`, or `rules`, treat `CODEX_AVAILABLE=false` regardless of installation status — those modes test Claude-specific internals that Codex lacks context for.
@@ -33,10 +28,10 @@ Split `<N>` in-scope problems between two generators. Claude always owns the 1 o
 
 **Step 1 — Codex generates N_CODEX in-scope problems** (runs first; writes directly to file):
 
-```bash
-${TIMEOUT_CMD:+$TIMEOUT_CMD 300} codex exec "Generate <N_CODEX> synthetic calibration problems for domain: '<DOMAIN>'.
+Agent(subagent_type="codex:codex-rescue", prompt="Generate \<N_CODEX> synthetic calibration problems for domain: '<DOMAIN>'.
 
 Each problem must be a JSON object with these exact fields:
+
 - problem_id: kebab-slug string, prefix with 'cx-' (e.g. 'cx-type-mismatch')
 - difficulty: exactly one of: easy, medium, hard — include at least 1 easy
 - task_prompt: instruction to give the reviewer (do NOT reveal the issues)
@@ -47,13 +42,13 @@ Each problem must be a JSON object with these exact fields:
   - severity: exactly one of: critical, high, medium, low
 
 Rules:
+
 - 2-5 known issues per problem; all detectable by reading the code alone (no runtime-only issues)
 - Issues must be unambiguous — a domain expert would confirm them
 - Do NOT include any out-of-scope problem — in-scope problems only
 - Write ONLY a valid JSON array (no prose, no markdown fences, no trailing commas)
 
-Write the JSON array to: _calibrations/<TIMESTAMP>/<TARGET>/problems-codex.json" --sandbox workspace-write
-```
+Write the JSON array to: \_calibrations/<TIMESTAMP>/<TARGET>/problems-codex.json")
 
 **Step 2 — Claude generates N_CLAUDE in-scope problems + 1 out-of-scope problem**:
 
@@ -172,16 +167,15 @@ Collect the compact JSON from each Claude scorer. **Do not write scores.json yet
 
 ### Phase 3b — Score responses via Codex (skip when CODEX_AVAILABLE=false)
 
-For each problem, run one Codex scoring call via Bash. Run these **sequentially** (not parallel — Codex runs as a subprocess): <!-- sequential: Codex subprocess shares a single shell session; parallel invocations risk interleaved stdout -->
+For each problem, spawn one Codex scoring subagent using the **Agent tool** — never via Bash or CLI. Run these **sequentially** (not parallel — Codex subagents share filesystem state; parallel invocations risk write conflicts).
 
-```bash
-${TIMEOUT_CMD:+$TIMEOUT_CMD 120} codex exec "You are scoring a calibration response against ground truth.
+Agent(subagent_type="codex:codex-rescue", prompt="You are scoring a calibration response against ground truth.
 
-Problem ID: <PROBLEM_ID>
-Ground truth (JSON array): <GROUND_TRUTH_JSON>
+Problem ID: \<PROBLEM_ID>
+Ground truth (JSON array): \<GROUND_TRUTH_JSON>
 
-Read the response from: _calibrations/<TIMESTAMP>/<TARGET>/response-<PROBLEM_ID>.md
-[If AB_MODE is true: also read _calibrations/<TIMESTAMP>/<TARGET>/response-<PROBLEM_ID>-general.md]
+Read the response from: \_calibrations/<TIMESTAMP>/<TARGET>/response-\<PROBLEM_ID>.md
+\[If AB_MODE is true: also read \_calibrations/<TIMESTAMP>/<TARGET>/response-\<PROBLEM_ID>-general.md\]
 
 For each ground truth issue: mark true if the response identified the same issue type at the same location (exact or semantically equivalent). Count false positives: reported issues with no ground truth match. Extract confidence from the ## Confidence block (use 0.5 if absent).
 
@@ -193,13 +187,12 @@ Format score: for found issues, check for all three of: location reference, seve
 Compute: recall=found/total (null if total=0), precision=found/(found+fp+1e-9), f1=2*r*p/(r+p+1e-9).
 
 Write ONLY this JSON (no prose, no markdown fences, no trailing commas) to the file below:
-{\"problem_id\":\"<PROBLEM_ID>\",\"found\":[true/false,...],\"false_positives\":N,\"confidence\":0.N,\"recall\":0.N,\"precision\":0.N,\"f1\":0.N,\"severity_accuracy\":0.N,\"format_score\":0.N,\"scorer\":\"codex\"}
-[If AB_MODE is true, append before the closing }: ,\"recall_general\":0.N,\"confidence_general\":0.N,\"precision_general\":0.N,\"f1_general\":0.N,\"severity_accuracy_general\":0.N,\"format_score_general\":0.N]
+{"problem_id":"\<PROBLEM_ID>","found":[true/false,...],"false_positives":N,"confidence":0.N,"recall":0.N,"precision":0.N,"f1":0.N,"severity_accuracy":0.N,"format_score":0.N,"scorer":"codex"}
+[If AB_MODE is true, append before the closing }: ,"recall_general":0.N,"confidence_general":0.N,"precision_general":0.N,"f1_general":0.N,"severity_accuracy_general":0.N,"format_score_general":0.N]
 
-Output file: _calibrations/<TIMESTAMP>/<TARGET>/score-<PROBLEM_ID>-codex.json" --sandbox workspace-write
-```
+Output file: \_calibrations/<TIMESTAMP>/<TARGET>/score-\<PROBLEM_ID>-codex.json")
 
-Substitute `<PROBLEM_ID>` and `<GROUND_TRUTH_JSON>` per problem. If a call times out or the output file is missing/unparsable, set `scorer_mode: "single"` for that problem — Phase 3c uses Claude's score only.
+Substitute `<PROBLEM_ID>` and `<GROUND_TRUTH_JSON>` per problem. If the output file is missing or unparsable after the agent completes, set `scorer_mode: "single"` for that problem — Phase 3c uses Claude's score only.
 
 ### Phase 3c — Consensus merge
 

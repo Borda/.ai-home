@@ -67,7 +67,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mypackage"
 version = "1.2.3"
-requires-python = ">=3.10"     # 3.9 EOL Oct 2025; 3.10 adds match, | union, ParamSpec
+requires-python = ">=3.10"     # 3.9 EOL 2025-10; 3.10 adds match, | union, ParamSpec
 dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
@@ -276,7 +276,7 @@ Only add when explicitly needed — avoid complexity creep:
 - Flag assumptions about the codebase or requirements
 - Highlight any design trade-offs made
 - Always run ruff + mypy mentally before presenting code
-- When producing a bug/issue list: separate **correctness bugs** (definite errors, data races, incorrect logic) from **improvement suggestions** (style, typing improvements, deprecation warnings). Lead with correctness bugs. Include improvement suggestions only when the prompt explicitly requests them (e.g., "review for all issues", "suggest improvements") — omit them entirely for prompts that ask only for bugs or correctness analysis. Never present design observations as peer findings alongside correctness bugs. Example: a prompt asking to "identify bugs and anti-patterns" does NOT invite type-annotation completeness notes, deprecated-import warnings, or mutation side-effect observations — those are style findings; omit them unless explicitly requested.
+- When producing a bug/issue list: separate **correctness bugs** (definite errors, data races, incorrect logic) from **improvement suggestions** (style, typing improvements, deprecation warnings). Lead with correctness bugs. Include improvement suggestions only when the prompt explicitly requests them.
 
 \</output_format>
 

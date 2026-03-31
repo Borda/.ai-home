@@ -141,7 +141,7 @@ ______________________________________________________________________
 | `Bash(git merge:*)`      | Merge a branch into the current branch (with or without committing) | `/resolve` merges the PR head branch to detect and stage conflict resolution; `--no-commit --no-ff` for inspection, `--ff-only` for clean pointer advance |
 | `Bash(git merge-base:*)` | Find the common ancestor commit of two branches                     | `/resolve` uses this to find the diverge point between source and target for diff analysis                                                                |
 | `Bash(git worktree:*)`   | Add, list, or remove linked working trees                           | `/resolve` creates a temporary isolated worktree in `/tmp` to run the merge without touching the user's main working directory                            |
-| `Bash(git commit:*)`     | Commit staged changes to local history                              | `/optimize campaign` commits each experiment atomically before verifying the metric; `/codex` skill commits validated changes                             |
+| `Bash(git commit:*)`     | Commit staged changes to local history                              | `/optimize campaign` commits each experiment atomically before verifying the metric                                                                       |
 | `Bash(git revert:*)`     | Revert a commit by creating an inverse commit                       | `/optimize campaign` reverts failed experiments with `git revert HEAD --no-edit` — preserves history, avoids `reset --hard`                               |
 | `Bash(git add:*)`        | Stage files for the next commit                                     | Stage changes after an edit before prompting user to commit                                                                                               |
 | `Bash(git checkout:*)`   | Switch branches or restore individual files from a ref              | Switch to a feature branch; restore a file to HEAD state                                                                                                  |
@@ -184,11 +184,10 @@ ______________________________________________________________________
 
 ## macOS / ecosystem
 
-| Permission       | Description                 | Typical use case                                                                |
-| ---------------- | --------------------------- | ------------------------------------------------------------------------------- |
-| `Bash(codex:*)`  | Invoke the OpenAI Codex CLI | `/codex` skill delegates mechanical coding tasks to Codex                       |
-| `Bash(claude:*)` | Invoke the Claude Code CLI  | SessionStart hook runs `claude auth status` to cache plan info                  |
-| `Bash(node:*)`   | Run Node.js scripts         | Hooks (`task-log.js`, `statusline.js`) are Node scripts executed by Claude Code |
+| Permission       | Description                | Typical use case                                                                |
+| ---------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| `Bash(claude:*)` | Invoke the Claude Code CLI | SessionStart hook runs `claude auth status` to cache plan info                  |
+| `Bash(node:*)`   | Run Node.js scripts        | Hooks (`task-log.js`, `statusline.js`) are Node scripts executed by Claude Code |
 
 ______________________________________________________________________
 
