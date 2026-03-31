@@ -3,6 +3,7 @@ name: investigate
 description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop debug) or config quality (/audit).
 argument-hint: <symptom, question, or failing command>
 allowed-tools: Read, Bash, Grep, Glob, TaskCreate, TaskUpdate, AskUserQuestion
+effort: high
 ---
 
 <objective>
@@ -97,6 +98,26 @@ Common categories to consider:
 - **Recent change regression** — a git commit or config edit introduced the issue (check `git log`)
 - **Sync drift** — project `.claude/` and home `~/.claude/` diverged; use `/sync` to check
 - **External service** — network unavailable, API rate-limited, or remote tool unreachable
+
+## Step 3b: Auxiliary review (optional)
+
+If the `codex` plugin is available AND the top hypothesis has weak or circumstantial evidence (no direct confirming signal), request an adversarial review of the hypothesis set:
+
+```
+Skill("codex:adversarial-review", "--wait hypothesis-quality")
+```
+
+Provide Codex with: the symptom (Step 1 output), key signals gathered (Step 2), and the ranked hypothesis table (Step 3). Ask it to: identify any blindspots not in the table, challenge the top hypothesis, and surface alternative root causes.
+
+- Incorporate any alternative hypotheses Codex surfaces as new rows in the Step 3 table
+- Re-rank if Codex provides stronger evidence for a lower-ranked candidate
+- If Codex identifies a category not in the common list, add it
+
+**Skip this step when**:
+
+- Top hypothesis already has strong direct evidence (confidence clearly high)
+- `codex` plugin is not available (`claude plugin list` shows no `codex@openai-codex`)
+- User requested speed or `/investigate --fast` was specified
 
 ## Step 4: Probe top hypotheses
 

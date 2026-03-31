@@ -230,7 +230,7 @@ Trusted Publishing uses GitHub OpenID Connect (OIDC) — no `API_TOKEN` or `TWIN
 
 ## Downstream / Ecosystem CI
 
-Run `nightly.yml` on `schedule: cron: '0 4 * * *'` with `continue-on-error: true`. See `ci-guardian` agent for the full nightly YAML pattern. When nightly fails, follow the xfail policy and upstream issue protocol in `ci-guardian` (`<ecosystem_nightly_ci>` section).
+See `ci-guardian` agent for the full nightly YAML pattern and xfail policy (`<ecosystem_nightly_ci>` section).
 
 ### Downstream Impact Assessment
 
@@ -318,18 +318,11 @@ Tone: developer talking to developer — peer-to-peer, polite, warm, constructiv
 | Avoid                                                    | Use instead                                                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | "Thank you for your contribution!" (generic)             | name the specific thing: `good approach here` / `solid fix`                                 |
-| "I hope this helps."                                     | "let me know if that makes sense" / "does this work for you?"                               |
-| "Just do X"                                              | "one approach that might work: X — does that fit your setup?"                               |
-| "Obviously..." / "You clearly didn't..."                 | state it without the condescension                                                          |
 | "Could you please provide a reproduction?"               | "can you paste the traceback?" / "what does your setup look like?" / "which version?"       |
-| "Could you clarify the use case for this feature?"       | "what's the problem you're solving?" / "what does your current workaround look like?"       |
 | "It would be great if you could..."                      | state it directly: `can you add X?`                                                         |
 | "This may potentially cause issues."                     | "this breaks X when Y"                                                                      |
-| "One might consider simplifying this."                   | "I'd simplify this"                                                                         |
 | "You need to fix X, Y, and Z before this can be merged." | "N things need sorting before I merge" + prose per item                                     |
-| "Please don't hesitate to reach out."                    | "ping me if you get stuck"                                                                  |
 | Closing without explaining the resolution                | say what was fixed and how: `fixed in #123 by doing X — can you check if it works for you?` |
-| Explaining what the contributor clearly already knows    | comment only on what's non-obvious                                                          |
 
 Use contractions. Short sentences. State opinions directly.
 

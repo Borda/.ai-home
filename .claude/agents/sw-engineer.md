@@ -236,7 +236,7 @@ Only add when explicitly needed — avoid complexity creep:
 08. Review for SOLID violations, naming clarity, and completeness
 09. Verify: does the change break any existing tests? Does it introduce new debt?
 10. Hand off to `qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to the user.
-11. After `qa-specialist` completes step 9, hand off to `linting-expert` to sanitize and validate the code — these steps are sequential, not parallel; linting runs after QA to catch issues in any test code QA may have added.
+11. After `qa-specialist` completes step 10, hand off to `linting-expert` to sanitize and validate the code — these steps are sequential, not parallel; linting runs after QA to catch issues in any test code QA may have added.
 12. Apply the Internal Quality Loop and end with a `## Confidence` block — see `.claude/rules/quality-gates.md`. Domain calibration: do not penalise confidence for absence of a test suite or caller context when bugs are statically evident — gaps must require genuine runtime or integration context to count.
 
 </workflow>

@@ -4,6 +4,7 @@ description: "Full-sweep quality audit of .claude/ config — cross-references, 
 argument-hint: '[agents|skills|rules|communication] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
+effort: high
 ---
 
 <objective>
@@ -456,6 +457,7 @@ MEMORY.md has a 200-line truncation limit. Noise accumulates silently over time 
 
 ```bash
 # Find lines with semver pins or "as of" staleness markers in MEMORY.md
+# Same slug derivation pattern used in skills/distill/SKILL.md
 MEMORY_FILE="$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|[/.]|-|g')/memory/MEMORY.md"
 if [ -f "$MEMORY_FILE" ]; then
   grep -nE '(v[0-9]+\.[0-9]+\.[0-9]+|as of [A-Z][a-z]+ 20[0-9]{2})' "$MEMORY_FILE" || echo "no stale pins found"
@@ -952,7 +954,7 @@ Mark "A/B test capability proposals" completed.
 - Reverted items: run `/calibrate <agent> full` for deeper A/B signal (N=10 vs N=3 used here)
 ```
 
-Run `/sync apply` automatically after all proposals are processed.
+Propose `/sync apply` to the user after upgrade completes — do not auto-execute. Print: `→ Run \`/sync apply\` to propagate accepted changes to ~/.claude/\`
 
 </workflow>
 

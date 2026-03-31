@@ -9,13 +9,13 @@ ______________________________________________________________________
 
 ## Deny List — always blocked
 
-| Permission                      | Description                               | Why denied                                    |
-| ------------------------------- | ----------------------------------------- | --------------------------------------------- |
-| `Bash(git branch -D:*)`         | Force-delete a local branch               | Destructive; may lose unmerged work           |
-| `Bash(git branch -d:*)`         | Delete a merged local branch              | Requires explicit user intent                 |
-| `Bash(git tag -d:*)`            | Delete a local tag                        | Tags are release markers; user-only           |
-| `Bash(curl -X DELETE:*)`        | HTTP DELETE requests via curl             | Destructive API mutation; never auto-approved |
-| `Bash(curl --request DELETE:*)` | HTTP DELETE requests via curl (long form) | Destructive API mutation; never auto-approved |
+| Permission                      | Description                           | Why denied                                  |
+| ------------------------------- | ------------------------------------- | ------------------------------------------- |
+| `Bash(git branch -D:*)`         | Force-delete local branch             | Irreversible; require explicit confirmation |
+| `Bash(git branch -d:*)`         | Delete local branch                   | Requires explicit user confirmation         |
+| `Bash(git tag -d:*)`            | Delete local tag                      | Requires explicit user confirmation         |
+| `Bash(curl -X DELETE:*)`        | HTTP DELETE requests                  | Destructive external state mutation         |
+| `Bash(curl --request DELETE:*)` | HTTP DELETE requests (alternate form) | Destructive external state mutation         |
 
 ______________________________________________________________________
 
@@ -211,9 +211,6 @@ ______________________________________________________________________
 | `WebFetch(domain:openai.com)`                | OpenAI blog and model release notes      | Track new model releases                                                                     |
 | `WebFetch(domain:www.anthropic.com)`         | Anthropic main site                      | Research blog posts, model announcements, policy pages                                       |
 | `WebFetch(domain:support.claude.com)`        | Anthropic support and help centre        | Lookup Claude feature behaviour, plan limits, billing FAQs                                   |
-| `WebFetch(domain:github.blog)`               | GitHub official blog                     | Track new GitHub Actions features, changelog entries, ecosystem news                         |
-| `WebFetch(domain:api.codecov.io)`            | Codecov REST API                         | `/ci-guardian` and CI audit reads: coverage reports, branch summaries, PR coverage deltas    |
-| `WebFetch(domain:app.codecov.io)`            | Codecov web application                  | Fetch coverage badge URLs and web-facing coverage reports                                    |
 | `WebFetch(domain:hr.linkedin.com)`           | LinkedIn profile pages                   | `release-notes.md` contributor lookup: confirm a contributor's real name via their profile   |
 | `WebFetch(domain:scholar.google.com)`        | Google Scholar academic search           | `ai-researcher` and `/research` find papers and citation counts                              |
 

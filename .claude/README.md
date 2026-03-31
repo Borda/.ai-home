@@ -410,7 +410,7 @@ Each mode enforces a validation gate *before* writing implementation code:
 | `git-commit.md`         | (global)                          | Commit message format, push safety (explicit confirmation required), branch safety                                |
 | `hooks-js.md`           | `.claude/hooks/*.js`              | Hook writing standards: state files, age-out patterns, tool activity tracking                                     |
 | `pre-commit-config.md`  | `.pre-commit-config.yaml`         | Version pinning rules, hook ordering, CI integration via pre-commit.ci                                            |
-| `python-code.md`        | `**/*.py`                         | Modern Python style: type annotations, dataclasses, structural pattern matching                                   |
+| `python-code.md`        | `**/*.py`                         | Python style: docstrings, deprecation (pyDeprecate), library API freshness checks, version policy, PyTorch AMP    |
 | `quality-gates.md`      | (global)                          | Confidence blocks on all analysis tasks, internal quality loop, output routing rules                              |
 | `release-notes.md`      | `CHANGELOG.md`, `PUBLIC-NOTES.md` | Release note structure, SemVer decision criteria, deprecation notice format                                       |
 | `testing.md`            | `tests/**/*.py`, `**/test_*.py`   | pytest AAA structure, parametrize standards, doctest location (source files, not tests)                           |
@@ -571,11 +571,11 @@ Agent Teams is Claude Code's experimental multi-agent feature. Teams are always 
 A lightweight hook (`hooks/statusline.js`) adds a persistent two-row status bar to every Claude Code session:
 
 ```
-Row 1:  claude-sonnet-4-6 │ Borda.ai-home │ Pro ~$1.20 │ ████░░░░░░ 38% │ 📨 2
+Row 1:  claude-sonnet-4-6 │ Borda.ai-home │ Pro ~$1.20 │ ████░░░░░░ 38% │ 💬
 Row 2:  🕵 2 agents (self-mentor, sw-engineer) │ 🤖 codex-rescue │ 🔧 Bash ×3 · Edit · Read ×12
 ```
 
-**Row 1** — model name · project directory · billing indicator · 10-segment context bar (green → yellow → red) · pending input queue badge `📨 N` (yellow; only shown when N ≥ 1)
+**Row 1** — model name · project directory · billing indicator · 10-segment context bar (green → yellow → red) · processing badge `💬` (cyan; shown while Claude is handling the current turn; disappears when done)
 
 **Row 2** — native agent count · Codex sessions (separate) · active tools (last 30 seconds)
 

@@ -183,7 +183,7 @@ When the task prompt explicitly restricts the audit category (e.g. "identify mis
 - **Do NOT add advisory improvements** to functions that already satisfy the scoped criterion (e.g., a function already has a docstring — do not suggest expanding it under a "missing docstring" audit; a function already has an Args section — do not suggest adding Examples under a "missing Args sections" audit). Advisory improvements are out of scope unless the prompt asks for general completeness recommendations.
 - When in doubt, omit the Additional Observations section entirely rather than risk FP inflation.
 
-## Docstring Audit
+#### Docstrings
 
 - Every public function/class/module has a docstring
 - Parameters, Returns/Raises documented with types and descriptions (Google style)
@@ -197,14 +197,14 @@ When listing findings, order by severity within each item: (1) missing docstring
 
 See the **Prompt-Scope Gate** above for scope-filtering rules when the task prompt restricts the audit category.
 
-## README Audit
+#### README
 
 - Quick start works in a fresh environment
 - Installation steps are current and complete
 - Badges are accurate (not broken links)
 - No references to deleted features or old APIs
 
-## CHANGELOG Audit
+#### CHANGELOG
 
 - Every user-visible change has an entry
 - For the canonical CHANGELOG and release notes format, use the `release` skill — it defines section order, emoji headers, and contributor format
@@ -252,13 +252,7 @@ See the **Prompt-Scope Gate** above for scope-filtering rules when the task prom
 5. Write documentation that matches the actual behavior (not the intended behavior)
 6. Add usage examples that actually run (`doctest -v` or pytest --doctest-modules)
 7. Flag any inconsistencies between docs and code
-8. Apply the Internal Quality Loop and end with a `## Confidence` block — see `.claude/rules/quality-gates.md`. Domain calibration:
-
-When reporting confidence:
-
-- For structural-absence tasks (missing docstrings, missing Parameters/Returns sections): score 0.90–0.94 is appropriate for static reading of a self-contained module, and prefer the top half of that range when every finding is a direct textual absence in prompt-scoped files. The "doctests not executed" caveat applies only when the finding depends on example output correctness — do not cite it for structural gaps (missing section headers, empty description lines, absent docstrings).
-- For example-correctness tasks: cap at 0.90 unless examples were executed in a live environment.
-- For tasks involving cross-file or cross-module dependencies (e.g. "check all public APIs in the package"): cap at 0.85 unless the full file tree was enumerated.
+8. Apply the Internal Quality Loop and end with a `## Confidence` block — see `.claude/rules/quality-gates.md`.
 
 </workflow>
 
@@ -272,5 +266,6 @@ When reporting confidence:
   - Documentation content complete → `linting-expert` sanitizes the output (formatting, style, lint errors in code examples); doc-scribe owns content, linting-expert owns the handover cleanup
 - **Docstring style**: follow `.claude/rules/python-code.md` — always Google (Napoleon); never auto-switch to NumPy
 - **Changelog automation**: if the project uses towncrier or commitizen, do not edit CHANGELOG.md directly — hand off to `oss-shepherd`
+- **Confidence calibration**: Lower confidence when: examples were not read, signatures were inferred from callers only, or the caller did not provide enough context for accurate parameter docs.
 
 </notes>

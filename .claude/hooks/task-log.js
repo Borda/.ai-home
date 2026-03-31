@@ -13,6 +13,21 @@
 //   It also appends to append-only audit logs so you have a full history of every
 //   agent launch, skill invocation, and context compaction across sessions.
 //
+// HOW IT WORKS
+//   1. Parse stdin JSON for hook_event_name, tool_name, tool_input, agent_id, agent_type, session_id
+//   2. Resolve per-session temp dir at /tmp/claude-state-<session_id>/ for ephemeral state
+//   3. PreToolUse: log Task/Agent/Skill invocations to invocations.jsonl; open a codex session
+//      file in state/codex/ for codex:* skills; increment per-tool-type counter in state/tools/
+//   4. PostToolUse: close the codex session file when Skill(codex:*) completes
+//   5. SubagentStart: write agent metadata (type, model, color, timestamp) to state/agents/<id>.json
+//   6. SubagentStop: delete the per-agent file; append completion entry (with last_assistant_message)
+//      to invocations.jsonl; also clean up codex tracking if the agent was a codex:* type
+//   7. PreCompact: log to compactions.jsonl; scan transcript tail for Write/Edit tool_use blocks
+//      and write modified file paths to state/session-context.md as a compaction breadcrumb
+//   8. UserPromptSubmit: write a queue marker to state/queue/ (deduplicated via 500ms lock)
+//   9. Stop: clear state/tools/ and remove oldest queue marker (deduplicated); agents left intact
+//  10. SessionEnd: delete entire /tmp/claude-state-<session_id>/ subtree; prune stale git worktrees
+//
 // HOOK EVENT RESPONSIBILITIES
 //
 //   PreToolUse
@@ -44,12 +59,14 @@
 //       breadcrumb that survives context compaction and is re-read at session resume.
 //
 //   UserPromptSubmit
-//     • Writes a marker file to state/queue/ so statusline.js can show 📨 N on Line 1
-//       when the user has inputs queued while Claude is processing a prior turn.
+//     • Writes a marker file to state/queue/ so statusline.js shows 💬 on Line 1
+//       while Claude is processing the current turn. (UserPromptSubmit fires when Claude
+//       begins handling the message — not when the user presses Enter — so the marker
+//       represents "currently processing", not a queued-but-unstarted message.)
 //
 //   Stop  (end of Claude's turn)
 //     • Clears state/tools/ so the 🔧 line resets between turns.
-//     • Clears state/queue/ — the queued message was just consumed.
+//     • Removes the processing marker from state/queue/ so the 💬 badge disappears.
 //       Agents are intentionally NOT cleared here — subagents can still be running
 //       across turns and must stay visible on the status line.
 //
@@ -62,11 +79,18 @@
 // STATE FILES
 //   .claude/logs/invocations.jsonl      — append-only audit log (agents + skills)
 //   .claude/logs/compactions.jsonl      — compaction events log
-//   .claude/state/agents/<id>.json      — one file per active subagent
-//   .claude/state/codex/<id>.json       — one file per active codex plugin session
-//   .claude/state/tools/<tool>.json     — one file per tool type, current turn only
-//   .claude/state/queue/<ts>.json       — one file per pending user input (cleared on Stop)
+//   /tmp/claude-state-<session_id>/agents/<id>.json   — one file per active subagent
+//   /tmp/claude-state-<session_id>/codex/<id>.json    — one file per active codex plugin session
+//   /tmp/claude-state-<session_id>/tools/<tool>.json  — one file per tool type, current turn only
+//   /tmp/claude-state-<session_id>/queue/<ts>.json    — one file per pending user input (cleared on Stop)
 //   .claude/state/session-context.md    — modified-files breadcrumb for compaction
+//
+// SESSION ISOLATION
+//   Ephemeral state (agents, tools, codex, queue, dedup locks) lives in a per-session temp
+//   directory keyed by the session_id from the hook payload.  This prevents cross-session
+//   contamination when multiple Claude Code instances run simultaneously — each session reads
+//   and writes only its own /tmp/claude-state-<session_id>/ subtree.
+//   Persistent state (audit logs, session-context.md) remains in .claude/ (project-scoped).
 //
 // EXIT CODES
 //   0  Always — logging hook; must never block or crash Claude.
@@ -81,18 +105,25 @@ process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(raw);
-    const { hook_event_name, tool_name, tool_input, agent_id, agent_type } = data;
+    const { hook_event_name, tool_name, tool_input, agent_id, agent_type, session_id } = data;
 
     // Resolve workspace root from CWD (hooks run with CWD = project root)
     const root = process.cwd();
     const logsDir = path.join(root, ".claude", "logs");
     const stateDir = path.join(root, ".claude", "state");
-    const agentsDir = path.join(stateDir, "agents");
-    const toolsDir = path.join(stateDir, "tools");
-    const codexDir = path.join(stateDir, "codex");
-    const queueDir = path.join(stateDir, "queue");
     const logFile = path.join(logsDir, "invocations.jsonl");
     const compactFile = path.join(logsDir, "compactions.jsonl");
+
+    // Ephemeral per-session state lives in /tmp scoped by session_id.
+    // This prevents cross-session contamination when multiple Claude Code instances run
+    // concurrently — each session owns its own subtree and cannot see another session's state.
+    // Fallback to 'default' if session_id is missing (older Claude Code versions).
+    const sid = (session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const tmpDir = path.join("/tmp", `claude-state-${sid}`);
+    const agentsDir = path.join(tmpDir, "agents");
+    const toolsDir = path.join(tmpDir, "tools");
+    const codexDir = path.join(tmpDir, "codex");
+    const queueDir = path.join(tmpDir, "queue");
 
     const ts = new Date().toISOString();
 
@@ -230,9 +261,9 @@ process.stdin.on("end", () => {
     } else if (hook_event_name === "UserPromptSubmit") {
       // Deduplication lock — project and home settings.json both register this hook.
       // Guard: if a lock for UserPromptSubmit exists and is < 500ms old, skip (duplicate fire).
-      if (isDuplicateEvent("UserPromptSubmit")) process.exit(0);
-      // User submitted a message — write a queue marker so statusline shows pending count
-      // Cleared on Stop (turn complete) or after 5 min safety-net in statusline.js
+      if (isDuplicateEvent("UserPromptSubmit", tmpDir)) process.exit(0);
+      // Write a processing marker so statusline shows 💬 while Claude handles this turn.
+      // Cleared on Stop (turn complete). SessionEnd removes any crash remnants via tmpDir wipe.
       try {
         fs.mkdirSync(queueDir, { recursive: true });
         const id = ts.replace(/[:.]/g, "-");
@@ -243,7 +274,7 @@ process.stdin.on("end", () => {
       // Guard: if a lock for Stop exists and is < 500ms old, skip (duplicate fire).
       // Without this, double-fire deletes two markers per turn — incorrectly consuming
       // genuinely queued messages when the user sends while Claude is processing.
-      if (isDuplicateEvent("Stop")) process.exit(0);
+      if (isDuplicateEvent("Stop", tmpDir)) process.exit(0);
       // End of turn — clear tool activity and queue markers (both are per-turn)
       // Agents intentionally NOT cleared — subagents can still be running across turns
       try {
@@ -255,8 +286,8 @@ process.stdin.on("end", () => {
         }
       } catch (_) {}
       try {
-        // Delete only the OLDEST marker — it corresponds to the turn just processed.
-        // Any remaining markers are genuinely queued (submitted while this turn ran).
+        // Delete the oldest processing marker — it corresponds to the turn just completed.
+        // There should be exactly one marker per turn (dedup prevents doubles).
         const qFiles = fs.readdirSync(queueDir).sort();
         if (qFiles.length > 0) {
           try {
@@ -265,17 +296,11 @@ process.stdin.on("end", () => {
         }
       } catch (_) {}
     } else if (hook_event_name === "SessionEnd") {
-      // Full session teardown — clear agents, tools, and codex sessions
-      for (const dir of [agentsDir, toolsDir, codexDir, queueDir]) {
-        try {
-          const files = fs.readdirSync(dir);
-          for (const f of files) {
-            try {
-              fs.unlinkSync(path.join(dir, f));
-            } catch (_) {}
-          }
-        } catch (_) {}
-      }
+      // Full session teardown — delete the entire session-scoped temp directory.
+      // All ephemeral state (agents, tools, codex, queue, dedup locks) lives there.
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch (_) {}
       // Prune stale worktrees (orphaned by crashed agents or interrupted sessions)
       try {
         execFileSync("git", ["worktree", "prune"], { cwd: root, timeout: 5000, stdio: "ignore" });
@@ -305,11 +330,15 @@ process.stdin.on("end", () => {
 });
 
 // isDuplicateEvent — deduplication guard for events that fire from both project and home
-// settings.json (e.g. UserPromptSubmit, Stop). Uses a per-event lock file in /tmp with a
-// 500ms TTL. The first instance creates the lock and proceeds; the second finds a fresh lock
-// and exits 0 silently. Genuine subsequent events (seconds later) are unaffected.
-function isDuplicateEvent(eventName) {
-  const lockFile = `/tmp/task-log-lock-${eventName}.lock`;
+// settings.json (e.g. UserPromptSubmit, Stop). Uses a per-event lock file with a 500ms TTL.
+// The first instance creates the lock and proceeds; the second finds a fresh lock and exits
+// 0 silently. Genuine subsequent events (seconds later) are unaffected.
+// Lock lives inside the session-scoped tmpDir so it cannot suppress events from OTHER sessions.
+function isDuplicateEvent(eventName, tmpDir) {
+  const lockFile = path.join(tmpDir, `lock-${eventName}.lock`);
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  } catch (_) {}
   try {
     const lockStat = fs.statSync(lockFile);
     if (Date.now() - lockStat.mtimeMs < 500) return true; // duplicate — skip

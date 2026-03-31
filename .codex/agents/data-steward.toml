@@ -1,5 +1,6 @@
 # .codex/agents/data-steward.toml
 
+name                    = "data-steward"
 model                   = "gpt-5.3-codex"
 model_reasoning_effort  = "high"
 model_reasoning_summary = "auto"

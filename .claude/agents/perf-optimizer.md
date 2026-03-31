@@ -283,7 +283,7 @@ Rank findings by impact (highest first). Separate statically-confirmed issues fr
 **Static Grep scan** — launch all five in parallel; each targets a known Python/ML bottleneck class:
 
 ```
-Grep: pattern="for .+ in .+:[\s\S]{0,80}for .+ in"   glob="**/*.py"   # nested loops → O(n²) candidates
+Grep: pattern="for .+ in .+:[\s\S]{0,80}for .+ in"   glob="**/*.py"   # nested loops → O(n²) candidates  (multiline: true required)
 Grep: pattern="\.mean\(\)|\.std\(\)"                  glob="**/*.py"   # repeated stats computation per batch
 Grep: pattern="num_workers\s*=\s*0"                   glob="**/*.py"   # DataLoader CPU bottleneck
 Grep: pattern="pin_memory\s*=\s*False"                glob="**/*.py"   # slow CPU-GPU transfer

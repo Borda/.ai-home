@@ -6,6 +6,16 @@
 //   provides a hook point for future output quality validation.  Works alongside
 //   task-log.js which tracks session state; this hook acts on team-level events.
 //
+// HOW IT WORKS
+//   1. Parse stdin JSON for hook_event_name and team_name
+//   2. TeammateIdle: validate team_name is safe (basename check), then read
+//      .claude/tasks/<team_name>/*.json from the current workspace
+//   3. Filter task files to those with status === "pending"
+//   4. Pending tasks found: write task list to stderr and exit 2 — Claude Code
+//      surfaces the message to the teammate, redirecting it back to claim a task
+//   5. No pending tasks (or task directory absent): exit 0 — teammate idles normally
+//   6. TaskCompleted: always exit 0 — rejection loops are worse than missing validation
+//
 // HOOK EVENT RESPONSIBILITIES
 //
 //   TeammateIdle

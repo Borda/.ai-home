@@ -1,5 +1,6 @@
 # .codex/agents/squeezer.toml
 
+name                    = "squeezer"
 model                   = "gpt-5.3-codex"
 model_reasoning_effort  = "high"
 model_reasoning_summary = "auto"

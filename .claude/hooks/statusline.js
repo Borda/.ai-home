@@ -6,9 +6,23 @@
 //   on every hook event.  Gives an at-a-glance view of model, cost, context usage,
 //   active subagents, running codex plugin sessions, and current tool activity.
 //
+// HOW IT WORKS
+//   1. Parse stdin JSON for model, workspace, context_window, cost, and session_id
+//   2. Resolve the per-session temp dir at /tmp/claude-state-<session_id>/ (written by task-log.js)
+//   3. Build Line 1: model name, project dir, billing (API key = yellow; OAuth = cyan plan name),
+//      context bar (10-char block bar; green <50% · yellow <75% · red ≥75% used), and 💬 badge
+//      while Claude is processing the current turn (marker exists in state/queue/)
+//   4. Build Line 2 agent segment (🕵): read state/agents/*.json; skip codex:* agents and entries
+//      older than 10 min (safety net); group by type; color from agent frontmatter COLOR_MAP
+//   5. Build Line 2 codex segment (🤖): read state/codex/*.json; skip entries older than 30 min;
+//      group by short type name
+//   6. Build Line 2 tool segment (🔧): read state/tools/*.json; skip entries older than 30 s;
+//      render per-type call counts with fixed TOOL_COLORS palette
+//   7. Write both lines to stdout with \x1b[K (clear-to-end-of-line) on each line
+//
 // OUTPUT FORMAT
 //   Line 1 — session metadata:
-//     <model>  <project-dir>  <billing>  <context-bar pct%>  [📨 N when queue > 0]
+//     <model>  <project-dir>  <billing>  <context-bar pct%>  [💬 while processing]
 //
 //   Line 2 — runtime activity (always shown, "none" when idle):
 //     🕵 N <type> [×N], …  │  🤖 <codex-type> [×N]  │  🔧 <tools>
@@ -25,19 +39,22 @@
 //   context bar 10-char block bar; color: green <50% · yellow <75% · red ≥75% used
 //
 // LINE 2 DETAILS
-//   🕵 agents   reads state/agents/*.json written by task-log.js SubagentStart/Stop.
-//               Groups by type; specialized agents shown in their declared color
-//               (from agent frontmatter color: field); general-purpose shown in gray.
+//   🕵 agents   reads /tmp/claude-state-<session_id>/agents/*.json written by task-log.js
+//               SubagentStart/Stop. Groups by type; specialized agents shown in their
+//               declared color (from agent frontmatter color: field); general-purpose gray.
 //               Safety-net: ignores entries older than 10 min (SubagentStop crash/hang).
-//   🤖 codex    reads state/codex/*.json written by task-log.js PreToolUse/PostToolUse and
-//               SubagentStart/Stop. Shows short name of each active codex session
-//               (e.g. "codex-rescue", "adversarial-review"). codex:* Agent subagents are
-//               excluded from 🕵 and shown here instead. Safety-net: ignores entries older
-//               than 30 min.
-//   🔧 tools    reads state/tools/*.json written by task-log.js PreToolUse.
-//               Shows tool types active within the last 30 s with per-type call counts.
-//               Each tool type has a fixed ANSI color for visual stability.
+//   🤖 codex    reads /tmp/claude-state-<session_id>/codex/*.json written by task-log.js
+//               PreToolUse/PostToolUse and SubagentStart/Stop. Shows short name of each
+//               active codex session. Safety-net: ignores entries older than 30 min.
+//   🔧 tools    reads /tmp/claude-state-<session_id>/tools/*.json written by task-log.js
+//               PreToolUse. Shows tool types active within the last 30 s with per-type
+//               call counts. Each tool type has a fixed ANSI color for visual stability.
 //               Agent and Task tool calls are excluded (tracked under 🕵 instead).
+//
+// SESSION ISOLATION
+//   All state dirs are scoped to /tmp/claude-state-<session_id>/ using the session_id from
+//   the JSON payload. Multiple Claude Code sessions (same or different projects) each write
+//   and read their own subtree — no cross-session contamination.
 //
 // ANSI RENDERING
 //   \x1b[K at end of each line clears to end of line — prevents stale characters
@@ -55,7 +72,12 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", () => {
   try {
-    const { model, workspace, context_window, cost } = JSON.parse(raw);
+    const { model, workspace, context_window, cost, session_id } = JSON.parse(raw);
+
+    // Session-scoped temp dir — mirrors the layout written by task-log.js.
+    // Falls back to 'default' for older Claude Code versions without session_id.
+    const sid = (session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const tmpDir = path.join("/tmp", `claude-state-${sid}`);
 
     const modelName = model?.display_name || model?.id || "";
     const dir = path.basename(workspace?.current_dir || process.cwd());
@@ -139,27 +161,28 @@ process.stdin.on("end", () => {
 
     const now = Date.now(); // shared by agents, tools, and queue sections
 
-    // Line 1 — queue badge (📨 N) — shown only when pending user inputs exist
+    // Line 1 — processing badge (💬) — shown while Claude is handling the current turn.
+    // UserPromptSubmit writes a marker when Claude begins processing; Stop deletes it when done.
+    // No age gate: markers are ephemeral (turn-scoped); SessionEnd cleans up any crash remnants.
     try {
-      const queueDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/queue");
-      const MAX_QUEUE_AGE_MS = 5 * 60 * 1000; // 5 min — matches CLAUDE.md §8 health monitoring interval
+      const queueDir = path.join(tmpDir, "queue");
       const queueFiles = fs.readdirSync(queueDir).filter((f) => f.endsWith(".json"));
-      const pending = queueFiles.filter((f) => {
+      const active = queueFiles.some((f) => {
         try {
           const q = JSON.parse(fs.readFileSync(path.join(queueDir, f), "utf8"));
-          return !q.processed_at && (!q.since || now - new Date(q.since).getTime() < MAX_QUEUE_AGE_MS);
+          return !q.processed_at;
         } catch (_) {
           return false;
         }
       });
-      if (pending.length > 0) {
-        parts.push(`\x1b[33m📨 ${pending.length}\x1b[0m`); // yellow — matches codex segment color
+      if (active) {
+        parts.push(`\x1b[36m💬\x1b[0m`); // cyan — processing indicator
       }
     } catch (_) {}
 
     // Line 2 — agents (always shown, even when 0)
     try {
-      const agentsDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/agents");
+      const agentsDir = path.join(tmpDir, "agents");
       const files = fs.readdirSync(agentsDir).filter((f) => f.endsWith(".json"));
       // Safety-net: drop agents stuck > 10 min (SubagentStop didn't fire — crash or hang)
       const MAX_AGE_MS = 10 * 60 * 1000;
@@ -206,7 +229,7 @@ process.stdin.on("end", () => {
 
     // Line 2 — codex sessions (always shown, even when 0)
     try {
-      const codexDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/codex");
+      const codexDir = path.join(tmpDir, "codex");
       const codexFiles = fs.readdirSync(codexDir).filter((f) => f.endsWith(".json"));
       const MAX_CODEX_AGE_MS = 30 * 60 * 1000; // 30-min safety net
       // Collect active entries with their short type names (e.g. "codex-rescue", "review")
@@ -234,7 +257,7 @@ process.stdin.on("end", () => {
     // Line 2 — tool activity segment (always shown, even when idle)
     let toolLine = "";
     try {
-      const toolsDir = path.join(workspace?.current_dir || process.cwd(), ".claude/state/tools");
+      const toolsDir = path.join(tmpDir, "tools");
       const toolFiles = fs.readdirSync(toolsDir).filter((f) => f.endsWith(".json"));
       const TOOL_MAX_AGE_MS = 30 * 1000;
       const activeTools = toolFiles

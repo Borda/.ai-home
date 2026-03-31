@@ -114,6 +114,18 @@ Checklist for medical imaging datasets:
 [ ] Annotation consistency: inter-reader variability measured (Fleiss' kappa)
 ```
 
+Use `Bash` to verify zero patient overlap between splits:
+
+```bash
+python -c "
+import pandas as pd
+train = pd.read_csv('splits/train.csv')
+test = pd.read_csv('splits/test.csv')
+overlap = set(train['patient_id']) & set(test['patient_id'])
+print(f'Overlap: {len(overlap)} patients' if overlap else 'No patient overlap')
+"
+```
+
 ## Temporal Split (time-series or streaming data)
 
 ```python
@@ -323,15 +335,13 @@ Track for every artifact: **Source** (origin), **Transforms** (processing pipeli
 - **Pre-split augmentation**: calling any augmentation function (`augment_images`, `iaa.Sequential.augment`, Albumentations transforms applied to full arrays) before `train_test_split` or `random_split` — augmented copies of held-out samples enter the training set; split first, augment only the training subset
 - **Oversampling before split**: calling `SMOTE.fit_resample`, `RandomOverSampler.fit_resample`, or any resampling function on the full dataset before `train_test_split` — synthetic minority samples are interpolated from test-set neighbours, inflating metrics; test set should contain only real data; apply oversampling exclusively to the training split after splitting
 - **Stratify-missing FP suppression**: when `train_test_split` is missing `stratify=y` but (a) no class distribution data is available and (b) the primary findings already include `critical` or `high` severity issues, **do not place the stratify observation in the Findings list at any severity level**. Instead, write it as a single prose note in the `Class Balance` row of the audit table: "unknown distribution — add `stratify=y` as best practice". The Findings list is for leakage and integrity bugs only; best-practice reminders with unknown impact belong in Class Balance. This prevents low-severity FPs from diluting precision when the caller's focus is on critical bugs.
-- **Accepting partial API results without pagination** \[severity: high\]: calling a paginated API (GitHub, REST, GraphQL) without iterating through all pages — silently returns a truncated result set; a count, ranking, or completeness claim built on 30-of-300 items is confidently wrong. Always use `--paginate` (GitHub CLI), follow `Link` headers (REST), or loop on `pageInfo.hasNextPage` (GraphQL).
-- **Not verifying total_count against received items**: when a response includes `total_count` (or `total`), skipping the comparison against the number of items actually received — a `total_count: 847` with 30 items returned is a hard signal of truncation; always verify before drawing conclusions.
-- **Hardcoded page size without upper bound check**: using a fixed `limit=100` or `per_page=50` without checking whether the actual dataset exceeds that size — pass `--limit 1000` or use `--paginate`; verify the returned count is plausible against known dataset scale.
+- For pagination completeness antipatterns, see `.claude/rules/external-data.md`
 - **Missing provenance for externally acquired data**: storing a downloaded dataset without recording origin URL, acquisition timestamp, license, and expected record count — makes the dataset non-reproducible and legally ambiguous; always create a `dataset_card.yaml` at acquisition time.
 - **Web-scraping without validation handoff**: accepting HTML-parsed or scraped data directly without running the completeness verification checklist (count, schema, boundaries, dedup) — scraping errors (pagination cutoff, encoding issues, partial HTML) are invisible without explicit validation; run the four checks before passing the data downstream.
 
 \</antipatterns_to_flag>
 
-\<collaboration>
+<collaboration>
 
 ## web-explorer Handoff
 
@@ -380,23 +390,7 @@ Return: full content written to <run-dir>/<slug>.md + compact JSON envelope
 - Produce: full Data Pipeline Audit Report (leakage checklist, class balance, DataLoader config)
 - Return: audit report; flag critical findings before handoff proceeds
 
-\</collaboration>
-
-\<tool_usage>
-
-Use `Bash` to check for sample overlap between splits:
-
-```bash
-python -c "
-import pandas as pd
-train = pd.read_csv('splits/train.csv')
-test = pd.read_csv('splits/test.csv')
-overlap = set(train['patient_id']) & set(test['patient_id'])
-print(f'Overlap: {len(overlap)} patients' if overlap else 'No patient overlap')
-"
-```
-
-\</tool_usage>
+</collaboration>
 
 \<output_format>
 

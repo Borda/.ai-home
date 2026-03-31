@@ -86,7 +86,7 @@ ______________________________________________________________________
 
 Triggered by `campaign <goal>` or `campaign <file.md>`.
 
-**Task tracking**: create tasks for steps C1–C7 at start.
+**Task tracking**: create tasks for C1–C7 at start. If `--codex` is active, also create task `C5b: Codex co-pilot (iter ?/max)` with status `pending`.
 
 ### Step C1: Load / build config
 
@@ -108,8 +108,8 @@ Triggered by `campaign <goal>` or `campaign <file.md>`.
 Generate a `run-id` = `$(date +%Y%m%d-%H%M%S)`. Create the run directory:
 
 ```
-.claude/state/optimize/<run-id>/
-  state.json      ← iteration count, best metric, status
+_optimizations/state/<run-id>/
+  state.json         ← iteration count, best metric, status
   experiments.jsonl  ← one line per iteration
 ```
 
@@ -174,17 +174,29 @@ For each iteration `i` from 1 to `max_iterations`:
 
 **Phase overview** (all phases run per iteration):
 
-| Phase | Name            | Trigger / description                                                                                |
-| ----- | --------------- | ---------------------------------------------------------------------------------------------------- |
-| 1     | Review          | Always — build compact context from git log, JSONL history, and recent diff                          |
-| 2     | Ideate          | Always — spawn specialist agent to propose and implement ONE atomic change                           |
-| 3     | Verify files    | Always — check `git diff --stat`; skip to Phase 8 if no files changed (no-op)                        |
-| 4     | Commit          | Always — stage modified files and commit before verifying metric                                     |
-| 5     | Verify metric   | Always — run `metric_cmd` with timeout; revert on timeout                                            |
-| 6     | Guard           | Always — run `guard_cmd`; record pass or fail                                                        |
-| 7     | Decide          | Always — keep, rework, or revert based on metric + guard result                                      |
-| 8     | Log             | Always — append JSONL record and update `state.json`                                                 |
-| 9     | Progress checks | Always — summary every SUMMARY_INTERVAL, stuck detection, diminishing-returns warn, early-stop check |
+| Phase | Name            | Trigger / description                                                                                 |
+| ----- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| 0     | Announce        | Always — print `[→ Iter N/max · starting]`; TaskUpdate C5 subject with current iteration              |
+| 1     | Review          | Always — build compact context from git log, JSONL history, and recent diff                           |
+| 2     | Ideate          | Always — spawn specialist agent to propose and implement ONE atomic change                            |
+| 2b    | Codex co-pilot  | `--codex` only — **MANDATORY every iteration**; Codex second pass after Phase 2; must not be skipped  |
+| 3     | Verify files    | Always — check `git diff --stat`; skip to Phase 8 if no files changed (no-op)                         |
+| 4     | Commit          | Always — stage modified files and commit before verifying metric                                      |
+| 5     | Verify metric   | Always — run `metric_cmd` with timeout; revert on timeout                                             |
+| 6     | Guard           | Always — run `guard_cmd`; record pass or fail                                                         |
+| 7     | Decide          | Always — keep, rework, or revert based on metric + guard result                                       |
+| 8     | Log             | Always — append JSONL record, update `state.json`, print iteration summary, TaskUpdate C5 with result |
+| 9     | Progress checks | Always — summary every SUMMARY_INTERVAL, stuck detection, diminishing-returns warn, early-stop check  |
+
+#### Phase 0 — Announce
+
+Before any phase work, print the iteration header and update the C5 task subject:
+
+```
+[→ Iter N/max_iterations — best so far: <best_metric> (Δ<best_delta_pct>% vs baseline)]
+```
+
+TaskUpdate C5 subject: `C5: Iteration N/max_iterations — running`
 
 #### Phase 1 — Review
 
@@ -192,27 +204,27 @@ Build context for the ideation agent and write it to a file — do NOT accumulat
 
 ```bash
 # Collect signals
-git log --oneline -10 > .claude/state/optimize/<run-id>/context-<i>.md
-tail -10 .claude/state/optimize/<run-id>/experiments.jsonl >> .claude/state/optimize/<run-id>/context-<i>.md
-git diff --stat HEAD~5 HEAD >> .claude/state/optimize/<run-id>/context-<i>.md
+git log --oneline -10 > _optimizations/state/<run-id>/context-<i>.md
+tail -10 _optimizations/state/<run-id>/experiments.jsonl >> _optimizations/state/<run-id>/context-<i>.md
+git diff --stat HEAD~5 HEAD >> _optimizations/state/<run-id>/context-<i>.md
 ```
 
 Prepend a header block to `context-<i>.md` with: goal, current metric vs baseline, delta trend (last 5 kept deltas), and the iteration number. The ideation agent in Phase 2 reads this file directly — the content is never echoed back to the main context.
 
 #### Phase 2 — Ideate
 
-Spawn the selected specialist agent with this prompt (adapt as needed):
+Spawn the selected specialist agent with `maxTurns: 15` and this prompt (adapt as needed):
 
 ```
 Goal: <goal>
 Current metric: <metric_cmd key> = <current value> (baseline: <baseline>, direction: <higher|lower>)
-Experiment history: read `.claude/state/optimize/<run-id>/context-<i>.md` for the full context block.
+Experiment history: read `_optimizations/state/<run-id>/context-<i>.md` for the full context block.
 Scope files (read and modify only these): <scope_files>
 
 Read `context-<i>.md` and the scope files. Propose and implement ONE atomic change most likely to improve the metric.
 The change must not break <guard_cmd>.
 Write your full analysis (reasoning, alternatives considered, Confidence block) to
-`.claude/state/optimize/<run-id>/ideation-<i>.md` using the Write tool.
+`_optimizations/state/<run-id>/ideation-<i>.md` using the Write tool.
 Return ONLY the JSON result line — nothing else after it:
 {"description":"...","files_modified":[...],"confidence":0.N}
 ```
@@ -225,6 +237,16 @@ If the Agent tool is unavailable (nested subagent context), implement the change
 
 #### Phase 2b — Codex co-pilot (`--codex` only)
 
+> **MANDATORY — do not skip.** When `--codex` was active at Step C2 and not cleared, this phase MUST run on every iteration regardless of Phase 2 outcome. Print the narration line and update the C5b task before calling Agent.
+
+Print:
+
+```
+[→ Iter N/max · Phase 2b: Codex co-pilot — running]
+```
+
+TaskUpdate C5b subject: `C5b: Codex co-pilot — iter N/max_iterations running`, status: `in_progress`
+
 Run Phase 2b on **every iteration** when `--codex` is active. Claude-first co-pilot — Codex always gets a second turn; keep whichever of the two proposals produces a better net metric improvement (or keep Claude's if Codex produces no additional improvement).
 
 - If Claude's Phase 2 change was **kept**: Codex runs a second pass on the current state — building on Claude's work, trying an additional improvement.
@@ -235,7 +257,7 @@ Run Codex ideation:
 ```
 Agent(
   subagent_type="codex:codex-rescue",
-  prompt="Goal: <goal>. Current metric: <metric_key>=<current_value> (baseline: <baseline>, direction: <higher|lower>). Scope files: <scope_files>. Read context from .claude/state/optimize/<run-id>/context-<i>.md. Starting state: Claude's change was [kept|reverted|no-op]. [If kept: try to improve further from the current state. If reverted/no-op: propose a fresh approach.] Propose and implement ONE atomic optimization change most likely to improve the metric without breaking <guard_cmd>. Write your full reasoning to .claude/state/optimize/<run-id>/codex-ideation-<i>.md."
+  prompt="Goal: <goal>. Current metric: <metric_key>=<current_value> (baseline: <baseline>, direction: <higher|lower>). Scope files: <scope_files>. Read context from _optimizations/state/<run-id>/context-<i>.md. Starting state: Claude's change was [kept|reverted|no-op]. [If kept: try to improve further from the current state. If reverted/no-op: propose a fresh approach.] Propose and implement ONE atomic optimization change most likely to improve the metric without breaking <guard_cmd>. Write your full reasoning to _optimizations/state/<run-id>/codex-ideation-<i>.md."
 )
 ```
 
@@ -244,6 +266,10 @@ Agent(
 - If Claude's change was **reverted or no-op** AND Codex proposes changes: proceed through Phases 3–7 exactly as for a Claude ideation — commit, verify metric, run guard, decide keep/revert.
 - If Claude's change was **reverted or no-op** AND Codex returns no file changes: append `status: codex-no-op` to JSONL with `ideation_source: "codex"`, continue loop.
 - Set `"ideation_source": "codex"` in the Phase 8 JSONL record for any Codex-proposed change.
+
+After Codex completes (any outcome — kept, reverted, no-op):
+
+TaskUpdate C5b subject: `C5b: Codex co-pilot — iter N done (<outcome>)`
 
 **Stuck escalation with `--codex`**: when Phase 9 detects `STUCK_THRESHOLD` consecutive discards and `--codex` is active, increase Codex ideation effort — add this hint to the Codex prompt for the next iteration: "Previous N attempts were all reverted. Focus on a fundamentally different approach (different file, different algorithm, different abstraction)."
 
@@ -317,13 +343,21 @@ Append one JSONL record to `experiments.jsonl`:
 
 Update `state.json`: `iteration = i`, `status = running`.
 
+Print iteration summary:
+
+```
+[✓ Iter N/max — <kept|reverted|no-op|...> · metric=<value> (Δ<delta>%) · agent=<agent_type>]
+```
+
+TaskUpdate C5 subject: `C5: Iter N/max — last: <status>, best: <best_metric>`
+
 #### Phase 9 — Progress checks
 
 - **Summary every SUMMARY_INTERVAL iterations**: print compact table (iteration, metric, delta, status) for the last N iterations.
 - **Stuck detection**: if last `STUCK_THRESHOLD` entries all have `status: reverted|no-op|hook-blocked`, trigger escalation (see `<constants>` in SKILL.md). Log escalation action.
 - **Diminishing returns**: if last `DIMINISHING_RETURNS_WINDOW` kept entries each improved < 0.5%, print a warning and suggest stopping. Do not auto-stop — let the user decide.
 - **Early stop**: if `target` is set in the program file (or config), stop when the metric crosses it (`direction: higher` → metric ≥ target; `direction: lower` → metric ≤ target). Mark `state.json` `status: goal-achieved`.
-- **Context compaction** (every SUMMARY_INTERVAL iterations): write a full iteration summary table to `.claude/state/optimize/<run-id>/progress-<i>.md` and actively discard verbose per-iteration details from working memory. Retain in working memory only: current metric value, iteration count, JSONL file path, and `best_commit`. This prevents linear context growth in long campaigns — full history is always recoverable from `experiments.jsonl` and `ideation-<i>.md` files on disk.
+- **Context compaction** (every SUMMARY_INTERVAL iterations): write a full iteration summary table to `_optimizations/state/<run-id>/progress-<i>.md` and actively discard verbose per-iteration details from working memory. Retain in working memory only: current metric value, iteration count, JSONL file path, and `best_commit`. This prevents linear context growth in long campaigns — full history is always recoverable from `experiments.jsonl` and `ideation-<i>.md` files on disk.
 
 ### Step C6: Results report
 
@@ -384,7 +418,7 @@ Triggered by `resume` or `resume <file.md>`.
 
 **Locating the run**:
 
-- `resume` (no argument): scan all run dirs in `.claude/state/optimize/`, select the one with the latest `started_at` that has `status: running`.
+- `resume` (no argument): scan all run dirs in `_optimizations/state/`, select the one with the latest `started_at` that has `status: running`.
 - `resume <file.md>`: resolve the path to absolute. Scan all run dirs, filter for those whose `state.json` has `"program_file"` matching that absolute path. Pick the one with the latest `started_at`. If no match: stop with a clear error.
 
 1. Read `state.json` from the located run dir.
@@ -407,37 +441,39 @@ ______________________________________________________________________
 **Workflow:**
 
 1. Lead completes Steps C1–C4 (config, preconditions, baseline) solo.
+
 2. Lead identifies 2–3 distinct optimization axes from the goal + codebase analysis.
+
 3. Lead defines the run output directory and spawns 2–3 teammates (reasoning agents at `opus` per CLAUDE.md §Agent Teams), each assigned a different axis and a matching ideation agent type. Each teammate runs in an isolated worktree (`isolation: worktree`).
 
-```bash
-RUN_DIR="_optimizations/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
-mkdir -p "$RUN_DIR"
-```
+   ```bash
+   RUN_DIR="_optimizations/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+   mkdir -p "$RUN_DIR"
+   ```
 
-Example axis assignment for "reduce training time":
+   Example axis assignment for "reduce training time":
 
-- teammate-A = `ai-researcher` axis: model architecture changes
-- teammate-B = `perf-optimizer` axis: data pipeline and GPU utilization
-- teammate-C = `sw-engineer` axis: code-level optimizations (batching, caching)
+   - teammate-A = `ai-researcher` axis: model architecture changes
+   - teammate-B = `perf-optimizer` axis: data pipeline and GPU utilization
+   - teammate-C = `sw-engineer` axis: code-level optimizations (batching, caching)
 
-Each teammate's spawn prompt must include:
+   Each teammate's spawn prompt must include:
 
-```
-Read .claude/TEAM_PROTOCOL.md and use AgentSpeak v2.
-You are a campaign teammate. Your axis: <axis description>.
-Ideation agent: <agent type>.
-Run 3–5 independent iterations of the Review→Ideate→Modify→Commit→Verify→Guard→Log loop.
-Baseline metric: <metric_cmd key> = <baseline>. Direction: <higher|lower>.
-Scope files: <scope_files>.
-Write your full iteration log (all runs, metrics, reasoning) to `$RUN_DIR/teammate-<axis>.md` using the Write tool before returning.
-Return ONLY a compact JSON envelope: {axis, iterations_run, kept, best_metric, best_commit, description}
-Call TaskUpdate(in_progress) when starting; TaskUpdate(completed) when done.
-```
+   ```
+   Read .claude/TEAM_PROTOCOL.md and use AgentSpeak v2.
+   You are a campaign teammate. Your axis: <axis description>.
+   Ideation agent: <agent type>.
+   Run 3–5 independent iterations of the Review→Ideate→Modify→Commit→Verify→Guard→Log loop.
+   Baseline metric: <metric_cmd key> = <baseline>. Direction: <higher|lower>.
+   Scope files: <scope_files>.
+   Write your full iteration log (all runs, metrics, reasoning) to `$RUN_DIR/teammate-<axis>.md` using the Write tool before returning.
+   Return ONLY a compact JSON envelope: {axis, iterations_run, kept, best_metric, best_commit, description}
+   Call TaskUpdate(in_progress) when starting; TaskUpdate(completed) when done.
+   ```
 
 4. Each teammate runs their iterations independently and reports results.
 
-5. **Consolidation**: after all teammates complete (or reach `TeammateIdle`), spawn a single `general-purpose` consolidator agent. Provide it the file paths of all teammate output files (`$RUN_DIR/teammate-<axis>.md` for each axis). Prompt:
+5. **Consolidation**: after all teammates complete (or reach `TeammateIdle`), spawn a single `sw-engineer` consolidator agent. Provide it the file paths of all teammate output files (`$RUN_DIR/teammate-<axis>.md` for each axis). Prompt:
 
    ```
    Read the teammate output files at the following paths: <paths>.

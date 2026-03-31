@@ -3,6 +3,7 @@ name: session
 description: Session parking lot — automatically parks diverging ideas and unanswered questions to project-scoped memory; /session resume shows pending items, /session archive closes them, /session summary gives a session digest
 argument-hint: resume | archive <text> | summary
 allowed-tools: Read, Write, Edit, Glob, Grep, TaskCreate, TaskUpdate, Bash
+effort: low
 ---
 
 <objective>
@@ -22,7 +23,13 @@ Track open-loop ideas, deferred questions, and diverging threads that arise duri
 
 <constants>
 
-- Memory dir: `$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|[/.]|-|g')/memory/`
+- Memory dir: `$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|[/.]|-|g' | sed 's/^-//')/memory/`
+- Canonical MEMORY_DIR snippet (use in every bash block that needs the path):
+  ```bash
+  PROJECT="$(git rev-parse --show-toplevel)"
+  SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
+  MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
+  ```
 - File pattern: `session-open-*.md`
 - Resolution log: `.claude/logs/session-archive.jsonl`
 - Stale threshold: 14 days (add `⚠ stale` prefix when listing)
@@ -44,18 +51,14 @@ Track open-loop ideas, deferred questions, and diverging threads that arise duri
 ### Step 1: Resolve the memory directory
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory"
+# MEMORY_DIR set per <constants> block above
 echo "$MEMORY_DIR"
 ```
 
 ### Step 2: Age-out expired items (≥ 30 days) silently
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory"
+# MEMORY_DIR set per <constants> block above
 find "$MEMORY_DIR" -name "session-open-*.md" -mtime +30 -delete 2>/dev/null
 echo "cleanup done"
 ```
@@ -67,9 +70,7 @@ Use Glob with pattern `session-open-*.md` in the memory directory. For each file
 Compute age in days for each file:
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory"
+# MEMORY_DIR set per <constants> block above
 NOW=$(date +%s)
 for f in "$MEMORY_DIR"/session-open-*.md; do
   [ -f "$f" ] || continue
@@ -110,9 +111,7 @@ If no files exist, print: `No pending session items.`
 ### Step 1: Locate the memory directory and list candidates
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory"
+# MEMORY_DIR set per <constants> block above
 ls "$MEMORY_DIR"/session-open-*.md 2>/dev/null || echo "none"
 ```
 
@@ -160,9 +159,7 @@ Call TaskList (or use TaskCreate/TaskUpdate context) to get tasks with status `c
 ### Step 2: Collect parked items
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory"
+# MEMORY_DIR set per <constants> block above
 ls "$MEMORY_DIR"/session-open-*.md 2>/dev/null || echo "none"
 ```
 
@@ -244,7 +241,7 @@ type: project
 
 Written to: `~/.claude/projects/<project-slug>/memory/session-open-<slug>-<YYYY-MM-DD>.md`
 
-Derive the project slug via: `git rev-parse --show-toplevel | sed 's|[/.]|-|g'`
+Derive the project slug via: `git rev-parse --show-toplevel | sed 's|[/.]|-|g' | sed 's/^-//'`
 
 **Memory pollution guard**: before parking a new item, count existing `session-open-*.md` files. If the count is ≥ 10, surface the full list and ask the user to archive some entries before writing a new one.
 

@@ -79,7 +79,7 @@
         "hooks": [
           {
             "async": true,
-            "command": "find _calibrations _resolutions _audits _reviews _optimizations _developments -maxdepth 2 -name 'result.jsonl' -mtime +30 2>/dev/null | xargs -r dirname | xargs -r rm -rf; find _outputs -type f -mtime +30 2>/dev/null | xargs -r rm -f; find _outputs -mindepth 1 -maxdepth 2 -type d -empty 2>/dev/null | xargs -r rmdir",
+            "command": "find _calibrations _resolutions _audits _reviews _optimizations _developments -maxdepth 2 -name 'result.jsonl' -mtime +30 2>/dev/null | xargs -r dirname | xargs -r rm -rf; find _brainstorming _analyse _outputs -type f -mtime +30 2>/dev/null | xargs -r rm -f; find _outputs -mindepth 1 -maxdepth 2 -type d -empty 2>/dev/null | xargs -r rmdir",
             "type": "command"
           }
         ]
@@ -160,6 +160,26 @@
       }
     ],
     "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "command": "node .claude/hooks/task-log.js",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
       {
         "hooks": [
           {
@@ -271,6 +291,7 @@
       "Bash(basename:*)",
       "Bash(dirname:*)",
       "Bash(node --check:*)",
+      "Bash(find _analyse*)",
       "Bash(find _calibrations*)",
       "Bash(find _resolutions*)",
       "Bash(find _audits*)",
@@ -278,6 +299,7 @@
       "Bash(find _optimizations*)",
       "Bash(find _developments*)",
       "Bash(find _outputs*)",
+      "Bash(mkdir -p _analyse/*)",
       "Bash(mkdir -p _calibrations/*)",
       "Bash(mkdir -p _resolutions/*)",
       "Bash(mkdir -p _audits/*)",
@@ -304,9 +326,6 @@
       "WebFetch(domain:openai.com)",
       "WebFetch(domain:support.claude.com)",
       "WebFetch(domain:www.anthropic.com)",
-      "WebFetch(domain:github.blog)",
-      "WebFetch(domain:api.codecov.io)",
-      "WebFetch(domain:app.codecov.io)",
       "WebFetch(domain:hr.linkedin.com)",
       "WebFetch(domain:scholar.google.com)",
       "Skill(sync)",
@@ -321,6 +340,7 @@
     ]
   },
   "statusLine": {
+    "async": true,
     "command": "node .claude/hooks/statusline.js",
     "type": "command"
   },

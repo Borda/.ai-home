@@ -52,7 +52,7 @@ process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(raw);
-    const { hook_event_name, tool_name, tool_input } = data;
+    const { hook_event_name, tool_name, tool_input, session_id } = data;
 
     // Only act on PostToolUse for Write or Edit
     if (hook_event_name !== "PostToolUse") process.exit(0);
@@ -76,12 +76,18 @@ process.stdin.on("end", () => {
     // so two instances fire concurrently for every Edit. The second instance would
     // race pre-commit's own lock file and exit non-zero. Guard: if a lock file for
     // this exact file exists and is < 5s old, skip silently (already being linted).
-    const lockFile = `/tmp/lint-on-save-${filePath.replace(/\//g, "_")}.lock`;
+    // Lock lives in the session-scoped tmpDir so it is cleaned up on SessionEnd
+    // and cannot collide with other concurrent Claude sessions.
+    const sid = (session_id || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const tmpDir = path.join("/tmp", `claude-state-${sid}`);
+    const sanitized = filePath.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const lockFile = path.join(tmpDir, `lock-lint-on-save-${sanitized}.lock`);
     try {
       const lockStat = fs.statSync(lockFile);
       if (Date.now() - lockStat.mtimeMs < 5_000) process.exit(0); // already running
     } catch (_) {} // lock absent — first instance, proceed
     try {
+      fs.mkdirSync(tmpDir, { recursive: true });
       fs.writeFileSync(lockFile, String(process.pid));
     } catch (_) {}
 

@@ -14,6 +14,7 @@ _audits/                 ← /audit skill runs
 _reviews/                ← /review skill runs
 _optimizations/          ← /optimize skill runs (perf + campaign modes)
 _developments/           ← /develop review-cycle runs
+_analyse/                ← /analyse skill (cache-gh + thread subdirs)
 _outputs/                ← quality-gates long output (cross-cutting)
   YYYY/MM/
 tasks/_plans/            ← todo_*.md, plan_*.md (tracked)
@@ -43,6 +44,7 @@ A completed run always contains `result.jsonl`. Incomplete runs (crashed, timed 
 | -------------------------------- | ------- | ---------------------------------------------- |
 | `_<skill>/YYYY-MM-DDTHH-MM-SSZ/` | 30 days | only dirs containing `result.jsonl`            |
 | `_brainstorming/`                | 30 days | keyed on file mtime (flat spec files)          |
+| `_analyse/`                      | 30 days | keyed on file mtime (flat cache files)         |
 | `_outputs/`                      | 30 days | keyed on file mtime                            |
 | `tasks/_plans/`                  | manual  | move to `closed/` when done; never auto-delete |
 | `tasks/_working/`                | manual  | human-maintained                               |
@@ -59,7 +61,7 @@ find _calibrations _resolutions _audits _reviews _optimizations _developments \
   | xargs -r dirname | xargs -r rm -rf
 
 # Delete stale brainstorm specs and temp outputs older than 30 days
-find _brainstorming _outputs -type f -mtime +30 2>/dev/null | xargs -r rm -f
+find _brainstorming _analyse _outputs -type f -mtime +30 2>/dev/null | xargs -r rm -f
 
 # Prune empty year/month dirs in _outputs
 find _outputs -mindepth 1 -maxdepth 2 -type d -empty 2>/dev/null | xargs -r rmdir
@@ -71,6 +73,7 @@ The deterministic `_*/` paths allow precise allow rules:
 
 ```text
 "Bash(mkdir -p _brainstorming/*)",
+"Bash(mkdir -p _analyse/*)",
 "Bash(mkdir -p _calibrations/*)",
 "Bash(mkdir -p _resolutions/*)",
 "Bash(mkdir -p _audits/*)",
@@ -79,6 +82,7 @@ The deterministic `_*/` paths allow precise allow rules:
 "Bash(mkdir -p _developments/*)",
 "Bash(mkdir -p _outputs/*/*)",
 "Bash(find _brainstorming*)",
+"Bash(find _analyse*)",
 "Bash(find _calibrations*)",
 "Bash(find _resolutions*)",
 "Bash(find _audits*)",

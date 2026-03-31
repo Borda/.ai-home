@@ -4,6 +4,7 @@ description: Unified development orchestrator with three modes — feature (TDD-
 argument-hint: feature|fix|refactor|plan|debug <goal>
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
+effort: high
 ---
 
 <objective>

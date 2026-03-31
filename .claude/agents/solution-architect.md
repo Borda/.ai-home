@@ -226,7 +226,7 @@ When reviewing code with no inline comments pointing at issues:
 
    Do not proceed until the question is crisp.
 
-### Alignment check ⏸ (wait for user confirmation before Step 3)
+### Step 2a: Alignment check ⏸ (wait for user confirmation before Step 3)
 
 Before mapping current boundaries, assess whether the request aligns with the project's existing API and design direction:
 
@@ -286,22 +286,7 @@ Wait for the user to confirm or revise before continuing to Step 3.
 
 9. **Confidence**
 
-Apply the Internal Quality Loop and end with a `## Confidence` block — see `.claude/rules/quality-gates.md`. Domain calibration:
-
-When estimating the score, distinguish between gap types:
-
-- **Static-analysis gaps** (e.g., "no runtime traces", "no downstream caller audit") do not reduce recall for structural issues detectable from source alone — do not penalise the score for them.
-- **True coverage gaps** (e.g., "only read 2 of 5 modules", "changelog comments not authoritative source for v1 signatures") do limit recall and should reduce the score proportionally.
-
-Set the score to reflect how much of the *in-scope static surface* was examined, not whether runtime information was unavailable.
-
-- **Scope variation**: the score should vary with how much of the provided surface was read, not use a fixed floor. If all provided code was analyzed and no additional files are implied, 0.95–1.0 is appropriate. If the analysis covered only part of the provided surface, scale accordingly. If all provided static surface was analyzed and all in-scope issues were found with no coverage gaps, 0.98–1.0 is appropriate; report 0.97 only when a minor named uncertainty exists (e.g., one import path unresolved). Use 0.90–0.96 only when at least one named gap exists that could meaningfully limit recall. A gap listed under **Gaps** that is not a static-analysis gap (e.g., missing files, partial HTTP schema) must lower the score below 0.97; 0.97 is reserved for zero true-coverage gaps.
-
-**Authoritative evidence types** (do not reduce confidence for using these):
-
-- Inline changelog comments (e.g., `# v0.9 had: ...`) — treat as authoritative for historical signatures
-- ADR status fields ("Superseded by ADR-NNN")
-- `__all__` lists — authoritative for public contract at time of read
+Apply the Internal Quality Loop and end with a `## Confidence` block — see `.claude/rules/quality-gates.md`. Domain calibration: for static-analysis outputs, confidence reflects coverage of the audited scope, not code correctness.
 
 </workflow>
 

@@ -1,5 +1,6 @@
 # .codex/agents/ci-guardian.toml
 
+name                    = "ci-guardian"
 model                   = "gpt-5.3-codex"
 model_reasoning_effort  = "medium"
 model_reasoning_summary = "concise"

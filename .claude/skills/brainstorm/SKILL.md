@@ -4,6 +4,7 @@ description: Interactive design-first skill for turning fuzzy ideas into approve
 argument-hint: <fuzzy idea or feature goal> | breakdown <spec-file>
 disable-model-invocation: true
 allowed-tools: Read, Write, Glob, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+effort: high
 ---
 
 <objective>
@@ -115,7 +116,7 @@ Describe *what*, not *how*. No implementation details.
 
 Before spawning, pre-compute the output path:
 `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
-`OUTPUT_PATH="_outputs/$(date +%Y)/$(date +%m)/output-brainstorm-review-$BRANCH-$(date +%s).md"`
+`OUTPUT_PATH="_outputs/$(date +%Y)/$(date +%m)/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"`
 
 Spawn **self-mentor** with a spec-focused prompt scoped to spec quality only — not a full config audit (inject the pre-computed `$OUTPUT_PATH` into the prompt in place of `<output-path>`):
 
@@ -208,6 +209,7 @@ End with a `## Confidence` block per CLAUDE.md output standards.
 - **`disable-model-invocation: true`** — the skill is conversational; the parent model drives all steps turn by turn
 - **self-mentor scope in Step 5** — the spawn prompt must constrain scope to spec quality explicitly; do not let it audit `.claude/` config files
 - **\_brainstorming/ directory** — created if absent; spec filenames use `YYYY-MM-DD-<kebab-slug>.md` format
+- **Breakdown heading convention**: Breakdown mode uses H3 headings with `B` prefix (e.g., `### B1: ...`) to distinguish breakdown sub-steps from main workflow steps (H2, `## Step N:`).
 - **Follow-up**: on spec approval → if targeting `.claude/` config (agent/skill/rule): `/manage update <name> <spec-file>` (type auto-detected) or `/manage create <type> <name> "desc"`; for mixed or system-level specs: `/brainstorm breakdown _brainstorming/<file>` to generate a per-task action plan; for pure code implementation: `/develop plan <spec-file>` then `/develop feature`
 
 </notes>

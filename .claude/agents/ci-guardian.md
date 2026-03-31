@@ -90,7 +90,7 @@ jobs:
       - run: |
           uv run pytest tests/ -n auto --tb=short -q \
             --cov=src --cov-report=xml
-      - uses: codecov/codecov-action@v4  # replace with full SHA — see trusted_publishing section for the SHA-pinned pattern
+      - uses: codecov/codecov-action@v4  # pin SHA: run: gh api repos/codecov/codecov-action/git/refs/tags/v4 --jq '.object.sha'
         if: matrix.python-version == '3.12'
         with:
           files: ./coverage.xml
@@ -267,7 +267,7 @@ on:
         default: ubuntu-latest
 
 # Job body: same checkout → setup-uv → uv sync → pytest pattern as the main quality job.
-# For the full publish workflow, see the \<trusted_publishing> section in this file.
+# For the full publish workflow, see the <trusted_publishing> section in this file.
 ```
 
 Callers use `uses: ./.github/workflows/reusable-test.yml` with `python-version` input in a matrix.

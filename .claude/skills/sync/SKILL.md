@@ -3,6 +3,7 @@ name: sync
 description: Drift-detect and sync git-tracked .claude/ and .codex/ config from project to home. Default shows what would change; "apply" performs the sync.
 argument-hint: '[apply]'
 allowed-tools: Read, Bash
+effort: low
 ---
 
 <objective>
@@ -56,7 +57,7 @@ HOME_CLAUDE="$HOME_EXPANDED/.claude"
 cd "$PROJECT" && git ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
   | sed 's|^\.claude/||' \
-  | rsync -av --dry-run --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"
+  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"
 ```
 
 rsync prints only files that would change; identical files are silently skipped.
@@ -103,7 +104,7 @@ HOME_EXPANDED="$HOME"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 cd "$PROJECT" && git ls-files .codex/ \
   | sed 's|^\.codex/||' \
-  | rsync -av --dry-run --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
+  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
 ```
 
 If `$ARGUMENTS` is empty: print the combined dry-run output and offer `/sync apply`. Stop here.

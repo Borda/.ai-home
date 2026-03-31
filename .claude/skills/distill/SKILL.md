@@ -4,6 +4,7 @@ description: One-time snapshot that extracts patterns from work history and accu
 argument-hint: '[review | prune | lessons | "<recurring task description>"]'
 disable-model-invocation: true
 allowed-tools: Read, Edit, Bash, Glob, Write
+effort: high
 ---
 
 <objective>
@@ -70,7 +71,8 @@ If `$ARGUMENTS` was provided, use it as additional context for the pattern analy
 If the Step 1 check showed OpenSpace active, run:
 
 ```bash
-diff -rq ~/.claude/skills/ .claude/skills/ 2>/dev/null | grep "^Files" | sed 's|Files ~/.claude/skills/||;s|\.claude/skills/||' | head -20
+HOME_SKILLS="$HOME/.claude/skills/"
+diff -rq "$HOME_SKILLS" .claude/skills/ 2>/dev/null | grep "^Files" | sed "s|Files ${HOME_SKILLS}||;s|\.claude/skills/||" | head -20
 ```
 
 Each line names a skill file that differs between the home dir (where OpenSpace writes evolved versions) and the project dir (source of truth). Collect these as "graduated candidates" for the Step 5 report. If no differences, note "No drift — project and home skills are in sync."
@@ -158,6 +160,8 @@ Locate, evaluate, and trim the project memory file.
 **Find the memory file:**
 
 <!-- Note: this slug derivation is also used in audit/SKILL.md Check 11. If the auto-memory path convention changes, update both files. -->
+
+<!-- Same slug derivation pattern used in skills/audit/SKILL.md -->
 
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"

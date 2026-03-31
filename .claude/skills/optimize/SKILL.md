@@ -4,6 +4,7 @@ description: Performance orchestrator with four modes. `plan` = interactive wiza
 argument-hint: plan <goal> [out.md] | campaign <goal|file.md> | resume [file.md] | perf <target> [--team] [--colab] [--codex]
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
+effort: high
 ---
 
 <objective>
@@ -89,8 +90,8 @@ If the first token is not a valid mode, stop and present:
 
 ```
 Usage: /optimize plan <goal> [out.md]
-       /optimize campaign <goal|file.md> [--team] [--colab]
-       /optimize resume [file.md] [--team] [--colab]
+       /optimize campaign <goal|file.md> [--team] [--colab] [--codex]
+       /optimize resume [file.md] [--team] [--colab] [--codex]
        /optimize perf <file|module|dir>
 ```
 
@@ -98,17 +99,17 @@ Usage: /optimize plan <goal> [out.md]
 
 **If mode is `perf`**: Read `.claude/skills/optimize/modes/perf.md` and execute its steps (P1–P6) in order, passing the remaining arguments as `$ARGUMENTS`.
 
-**If mode is `campaign`**: Read `.claude/skills/optimize/modes/campaign.md` and execute its Default Mode steps (C1–C7) in order, passing the remaining arguments along with any flags (`--team`, `--colab`).
+**If mode is `campaign`**: Read `.claude/skills/optimize/modes/campaign.md` and execute its Default Mode steps (C1–C7) in order, passing the remaining arguments along with any flags (`--team`, `--colab`, `--codex`).
 
 **If mode is `plan`**: Read `.claude/skills/optimize/modes/campaign.md` and execute its Plan Mode steps (C-P1–C-P3), passing the remaining arguments as `<goal> [out.md]`.
 
-**If mode is `resume`**: Read `.claude/skills/optimize/modes/campaign.md` and execute its Resume Mode steps, passing the optional `file.md` argument along with any flags (`--team`, `--colab`).
+**If mode is `resume`**: Read `.claude/skills/optimize/modes/campaign.md` and execute its Resume Mode steps, passing the optional `file.md` argument along with any flags (`--team`, `--colab`, `--codex`).
 
 </workflow>
 
 <notes>
 
-## Cross-mode follow-up chains
+**Cross-mode follow-up chains:**
 
 - Perf bottleneck is architectural (not just a hot loop) → `/develop refactor` for structural changes with test safety net
 - Perf changes non-trivial code paths → `/review` for quality validation

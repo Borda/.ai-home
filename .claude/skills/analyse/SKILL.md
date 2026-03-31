@@ -5,6 +5,7 @@ argument-hint: <N|health|ecosystem> [--reply]
 allowed-tools: Read, Bash, Write, Agent
 context: fork
 model: opus
+effort: high
 ---
 
 <objective>
@@ -38,7 +39,7 @@ Check for a local cache file before making API calls — prevents redundant fetc
 GitHub rate limits when re-analysing the same item in the same day.
 
 ```bash
-CACHE_DIR="_analyses/cache-gh"
+CACHE_DIR="_analyse/cache-gh"
 TODAY=$(date +%Y-%m-%d)
 CACHE_FILE="$CACHE_DIR/$ARGUMENTS-$TODAY.json"
 mkdir -p "$CACHE_DIR"
@@ -66,7 +67,9 @@ jq -n \
 
 **Stale cache** — a file for the same number but an earlier date is ignored. Old files are
 left in place — they are small and provide audit history. Prune files older than 30 days:
-`find _analyses/cache-gh -mtime +30 -delete`
+`find _analyse/cache-gh -mtime +30 -delete`
+
+# \_analyse/ dir TTL: clean with `find _analyse/cache-gh -mtime +30 -delete` (run manually — not in SessionEnd hook)
 
 Cache applies to: issue/PR/discussion primary fetch and comments.
 Cache does NOT apply to: `gh issue list`, `gh pr list`, `gh pr checks`, `gh pr diff`,
@@ -118,8 +121,8 @@ new activity since it was written.
 
 ```bash
 TODAY=$(date +%Y-%m-%d)
-mkdir -p _analyses/thread
-REPORT_FILE="_analyses/thread/output-analyse-thread-$ARGUMENTS-$TODAY.md"
+mkdir -p _analyse/thread
+REPORT_FILE="_analyse/thread/output-analyse-thread-$ARGUMENTS-$TODAY.md"
 
 DRIFT=false
 if [ -f "$REPORT_FILE" ]; then
@@ -142,9 +145,9 @@ Decision:
 the full thread (`gh issue view <number> --comments` or equivalent GraphQL for discussions)
 and read every comment. Apply voice and formatting rules from oss-shepherd's `<voice>`
 block — do not embed them inline here. Write your full output to
-`_analyses/thread/output-reply-thread-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY
+`_analyse/thread/output-reply-thread-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY
 a compact JSON envelope on your final line — nothing else after it:
-`{\"status\":\"done\",\"file\":\"_analyses/thread/output-reply-thread-<number>-<date>.md\",\"sentences\":N,\"resolved\":\"yes|no|partial\",\"confidence\":0.N,\"summary\":\"Reply: N sentences, resolved: yes|no|partial\"}`"
+`{\"status\":\"done\",\"file\":\"_analyse/thread/output-reply-thread-<number>-<date>.md\",\"sentences\":N,\"resolved\":\"yes|no|partial\",\"confidence\":0.N,\"summary\":\"Reply: N sentences, resolved: yes|no|partial\"}`"
 
 Print compact terminal summary:
 
@@ -152,7 +155,7 @@ Print compact terminal summary:
   Reply — N sentences  |  resolved: yes|no|partial
   [analysis refreshed — new activity since last report]  ← only if drift detected
 
-  Reply:  _analyses/thread/output-reply-thread-<number>-<date>.md
+  Reply:  _analyse/thread/output-reply-thread-<number>-<date>.md
 ```
 
 End your response with a `## Confidence` block per CLAUDE.md output standards — this is

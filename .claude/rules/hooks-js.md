@@ -49,4 +49,4 @@ Subsection order: `PURPOSE` → `HOW IT WORKS` → `EXIT CODES` (add others like
   });
   ```
 - Wrap all logic in try/catch; catch → **always** `process.exit(0)` — hooks must never crash or block Claude; silent-swallow is acceptable for top-level catches (logging hooks must not interfere with Claude's execution)
-- Use `execFileSync` or `spawnSync` (not `execSync` with shell strings) for subprocess calls — both take an args array, avoiding shell injection
+- Use `execFileSync` or `spawnSync` (not `execSync` with shell strings) for subprocess calls — both take an args array, avoiding shell injection. Use `execFileSync` when the command MUST succeed (throws on non-zero exit, use in try/catch). Use `spawnSync` when you need to inspect the result code (returns `{status, stdout, stderr}`, does not throw).

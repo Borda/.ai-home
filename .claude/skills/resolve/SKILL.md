@@ -150,9 +150,9 @@ TaskCreate(
 
 Mark it `in_progress` immediately.
 
-## Step 3-R (report mode): Report intelligence
+## Step 3a: Report intelligence (report mode only)
 
-*Skip to Step 3 (PR intelligence) when in pr mode or pr + report mode.*
+*Skip to Step 3b (PR intelligence) when in pr mode or pr + report mode.*
 
 When mode == **report**:
 
@@ -174,15 +174,15 @@ Map each finding bullet to the action item schema:
 
 If PR# was found in the report header (`## Code Review: PR #<N>` or similar):
 
-- Set `$ARGUMENTS = <N>` and proceed to Step 4 (checkout); skip Steps 3 (PR intelligence) and 3b entirely
+- Set `$ARGUMENTS = <N>` and proceed to Step 4 (checkout); skip Step 3b (PR intelligence) entirely
 - After checkout, skip directly to Step 8 with the report-derived action item list
 
 If no PR# was found in the header:
 
-- Skip Steps 3 and 4 entirely; work on the current branch as-is
+- Skip Step 3b and Step 4 entirely; work on the current branch as-is
 - Skip directly to Step 8 with the report-derived action item list
 
-## Step 3: PR intelligence
+## Step 3b: PR intelligence
 
 Fetch full PR metadata in one call:
 
@@ -218,7 +218,7 @@ If `CLOSING_ISSUES` is non-empty, fetch each linked issue for motivation context
 gh issue view <issue#> --json title,body
 ```
 
-### 3a: Synthesize contribution motivation
+### Synthesize contribution motivation
 
 Read the PR title, PR body, linked issue descriptions, and commit messages together. Produce a 2–3 sentence paragraph:
 
@@ -228,7 +228,7 @@ Read the PR title, PR body, linked issue descriptions, and commit messages toget
 
 This motivation summary is the **priority lens for conflict resolution** in Step 7 — it tells you whose logic should win when both sides touched the same area.
 
-### 3b: Classify action items
+### Classify action items
 
 Read every comment, review, and inline code comment. Classify each:
 
@@ -265,7 +265,7 @@ Answer any `[question]` items that can be resolved from reading the code — if 
 
 When mode == **pr + report**:
 
-Find and read the latest review report (`ls -t _outputs/*/*/output-review-*.md 2>/dev/null | head -1`). Parse structured findings using the same logic as Step 3-R (report mode) above.
+Find and read the latest review report (`ls -t _outputs/*/*/output-review-*.md 2>/dev/null | head -1`). Parse structured findings using the same logic as Step 3a (report mode) above.
 
 **Deduplication**:
 
@@ -681,6 +681,6 @@ Mark the task `completed`, then print:
 - Follow-up chains:
   - After push → `gh pr review <PR#> --approve` if satisfied; for substantial maintainer changes, comment on the PR explaining what was done and why — don't silently push to a contributor's fork
   - For `[question]` items left unanswered → post a PR comment with the rationale before merging; gives the contributor context and closes the thread
-  - After merge → linked issues close automatically when the PR is merged, provided the PR body contains `Closes #<issue#>` or `Fixes #<issue#>`; if `CLOSING_ISSUES` were found in Step 3 but the PR body lacks those keywords, add them to the PR description: `gh pr edit <PR#> --body "$(gh pr view <PR#> --json body -q .body)\n\nCloses #<issue#>"`
+  - After merge → linked issues close automatically when the PR is merged, provided the PR body contains `Closes #<issue#>` or `Fixes #<issue#>`; if `CLOSING_ISSUES` were found in Step 3b but the PR body lacks those keywords, add them to the PR description: `gh pr edit <PR#> --body "$(gh pr view <PR#> --json body -q .body)\n\nCloses #<issue#>"`
 
 </notes>

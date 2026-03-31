@@ -119,6 +119,14 @@ Skip this for trivial changes (typos, dep bumps, CI config).
 
 ## Step 4: Choose output format
 
+Pre-flight — verify all templates are present before proceeding:
+
+```bash
+for tmpl in PUBLIC-NOTES.tmpl.md CHANGELOG.tmpl.md SUMMARY.tmpl.md MIGRATION.tmpl.md; do
+  [ -f ".claude/skills/release/templates/$tmpl" ] || { echo "Missing template: $tmpl — aborting"; exit 1; }
+done
+```
+
 Before writing, fetch the last 2–3 releases from the repo to check for project-specific formatting conventions:
 
 ```bash
@@ -166,7 +174,7 @@ After applying the guidelines above to polish the output, write to disk per mode
 
 ## Step 6: Publish (after writing notes)
 
-**Human gate** — stop here and hand off to the user: the GitHub release must be created with project-level tooling (e.g. `gh release create`). Refer to the project's CLAUDE.md or `oss-shepherd` agent for the exact command. Resume after the release is live.
+**Human gate** — stop here and hand off to the user: the GitHub release must be created with project-level tooling (e.g. `gh release create`). Refer to the project's CLAUDE.md or `oss-shepherd` agent (see `<release_workflow>` section) for the exact command. Resume after the release is live.
 
 ## Mode: prepare
 

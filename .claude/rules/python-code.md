@@ -1,5 +1,5 @@
 ---
-description: Python coding standards — docstrings, deprecation, version policy, PyTorch AMP
+description: Python coding standards — docstrings, deprecation, version policy, library API awareness, PyTorch AMP
 paths:
   - '**/*.py'
 ---
@@ -12,18 +12,24 @@ paths:
 
 ## Deprecation
 
-**Never use `warnings.warn` for deprecation** — use `pyDeprecate` exclusively:
+**Version check first**: before generating any deprecation code, run `python3 -c "import deprecate; print(deprecate.__version__)"`. If the installed version is newer than Claude's training snapshot (~v0.6), read `help(deprecate)` or the project CHANGELOG before generating code — do not assume Claude knows the latest API. Do **not** upgrade pyDeprecate in projects that are on an older version and working fine.
+
+**Never use `warnings.warn` for deprecation** — use `pyDeprecate` exclusively. Import from `deprecate`, not `pyDeprecate`:
+
+**Deprecation lifecycle**: deprecate in minor release → keep for ≥1 minor cycle → remove in next major.
 
 ```python
-from pyDeprecate import deprecated
+from deprecate import deprecated  # correct
 ```
 
 If `pyDeprecate` is not installed, add it — do not fall back to `warnings.warn`.
 
+### Function / method deprecation
+
 Both parts below are required — decorator alone is incomplete:
 
 ```python
-from pyDeprecate import deprecated
+from deprecate import deprecated
 
 
 @deprecated(target=new_fn, deprecated_in="X.Y", remove_in="Z.W")
@@ -39,7 +45,27 @@ def old_fn(*args, **kwargs):
     ...
 ```
 
-- Deprecation lifecycle: deprecate in minor release → keep for ≥1 minor cycle → remove in next major
+### Class deprecation — use `deprecated_class` (v0.6.0+)
+
+**Do NOT apply `@deprecated` directly to a class** — use `deprecated_class`. Applying `@deprecated` to a class emits a `UserWarning` and silently delegates, but `deprecated_class` is the explicit, correct API for Enum, dataclass, and plain classes.
+
+```python
+from deprecate import deprecated_class
+
+
+@deprecated_class(target=NewClass, deprecated_in="X.Y", remove_in="Z.W")
+class OldClass: ...
+```
+
+`deprecated_class` wraps the class in a transparent proxy — per installed docs, attribute access, method calls, `isinstance()`, and instantiation all forward to `NewClass` with a `FutureWarning`.
+
+### Instance deprecation — use `deprecated_instance` (v0.6.0+)
+
+```python
+from deprecate import deprecated_instance
+
+old_obj = deprecated_instance(new_obj, deprecated_in="X.Y", remove_in="Z.W")
+```
 
 ## Python Version Policy
 
@@ -53,6 +79,19 @@ def old_fn(*args, **kwargs):
   - `ExceptionGroup` (3.11+)
   - `Self` type (3.11+)
 - Use `target-version = "py310"` in ruff/mypy configs for new projects
+
+## Library API Awareness
+
+Claude's training data has a fixed cutoff — any library released or substantially updated after that point may have APIs Claude doesn't know about.
+
+**Before using any third-party library feature**:
+
+1. Check the installed version: `python3 -c "import <pkg>; print(<pkg>.__version__)"` or `pip show <pkg>`
+2. Compare against what Claude was trained on: Claude's cutoff is ~mid-2025; any library with active development after that may have new or changed APIs
+3. If the installed version is newer than Claude's training snapshot: read the library's CHANGELOG or online docs first; `python3 -c "import <pkg>; help(<pkg>)"` is a fallback for offline inspection
+4. Use the API that matches the **installed** version — do not assume Claude's training knowledge is current
+
+**Never suggest upgrading a library** solely because Claude doesn't recognise a newer API. The project already has a version pinned for a reason — learn that version's API from docs; do not force updates on stable/stale projects.
 
 ## PyTorch AMP
 
