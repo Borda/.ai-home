@@ -207,10 +207,14 @@
   "ordering": "auto",
   "permissions": {
     "allow": [
+      "Read(.claude/*.md)",
+      "Read(.claude/**/*.md)",
+      "Read(.claude/logs/**)",
+      "Edit(.claude/logs/**)",
+      "Read(/tmp/**)",
       "Read(./**)",
       "Glob(./**)",
       "Grep(./**)",
-      "Read(/tmp/**)",
       "Write(.plans/**)",
       "Write(.notes/**)",
       "Write(.reports/**)",

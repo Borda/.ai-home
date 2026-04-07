@@ -1,7 +1,7 @@
 ---
 name: audit
 description: "Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness. Two mutually exclusive action modes: 'fix [high|medium|all]' auto-fixes at the requested severity level; 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes."
-argument-hint: '[agents|skills|rules|communication] fix [high|medium|all] | upgrade'
+argument-hint: '[agents|skills|rules|communication|setup] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 effort: high
@@ -26,6 +26,7 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
   - `skills` — restrict sweep to skill files only, report only
   - `rules` — restrict sweep to rule files only, report only
   - `communication` — restrict sweep to communication governance files: `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
+  - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, and plugin integration (Checks 1, 2, 3, 6, 6b, 10, 11, 12, 14, 19); skip Step 3 (no per-file self-mentor spawns)
   - Scope and fix level can be combined: `agents fix medium`, `rules fix all` — scope always precedes `fix`
   - **Invalid combinations** (report error and stop): `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade`
 
@@ -170,6 +171,15 @@ Run the following checks. For file-listing steps use Glob; for content-search st
 - `✓ Check N — <one-line result>` (pass)
 - `⚠ Check N — N findings` (issues)
 
+**Scope filter**: when `$SCOPE` is set, run only the checks listed for that scope; skip all others silently.
+
+- `agents` — Checks 4, 5, 8, 13, 16, 17, 21 (agent-file checks)
+- `skills` — Checks 4, 5, 7, 16, 17, 18, 20, 21 (skill-file checks)
+- `rules` — Checks 15, 17, 21 (rule-file checks)
+- `communication` — Checks 5, 9, 17, 21 (communication-file checks)
+- `setup` — Checks 1, 2, 3, 6, 6b, 10, 11, 12, 14, 19 (system-configuration checks only; Step 3 is skipped)
+- No scope argument — run all checks (default)
+
 **Check 1 — Inventory drift (MEMORY.md vs disk)**
 Use Glob (`agents/*.md`, path `.claude/`) to list agent files; extract basenames and sort, then write to `/tmp/agents_disk.txt` via Bash:
 
@@ -178,6 +188,8 @@ ls .claude/agents/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.m
 ```
 
 Read the `- Agents:` and `- Skills:` roster lines from the MEMORY.md content injected in the conversation context (available as auto-memory at session start). Do not attempt to Grep a file path — the MEMORY.md is not stored under `.claude/` but in Claude Code's auto-memory system. Repeat with Glob (`skills/*/`, path `.claude/`) for skills on disk — write to `/tmp/skills_disk.txt`.
+
+**macOS caution**: BSD grep treats arguments starting with `-` as option flags. If constructing a bash comparison from the MEMORY.md roster via grep, always use `grep -E 'Agents:'` (no leading `- `) or `grep -- '- Agents:'` rather than `grep '- Agents:'` — the latter exits 2 on macOS and silently produces an empty result. The safest approach is to use the Read tool (not grep) for MEMORY.md as the instruction above states.
 
 **Check 2 — README vs disk**
 Use Grep tool (pattern `^\| \*\*`, file `README.md`, output mode `content`) to extract agent/skill table rows.
@@ -486,7 +498,7 @@ else
     const src = fs.readFileSync('.claude/hooks/rtk-rewrite.js', 'utf8');
     const m = src.match(/RTK_PREFIXES\s*=\s*\[([^\]]*)\]/s);
     if (!m) { process.exit(1); }
-    const entries = m[1].match(/'[^']+'/g) || [];
+    const entries = m[1].match(/"[^"]+"/g) || [];
     entries.forEach(e => console.log(e.replace(/'/g, '')));
   " 2>/dev/null)
 

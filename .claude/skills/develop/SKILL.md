@@ -113,10 +113,10 @@ uv run ruff format <changed_files>
 uv run mypy <changed_files> --no-error-summary 2>&1 | head -30
 
 # Full test suite
-python -m pytest <test_dir> -v --tb=short -q
+uv run pytest <test_dir> -v --tb=short -q
 
 # Doctests (if applicable)
-python -m pytest --doctest-modules <target_module> -v 2>&1 | tail -20
+uv run pytest --doctest-modules <target_module> -v 2>&1 | tail -20
 ```
 
 Spawn a **linting-expert** agent if mypy or ruff issues require non-trivial fixes.
@@ -239,7 +239,7 @@ Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree 
   - Feature changes public API → `/release` to prepare CHANGELOG + migration guide
   - Feature/fix is performance-sensitive → `/optimize plan <file>` for profile-first bottleneck analysis
   - Any mode touches `.claude/` config files → spawn `self-mentor` on changed files, then `/sync` to propagate
-  - Mechanical follow-up beyond Codex step → `/codex:rescue` to delegate additional tasks
+  - Mechanical follow-up beyond Codex step → spawn `Agent(subagent_type="codex:codex-rescue")` to delegate additional tasks
   - External validation → `/review` if an independent multi-agent review is desired beyond the built-in self-review gates
 
 </notes>

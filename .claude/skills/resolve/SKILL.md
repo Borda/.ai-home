@@ -52,7 +52,7 @@ preflight_pass(){ mkdir -p .claude/state/preflight; date +%s > ".claude/state/pr
 CODEX_AVAILABLE=false
 if preflight_ok codex; then
   CODEX_AVAILABLE=true && echo "codex (openai-codex): ok (cached)"
-elif claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then
+elif claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then  # timeout: 15000
   preflight_pass codex && CODEX_AVAILABLE=true && echo "codex (openai-codex): ok"
 else
   echo "codex (openai-codex): missing — action item implementation (Step 8) will be skipped"
@@ -259,7 +259,7 @@ Print the action item table:
 
 Answer any `[question]` items that can be resolved from reading the code — if the answer is clear, reclassify to `[req]` or `[suggest]`; if it requires maintainer judgement, surface and pause. A question answered by the **contributor** (not the maintainer) is not automatically closed — if the contributor's answer reveals a known limitation or deferred work (e.g., "currently per-process, Redis is a follow-up"), keep it as `[question]` and surface it for the maintainer to explicitly accept or reject before proceeding.
 
-### 3c: Merge report findings (pr + report mode only)
+## Step 3c: Merge report findings (pr + report mode only)
 
 *Skip when in pr mode.*
 
@@ -315,8 +315,8 @@ Work directly with the existing markers. Skip to Step 6, substep 6c.
 Merge `BASE_REF` into the PR branch (this updates the PR with the latest base changes — the merge direction is BASE → HEAD_REF, not the reverse):
 
 ```bash
-git fetch origin "$BASE_REF"          # ensure origin/$BASE_REF is current
-git merge "origin/$BASE_REF" --no-commit --no-ff
+git fetch origin "$BASE_REF"          # ensure origin/$BASE_REF is current  # timeout: 6000
+git merge "origin/$BASE_REF" --no-commit --no-ff  # timeout: 6000
 ```
 
 Check for conflicted files:
@@ -347,12 +347,12 @@ Run before touching any conflict markers.
 
 ### 6a: Source-branch intent
 
-Use the contribution motivation from Step 3a as the primary lens. Additionally:
+Use the contribution motivation from Step 3b as the primary lens. Additionally:
 
 ```bash
-MERGE_BASE=$(git merge-base "origin/$BASE_REF" "$HEAD_REF")
-git log $MERGE_BASE..$HEAD_REF --oneline --no-merges
-git diff $MERGE_BASE $HEAD_REF --stat
+MERGE_BASE=$(git merge-base "origin/$BASE_REF" "$HEAD_REF")  # timeout: 3000
+git log $MERGE_BASE..$HEAD_REF --oneline --no-merges  # timeout: 3000
+git diff $MERGE_BASE $HEAD_REF --stat  # timeout: 3000
 ```
 
 One-sentence summary: which files/modules this PR owns and what it changes about them.
@@ -369,28 +369,54 @@ One-sentence summary: what independent changes landed on base after the contribu
 
 ## Step 7: Resolve per conflicted file
 
-For each conflicted file (work in the current PR branch checkout):
+Delegate per-file conflict edits to `sw-engineer`. Build the spawn prompt with all three context sources, then check the result before completing the merge.
 
-a. **Read** the file — examine `<<<<<<<`, `=======`, `>>>>>>>` markers and surrounding context
+### 7a: Spawn sw-engineer
 
-b. **Determine resolution** using the contribution motivation (Step 3b) and drift (Step 6b):
+Spawn `sw-engineer` with this prompt (fill in the bracketed sections from the steps indicated):
 
-- Contributor's new functionality takes priority for files the PR owns (introduced or substantially rewrote)
-- Base's independent refactors and config updates are always preserved
-- When both sides changed the same logic, blend: keep the PR's semantic change while incorporating the base's structural update
+```
+Agent(sw-engineer, prompt="
+You are resolving merge conflicts in a checked-out PR branch.
 
-c. **Edit** to remove all conflict markers and produce the correct resolved content
+## Conflicted files
+<list every file from Step 5 `git diff --name-only --diff-filter=U` output, one per line>
 
-d. **Stage**:
+## Contribution motivation (whose intent wins)
+<2–3 sentence motivation summary from Step 3b>
 
-```bash
-git add <file>
+## Merge context
+### What HEAD_REF added (merge-base log)
+<git log $MERGE_BASE..$HEAD_REF --oneline --no-merges output from Step 6a>
+
+### Files changed by this PR (diff stat)
+<git diff $MERGE_BASE $HEAD_REF --stat output from Step 6a>
+
+## Instructions
+For each conflicted file:
+1. Use the Read tool to inspect the full file and locate all conflict markers
+2. Determine the correct resolution using the contribution motivation above as the priority lens:
+   - Contributor's new functionality takes priority for files the PR owns (introduced or substantially rewrote)
+   - Base's independent refactors and config updates are always preserved
+   - When both sides changed the same logic, blend: keep the PR's semantic change while incorporating the base's structural update
+3. Use the Edit tool to apply targeted replacements that remove all conflict markers and produce the correct resolved content — do NOT rewrite the whole file; use Edit for minimal targeted replacements
+4. After resolving each file, stage it with: git add -- <file>  (timeout: 3000)
+
+Return ONLY a compact JSON envelope — no prose, no explanation:
+{\"status\":\"done\",\"resolved\":N,\"staged\":N,\"confidence\":0.N}
+")
 ```
 
-After all conflicted files have been resolved and staged, **complete the merge once**:
+> **Health monitoring**: Agent call is synchronous; Claude awaits response natively. If no response within ~15 min, surface partial results with ⏱ and proceed to merge with whatever files were staged.
+
+### 7b: Verify and complete merge
+
+Parse the JSON envelope returned by sw-engineer. Check that `resolved == staged` — if they differ, surface the discrepancy before proceeding (a mismatch means at least one file was resolved but not staged, which would leave the merge incomplete).
+
+Complete the merge:
 
 ```bash
-git merge --continue --no-edit
+git merge --continue --no-edit  # timeout: 6000
 ```
 
 Print conflict report:
@@ -435,7 +461,7 @@ If code changed → commit:
 ```bash
 # Stage tracked modifications + new files from Codex (never git add -A)
 git add $(git diff HEAD --name-only)
-git ls-files --others --exclude-standard | xargs -r git add --  # note: permission matcher sees 'git ls-files' as first token
+git ls-files --others --exclude-standard | grep . | xargs git add -- 2>/dev/null || true  # grep . filters empty output (macOS-portable; xargs -r is GNU-only); permission matcher sees 'git ls-files' as first token
 git commit -m "$(cat <<'EOF'
 <imperative short summary of the change>
 
@@ -452,7 +478,7 @@ Record per-item: `committed <SHA>` or `skipped — <Codex reason>`.
 ## Step 9: Lint and QA gate
 
 ```bash
-RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"
+RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"  # timeout: 5000
 ```
 
 Spawn both agents in parallel:
@@ -496,7 +522,7 @@ git branch --set-upstream-to="$FORK_REMOTE/$HEAD_REF" 2>/dev/null || true
 PUSH_COUNT=$(git rev-list "$FORK_REMOTE/$HEAD_REF..HEAD" --count 2>/dev/null || git rev-list "origin/$BASE_REF..HEAD" --count)
 echo "→ $PUSH_COUNT commits ready to push to $FORK_REMOTE/$HEAD_REF — approve the git push request in the toolbar ↑ to complete"
 
-git push
+git push  # timeout: 30000
 # gh pr checkout configured tracking to the fork branch — git push targets it automatically
 ```
 
@@ -522,7 +548,7 @@ Mark the task `completed`, then print:
 ## Resolve Report — PR #<number>
 
 ### Contribution
-<2–3 sentence motivation summary from Step 3a>
+<2–3 sentence motivation summary from Step 3b>
 
 ### Conflicts
 <conflict table from Step 7, or "No conflicts detected">
@@ -615,7 +641,7 @@ if REVIEW_PASS == 5 and ISSUES_FOUND > 0:
 If code was changed (dispatch or review loop produced commits):
 
 ```bash
-RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"
+RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"; mkdir -p "$RUN_DIR"  # timeout: 5000
 ```
 
 Spawn both agents in parallel:
@@ -664,7 +690,7 @@ Mark the task `completed`, then print:
 - **Contribution motivation before code** — Step 3a must happen before any file is read or edited; it provides the "whose intent wins" lens for conflict decisions; reading the PR body and linked issues often reveals design constraints that are invisible from git diff alone
 - **Separate commits per action item** — each `[req]` and `[suggest]` item must produce exactly one atomic commit; the `[resolve #N]` tag in the message lets `git log --grep='resolve #3'` find the exact commit for any action item; this makes the history reviewable, the diff bisectable, and each change independently revertable; an empty commit is never created when Codex makes no changes
 - **`[question]` items** — answer first (in a PR comment or inline reasoning), then reclassify before implementing; never silently implement a response to an unanswered question
-- **Case A (already MERGING)** — if a prior `git merge origin/$BASE_REF` left markers, the skill skips Steps 5 detection and 6 context-distill, jumps directly to Step 7c (resolve per file), uses the existing markers; no new merge is started
+- **Case A (already MERGING)** — if a prior `git merge origin/$BASE_REF` left markers, the skill skips Steps 5 detection and 6 context-distill, jumps directly to Step 7a (resolve per file), uses the existing markers; no new merge is started
 - **Push verification** — always confirm via `gh pr view --json commits` that new commits appear on GitHub before reporting success; exit code 0 from `git push` is necessary but not sufficient (branch protection rules can silently reject)
 - **`gh pr merge` flags**: `--merge` preserves all commits and history; `--squash` collapses to one (loses individual action-item commits); never suggest `--rebase` (rewrites SHAs); default recommendation is `--merge` unless project convention says otherwise
 - **Escape hatch**: `git merge --abort` undoes the entire conflict state and returns the PR branch to pre-merge state; use `git push --force-with-lease` (never plain `--force`) if push is rejected after local amending
@@ -674,6 +700,7 @@ Mark the task `completed`, then print:
 - **`[gh]` items** (pr + report mode only): commit messages use: `[resolve #<id>] @<reviewer> (gh):` — same as plain `[req]`/`[suggest]` in pr mode, plus the `(gh)` source annotation.
 - **`[report]` items**: commit messages for these items should attribute the finding to the agent, not a GitHub commenter: `[resolve #<id>] /review finding by <agent-name> (report: <report-path>):` — this distinguishes automated findings from human reviewer requests in git history.
 - **Sources block**: always printed after mode resolution and before any GitHub API calls — gives the user a clear "abort if wrong source" moment with zero cost.
+- **Step 7 delegation** — Step 7 delegates per-file conflict edits to `sw-engineer`; resolve owns workflow orchestration and context (conflict list, motivation, merge-base log, diff stat); sw-engineer owns code-level semantic resolution (Read → Edit → stage); resolve retains the conflict report block and the `git merge --continue` call.
 - Follow-up chains:
   - After push → `gh pr review <PR#> --approve` if satisfied; for substantial maintainer changes, comment on the PR explaining what was done and why — don't silently push to a contributor's fork
   - For `[question]` items left unanswered → post a PR comment with the rationale before merging; gives the contributor context and closes the thread

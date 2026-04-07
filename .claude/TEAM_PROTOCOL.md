@@ -1,6 +1,6 @@
 # Agent Teams Protocol — Borda.ai-home
 
-AgentSpeak v2 compressed inter-agent messaging for Claude Code Agent Teams. Achieves ~60% token savings vs natural language on inter-agent messages. Adapted from [github.com/yuvalsuede/claude-teams-language-protocol](https://github.com/yuvalsuede/claude-teams-language-protocol) (MIT).
+AgentSpeak v2 compressed inter-agent messaging for Claude Code Agent Teams. Achieves ~60% token savings vs natural language on inter-agent messages. Adapted from [github.com/yuvalsuede/claude-teams-language-protocol](https://github.com/yuvalsuede/claude-teams-language-protocol) (MIT) <!-- attribution-only; not a runtime dependency -->.
 
 **Rule 1**: Teammate↔teammate uses this protocol. Lead↔human uses normal English.
 **Rule 2**: Declare version at spawn: `alpha PROTO:v2.0 @lead ready`
@@ -82,8 +82,10 @@ Status code is always first. Task ID (`T#`) always precedes file shortcode.
 | `ST` | `.claude/settings.json`    |
 | `CM` | `.claude/CLAUDE.md`        |
 | `TP` | `.claude/TEAM_PROTOCOL.md` |
-| `MM` | `.claude/memory/MEMORY.md` |
+| `MM` | `MEMORY.md` ¹              |
 | `RM` | `README.md`                |
+
+¹ `MM` — session-injected from `~/.claude/projects/<slug>/memory/MEMORY.md`; read-only in teammate context (Write tool cannot address it).
 
 For source files, define shortcodes per-team in the spawn prompt (e.g., `SRC=src/, TST=tests/`).
 
@@ -150,7 +152,7 @@ Report security findings as `P0` (auth bypass, injection, secrets in code) or `P
 
 When a teammate completes an analysis task (review, audit, research):
 
-- Write full findings to `.temp/<skill>-<teammate-name>-<date>.md` using the Write tool
+- Write full findings to the canonical output path — see `.claude/skills/_shared/file-handoff-protocol.md` for the path convention
 - Send lead a summary message: `DONE <task-id> | findings=N sev=C/H/M | → <file-path>`
 - Lead reads the file only when consolidating the final report — not for every task completion
 

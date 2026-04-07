@@ -3,7 +3,7 @@ name: brainstorm
 description: Iterative brainstorming skill for turning fuzzy ideas into approved tree documents. Diverges into branches, deepens and prunes them over many rounds, saves a tree doc. Run breakdown on the tree to distill it into a spec via guided questions.
 argument-hint: <fuzzy idea or feature goal> [--tight|--deep] [--type <type>] | breakdown <tree-or-spec-file>
 disable-model-invocation: true
-allowed-tools: Read, Write, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+allowed-tools: Read, Write, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
 ---
 
@@ -215,8 +215,12 @@ Assemble the tree state and write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` usi
 ## Step 5: Tree review
 
 Before spawning, pre-compute the output path:
-`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
-`OUTPUT_PATH=".temp/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"`
+
+```bash
+# timeout: 3000
+BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
+OUTPUT_PATH=".temp/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"
+```
 
 Spawn **self-mentor** with a tree-focused prompt (inject the pre-computed `$OUTPUT_PATH` in place of `<output-path>`):
 

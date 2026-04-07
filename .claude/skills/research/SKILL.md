@@ -59,7 +59,10 @@ Task the ai-researcher with a single objective: find the top 5 papers for `$ARGU
 Use this prompt scaffold (adapt the constraints from Step 1):
 
 Note: pre-compute output paths before spawning — the orchestrator must extract the branch and evaluate date expressions, then substitute concrete paths into all spawn prompts:
-`BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
+
+```bash
+BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')  # timeout: 3000
+```
 
 **Note**: Substitute pre-computed values — do not pass raw $(date) expressions into spawn prompts.
 
@@ -69,7 +72,7 @@ Codebase constraints: <framework, Python version, compute budget, existing depen
 Deliver: comparison table (method, key idea, benchmarks, compute, code available), recommendation for best method, a 3-step implementation plan for this codebase, key hyperparameters (name, typical range, what it controls) for the recommended method, and common gotchas (failure modes and how to avoid them).
 Write your full findings (comparison table, paper analysis, recommendation, implementation plan, Confidence block) to `.temp/output-research-agent-$BRANCH-<date>.md` using the Write tool.
 Then return ONLY a compact JSON envelope on your final line — nothing else after it:
-{"status":"done","papers":N,"recommendation":"<method name>","file":".temp/output-research-agent-<date>.md","confidence":0.N}
+{"status":"done","papers":N,"recommendation":"<method name>","file":".temp/output-research-agent-$BRANCH-<date>.md","confidence":0.N}
 ```
 
 **Health monitoring** — the Agent tool is synchronous; Claude awaits the ai-researcher response natively (no Bash checkpoint available in this skill). If ai-researcher does not return within `$HARD_CUTOFF` seconds (~15 min), use the Read tool to surface any partial results already written to `.temp/` and continue with what was found; mark timed-out agents with ⏱ in the report. Grant one `$EXTENSION` extension if the output file explains the delay.
@@ -278,6 +281,7 @@ Confidence:  [score] — [key gaps]
 <notes>
 
 - This skill orchestrates — it gathers context and delegates research to `ai-researcher` and codebase mapping to `solution-architect` (plan mode). For direct hypothesis/experiment work, use the `ai-researcher` agent directly.
+- **Team Mode dependency**: `--team` mode requires `.claude/TEAM_PROTOCOL.md` to exist — each teammate spawn prompt includes `Read .claude/TEAM_PROTOCOL.md and use AgentSpeak v2`; verify the file is present before launching team mode.
 - **Link integrity**: All URLs cited in the research report must be fetched and verified before inclusion. Use WebFetch to confirm each URL exists and says what you claim.
 - Follow-up chains:
   - Research recommends a method for implementation → `/research plan` to produce a sequenced plan (auto-detects latest output), then `/develop feature` for TDD-first implementation

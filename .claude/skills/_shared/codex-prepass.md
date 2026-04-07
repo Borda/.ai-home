@@ -1,7 +1,7 @@
 Before cycle 1 of the review loop, run a Codex pre-pass if the diff is meaningful:
 
 ```bash
-claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' || echo "codex (openai-codex) not installed — skipping pre-pass"
+{ [ -n "$CLAUDE_PLUGIN_DATA" ] && echo "$CLAUDE_PLUGIN_DATA" | grep -q 'codex-openai-codex'; } || echo "codex (openai-codex) not available — skipping pre-pass"
 git diff HEAD --stat
 ```
 

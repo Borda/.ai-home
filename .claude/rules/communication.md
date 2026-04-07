@@ -42,7 +42,4 @@ Rules:
 
 ## Output Routing
 
-- **Long output** (5+ findings or 10+ lines) → write to `.temp/output-<slug>-<branch>-<YYYY-MM-DD>.md`; print compact terminal summary (verdict · 2–3 sentences · critical points · confidence · `→ file`)
-- **Short inline status** (pass/fail, one sentence) → terminal only; do not create a file
-
 Full rules (including anti-overwrite counter-suffix and branch-slug format), breaking-findings format, and terminal colors: see `.claude/rules/quality-gates.md`.

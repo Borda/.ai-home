@@ -38,7 +38,7 @@ Project always wins: files in home that have no counterpart in the project are l
 ## Step 1: Resolve paths
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
+PROJECT="$(git rev-parse --show-toplevel)"  # timeout: 3000
 HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
 HOME_CODEX="$HOME_EXPANDED/.codex"
@@ -57,7 +57,7 @@ HOME_CLAUDE="$HOME_EXPANDED/.claude"
 cd "$PROJECT" && git ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
   | sed 's|^\.claude/||' \
-  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"
+  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"  # timeout: 5000
 ```
 
 rsync prints only files that would change; identical files are silently skipped.
@@ -68,7 +68,7 @@ rsync prints only files that would change; identical files are silently skipped.
 PROJECT="$(git rev-parse --show-toplevel)"
 HOME_EXPANDED="$HOME"
 HOME_CLAUDE="$HOME_EXPANDED/.claude"
-SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
+SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"  # timeout: 5000
 sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
 CHANGED=$(rsync --checksum --itemize-changes --dry-run \
@@ -109,7 +109,7 @@ HOME_EXPANDED="$HOME"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 cd "$PROJECT" && git ls-files .codex/ \
   | sed 's|^\.codex/||' \
-  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
+  | rsync -a --itemize-changes --dry-run --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"  # timeout: 5000
 ```
 
 If `$ARGUMENTS` is empty: print the combined dry-run output and offer `/sync apply`. Stop here.
@@ -130,7 +130,7 @@ mkdir -p "$HOME_CLAUDE"
 cd "$PROJECT" && git ls-files .claude/ \
   | grep -vE 'settings\.json$|settings\.local\.json$' \
   | sed 's|^\.claude/||' \
-  | rsync -av --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"
+  | rsync -av --files-from=- "$PROJECT/.claude/" "$HOME_CLAUDE/"  # timeout: 30000
 ```
 
 **`settings.json`** — transform and apply (self-contained, content-based comparison):
@@ -142,7 +142,7 @@ HOME_CLAUDE="$HOME_EXPANDED/.claude"
 SETTINGS_TMP="$(mktemp /tmp/settings_sync_XXXXXX.json)"
 sed 's|node \.claude/hooks/|node $HOME/.claude/hooks/|g' \
   "$PROJECT/.claude/settings.json" > "$SETTINGS_TMP"
-CHANGED=$(rsync --checksum --itemize-changes \
+CHANGED=$(rsync --checksum --itemize-changes \  # timeout: 5000
   "$SETTINGS_TMP" "$HOME_CLAUDE/settings.json" 2>&1)
 rm -f "$SETTINGS_TMP"
 if [ -n "$CHANGED" ]; then
@@ -162,7 +162,7 @@ HOME_EXPANDED="$HOME"
 HOME_CODEX="$HOME_EXPANDED/.codex"
 cd "$PROJECT" && git ls-files .codex/ \
   | sed 's|^\.codex/||' \
-  | rsync -av --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"
+  | rsync -av --files-from=- "$PROJECT/.codex/" "$HOME_CODEX/"  # timeout: 30000
 ```
 
 ## Step 4: Verify and report outcome (apply mode only)
@@ -171,7 +171,7 @@ cd "$PROJECT" && git ls-files .codex/ \
 PROJECT="$(git rev-parse --show-toplevel)"
 HOME_EXPANDED="$HOME"
 # JSON validity
-jq empty "$HOME_EXPANDED/.claude/settings.json" && echo "settings.json: valid"
+jq empty "$HOME_EXPANDED/.claude/settings.json" && echo "settings.json: valid"  # timeout: 5000
 
 # Counts
 echo ".claude files: $(cd "$PROJECT" && git ls-files .claude/ | wc -l | tr -d ' ')"
@@ -180,7 +180,7 @@ echo ".codex files:  $(cd "$PROJECT" && git ls-files .codex/  | wc -l | tr -d ' 
 
 ```bash
 # Plugin presence check
-if claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then
+if claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then  # timeout: 15000
   echo "✓ codex (openai-codex) plugin: installed"
 else
   echo "⚠ codex (openai-codex) plugin: NOT installed on this machine"

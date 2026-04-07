@@ -45,7 +45,7 @@ def old_fn(*args, **kwargs):
     ...
 ```
 
-### Class deprecation — use `deprecated_class` (v0.6.0+)
+### Class deprecation — use `deprecated_class` (v0.6.0+) <!-- verified: 2026-04-06; re-verify if pyDeprecate is upgraded past 0.6.x -->
 
 **Do NOT apply `@deprecated` directly to a class** — use `deprecated_class`. Applying `@deprecated` to a class emits a `UserWarning` and silently delegates, but `deprecated_class` is the explicit, correct API for Enum, dataclass, and plain classes.
 
@@ -59,7 +59,7 @@ class OldClass: ...
 
 `deprecated_class` wraps the class in a transparent proxy — per installed docs, attribute access, method calls, `isinstance()`, and instantiation all forward to `NewClass` with a `FutureWarning`.
 
-### Instance deprecation — use `deprecated_instance` (v0.6.0+)
+### Instance deprecation — use `deprecated_instance` (v0.6.0+) <!-- verified: 2026-04-06; re-verify if pyDeprecate is upgraded past 0.6.x -->
 
 ```python
 from deprecate import deprecated_instance
@@ -69,7 +69,7 @@ old_obj = deprecated_instance(new_obj, deprecated_in="X.Y", remove_in="Z.W")
 
 ## Python Version Policy
 
-- Python 3.10 reaches EOL Oct 2026 — minimum for new projects is **3.11** (Python 3.11 reaches EOL Oct 2027; check [endoflife.date/python](https://endoflife.date/python) for current schedule)
+- Python 3.10 reaches EOL Oct 2026 — minimum for new projects is **3.11** (Python 3.11 reaches EOL Oct 2027; check [endoflife.date/python](https://endoflife.date/python) for current schedule) <!-- re-verify: when Python 3.11 reaches EOL (Oct 2027) — bump minimum to 3.12 -->
 - **Before writing any Python code**: read `pyproject.toml` (or `setup.cfg`/`setup.py`) to find `requires-python`; use only syntax/APIs available in that minimum version
 - Version-gated features — **read pyproject.toml first if any of these are requested**:
   - `match` statement (3.10+)
@@ -97,7 +97,7 @@ Claude's training data has a fixed cutoff — any library released or substantia
 
 - `torch.cuda.amp.autocast` deprecated since PyTorch 2.4 — stable replacement:
   `torch.amp.autocast('cuda', ...)` and `torch.amp.GradScaler('cuda')`
-  (verify current stable release at pytorch.org before citing specific versions)
+  (verify current stable release at pytorch.org before citing specific versions) <!-- verified: 2026-04-06 -->
 
 ## Security
 

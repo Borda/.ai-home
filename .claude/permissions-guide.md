@@ -23,16 +23,20 @@ ______________________________________________________________________
 
 These entries pre-authorize `Read`, `Glob`, `Grep`, and `Write` on directories that skills and teammates access frequently as part of their own configuration or runtime state. Without them, agents are prompted to confirm accessing their own config files or writing output to skill run dirs.
 
-| Permission           | Description                                 | Typical use case                                                                                                                  |
-| -------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `Read(./**)`         | Read any file in the project root           | Teammates read `TEAM_PROTOCOL.md` and agent files at spawn; skills read their own SKILL.md files                                  |
-| `Glob(./**)`         | Glob-match any file in the project          | `/audit` and `/manage` enumerate agents, skills, hooks, and source files without shell `find`                                     |
-| `Grep(./**)`         | Search content in any project file          | `/audit` checks cross-references; `/calibrate` locates skill keyword patterns                                                     |
-| `Read(/tmp/**)`      | Read temporary files under `/tmp/`          | `/calibrate` reads checkpoint files for background agent health monitoring; skill temp output files                               |
-| `Write(.plans/**)`   | Write plan and blueprint files to `.plans/` | `/brainstorm` writes spec and tree files to `.plans/blueprint/`; `/develop plan` writes plans to `.plans/active/`                 |
-| `Write(.notes/**)`   | Write notes and lessons to `.notes/`        | Skills write lessons, diary entries, and guides to `.notes/`                                                                      |
-| `Write(.reports/**)` | Write files into `.reports/` skill run dirs | Skills and Codex write timestamped run artifacts (result.jsonl, analysis files) to `.reports/<skill>/`                            |
-| `Write(.temp/**)`    | Write prose output files to `.temp/`        | Quality-gates long output; research, review, resolve, session, and other skills write findings to `.temp/output-<slug>-<date>.md` |
+| Permission              | Description                                 | Typical use case                                                                                                                  |
+| ----------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `Read(.claude/*.md)`    | Read top-level `.claude/` markdown files    | Agents read CLAUDE.md, permissions-guide.md, and TEAM_PROTOCOL.md at spawn                                                        |
+| `Read(.claude/**/*.md)` | Read any nested `.claude/` markdown file    | Agents and skills read their own agent/skill/rule files; self-mentor reads config files for audit                                 |
+| `Read(.claude/logs/**)` | Read log files under `.claude/logs/`        | `/calibrate` reads calibrations.jsonl for historical context; `/audit` reads audit-errors.jsonl                                   |
+| `Edit(.claude/logs/**)` | Edit log files under `.claude/logs/`        | Skills append to calibrations.jsonl and audit-errors.jsonl without Bash redirection                                               |
+| `Read(./**)`            | Read any file in the project root           | Teammates read `TEAM_PROTOCOL.md` and agent files at spawn; skills read their own SKILL.md files                                  |
+| `Glob(./**)`            | Glob-match any file in the project          | `/audit` and `/manage` enumerate agents, skills, hooks, and source files without shell `find`                                     |
+| `Grep(./**)`            | Search content in any project file          | `/audit` checks cross-references; `/calibrate` locates skill keyword patterns                                                     |
+| `Read(/tmp/**)`         | Read temporary files under `/tmp/`          | `/calibrate` reads checkpoint files for background agent health monitoring; skill temp output files                               |
+| `Write(.plans/**)`      | Write plan and blueprint files to `.plans/` | `/brainstorm` writes spec and tree files to `.plans/blueprint/`; `/develop plan` writes plans to `.plans/active/`                 |
+| `Write(.notes/**)`      | Write notes and lessons to `.notes/`        | Skills write lessons, diary entries, and guides to `.notes/`                                                                      |
+| `Write(.reports/**)`    | Write files into `.reports/` skill run dirs | Skills and Codex write timestamped run artifacts (result.jsonl, analysis files) to `.reports/<skill>/`                            |
+| `Write(.temp/**)`       | Write prose output files to `.temp/`        | Quality-gates long output; research, review, resolve, session, and other skills write findings to `.temp/output-<slug>-<date>.md` |
 
 ______________________________________________________________________
 
@@ -236,3 +240,19 @@ Only skills that are invoked **programmatically** (by another skill, hook, or au
 | ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `Skill(sync)`      | Invoke the `/sync` skill without user confirmation | CLAUDE.md and hooks reference running sync after config changes; called non-interactively                |
 | `Skill(calibrate)` | Invoke the `/calibrate` skill without confirmation | Post-fix quality gate in `/develop` and CLAUDE.md self-improvement loop; runs without user at the prompt |
+
+______________________________________________________________________
+
+## Top-level `settings.json` keys
+
+These are non-permission top-level keys in `settings.json` that control Claude Code behaviour. They are not part of the `permissions` block but are documented here as the canonical `settings.json` reference.
+
+| Key                       | Value in this project | Description                                                                                                                                                                                                                                                        |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoCompactThreshold`    | `0.7`                 | Fraction of context capacity at which Claude Code triggers automatic compaction. `0.7` = compact at 70% full. Lower values compact earlier (safer for long sessions); higher values use more context before compacting.                                            |
+| `ordering`                | `"auto"`              | Controls tool-call ordering. `"auto"` lets Claude Code choose the optimal execution order. Undocumented in public docs as of 2026-04-07; keep as `"auto"` unless the release notes document other values.                                                          |
+| `teammateMode`            | `"in-process"`        | Controls how agent teammates are spawned. `"in-process"` runs teammates in the same process (low overhead, shared memory); alternative would be `"subprocess"` for full isolation. Required to be set alongside `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `env`. |
+| `model`                   | `"opusplan"`          | Default model for the session. `"opusplan"` is the plan-gated Opus alias — activates plan mode for any non-trivial task. See MEMORY.md for the model alias reference.                                                                                              |
+| `effortLevel`             | `"high"`              | Sets the default effort level for all tasks. Equivalent to always running with extended thinking enabled.                                                                                                                                                          |
+| `autoUpdatesChannel`      | `"stable"`            | Which Claude Code release channel to track for auto-updates. `"stable"` = released versions only; `"beta"` would include pre-release builds.                                                                                                                       |
+| `fastModePerSessionOptIn` | `false`               | Whether fast mode is enabled per-session (opt-in). `false` = normal mode by default; user must explicitly toggle `/fast` to enable.                                                                                                                                |

@@ -45,18 +45,19 @@ Run dir per skill: `.reports/calibrate/<TIMESTAMP>/<TARGET>/` (strip `/` from ta
 
 Modes evaluated for calibration but deferred due to significant barriers. `/audit` Check 19 skips modes listed here to avoid false-positive recommendations.
 
-| Mode                 | Barrier                                                                                   | Re-evaluate when                        |
-| -------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------- |
-| `/analyse-thread`    | Requires GitHub API mocking — thread analysis fetches live issue/PR data                  | GitHub fixture infrastructure exists    |
-| `/analyse-health`    | Requires live GitHub API — health overview fetches real repo stats (issue/PR counts)      | GitHub fixture infrastructure exists    |
-| `/analyse-ecosystem` | Requires live GitHub API — ecosystem analysis fetches real package/dependency data        | GitHub fixture infrastructure exists    |
-| `/release-notes`     | Requires controlled git history — output depends on real commit range                     | Git-history fixture helper exists       |
-| `/release-changelog` | Same as `/release-notes` — git-history dependent                                          | Git-history fixture helper exists       |
-| `/release-summary`   | Same as `/release-notes` — git-history dependent                                          | Git-history fixture helper exists       |
-| `/release-audit`     | Requires controlled repo state (version tags, CHANGELOG, CI status)                       | Release fixture infrastructure exists   |
-| `/develop-plan`      | Output is somewhat subjective; no clear ground-truth checklist beyond section presence    | Structured plan schema is formalized    |
-| `/distill-review`    | Reads real agent/skill files; synthetic roster possible but overlaps `/audit` calibration | Distinct synthetic scenarios identified |
-| `/distill-lessons`   | Reads real `.notes/lessons.md`; needs realistic synthetic lesson corpus                   | Lesson corpus fixtures exist            |
+| Mode                 | Barrier                                                                                                                                                                                                                | Re-evaluate when                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `/analyse-thread`    | Requires GitHub API mocking — thread analysis fetches live issue/PR data                                                                                                                                               | GitHub fixture infrastructure exists    |
+| `/analyse-health`    | Requires live GitHub API — health overview fetches real repo stats (issue/PR counts)                                                                                                                                   | GitHub fixture infrastructure exists    |
+| `/analyse-ecosystem` | Requires live GitHub API — ecosystem analysis fetches real package/dependency data                                                                                                                                     | GitHub fixture infrastructure exists    |
+| `/release-notes`     | Requires controlled git history — output depends on real commit range                                                                                                                                                  | Git-history fixture helper exists       |
+| `/release-changelog` | Same as `/release-notes` — git-history dependent                                                                                                                                                                       | Git-history fixture helper exists       |
+| `/release-summary`   | Same as `/release-notes` — git-history dependent                                                                                                                                                                       | Git-history fixture helper exists       |
+| `/release-audit`     | Requires controlled repo state (version tags, CHANGELOG, CI status)                                                                                                                                                    | Release fixture infrastructure exists   |
+| `/develop-plan`      | Output is somewhat subjective; no clear ground-truth checklist beyond section presence                                                                                                                                 | Structured plan schema is formalized    |
+| `/distill-review`    | Reads real agent/skill files; synthetic roster possible but overlaps `/audit` calibration                                                                                                                              | Distinct synthetic scenarios identified |
+| `/distill-prune`     | Likely calibratable — construct a synthetic memory corpus with known entries to drop (stale, redundant, duplicated-in-CLAUDE.md), then score recall of correct drop/trim/keep decisions; ground truth is constructable | Synthetic memory corpus fixtures built  |
+| `/distill-lessons`   | Reads real `.notes/lessons.md`; needs realistic synthetic lesson corpus                                                                                                                                                | Lesson corpus fixtures exist            |
 
 **Excluded** (inherently non-calibratable — documented to avoid recurring evaluation):
 
@@ -71,3 +72,4 @@ Modes evaluated for calibration but deferred due to significant barriers. `/audi
 - `/calibrate` itself — meta-calibration is circular
 - `/optimize-run` — sustained iteration loop with live metric commands and git state
 - `/optimize-resume` — continuation of run; same barriers as run
+- `/optimize-sweep` — same barriers as `/optimize-run` — sustained iteration loop requiring live metrics and git state; not calibratable synthetically

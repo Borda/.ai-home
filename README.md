@@ -20,7 +20,7 @@ Personal AI coding assistant configuration for Python/ML OSS development. Versio
 
 ## 🎯 Why
 
-Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 12 specialist agents and 16 slash-command skill workflows in a version-controlled, continuously benchmarked setup optimized for:
+Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 12 specialist agents and 15 slash-command skill workflows in a version-controlled, continuously benchmarked setup optimized for:
 
 - Python/ML OSS libraries requiring SemVer discipline and deprecation cycles
 - ML training and inference codebases needing GPU profiling and data pipeline validation

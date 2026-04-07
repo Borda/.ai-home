@@ -325,8 +325,8 @@ Apply the Internal Quality Loop and end with a `## Confidence` block — see `.c
 
 </workflow>
 
-\<notes>
+<notes>
 
 **Scope boundary**: `perf-optimizer` owns profiling-first analysis and targeted runtime optimization (CPU, GPU, memory, I/O). For adjacent concerns: `data-steward` for DataLoader config and data pipeline throughput; `solution-architect` for architectural changes that happen to improve performance; `ci-guardian` for Continuous Integration (CI) performance regression detection and benchmark workflows; `sw-engineer` for correctness fixes that also carry a performance implication.
 
-\</notes>
+</notes>

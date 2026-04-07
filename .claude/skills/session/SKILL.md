@@ -4,6 +4,7 @@ description: Session parking lot — automatically parks diverging ideas and una
 argument-hint: resume | archive <text> | summary
 allowed-tools: Read, Write, Edit, Glob, Grep, TaskCreate, TaskUpdate, Bash
 effort: low
+model: sonnet
 ---
 
 <objective>
@@ -50,7 +51,10 @@ Track open-loop ideas, deferred questions, and diverging threads that arise duri
 
 ### Step 1: Resolve the memory directory
 
+Derive MEMORY_DIR using the canonical snippet from `<constants>`.
+
 ```bash
+# Use canonical MEMORY_DIR from <constants>
 PROJECT="$(git rev-parse --show-toplevel)"
 SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
 MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
@@ -60,10 +64,8 @@ echo "$MEMORY_DIR"
 ### Step 2: Age-out expired items (≥ 30 days) silently
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
-find "$MEMORY_DIR" -name "session-open-*.md" -mtime +30 -delete 2>/dev/null
+# MEMORY_DIR derived in Step 1 — reuse that value
+find "$MEMORY_DIR" -name "session-open-*.md" -mtime +30 -delete 2>/dev/null  # timeout: 5000
 echo "cleanup done"
 ```
 
@@ -74,13 +76,11 @@ Use Glob with pattern `session-open-*.md` in the memory directory. For each file
 Compute age in days for each file:
 
 ```bash
-PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
-MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
+# MEMORY_DIR derived in Step 1 — reuse that value
 NOW=$(date +%s)
 for f in "$MEMORY_DIR"/session-open-*.md; do
   [ -f "$f" ] || continue
-  MTIME=$(if [ "$(uname -s)" = "Darwin" ]; then stat -f "%m" "$f"; else stat -c "%Y" "$f"; fi)
+  MTIME=$(if [ "$(uname -s)" = "Darwin" ]; then stat -f "%m" "$f"; else stat -c "%Y" "$f"; fi)  # timeout: 5000
   AGE=$(( (NOW - MTIME) / 86400 ))
   echo "$AGE $f"
 done
@@ -116,6 +116,8 @@ If no files exist, print: `No pending session items.`
 
 ### Step 1: Locate the memory directory and list candidates
 
+Derive MEMORY_DIR using the canonical snippet from `<constants>`, then list candidates:
+
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
 SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
@@ -145,13 +147,13 @@ echo "deleted"
 Ensure the log directory exists:
 
 ```bash
-mkdir -p .claude/logs
+mkdir -p .claude/logs  # timeout: 5000
 ```
 
 Append a one-line JSON entry using Write/Edit — or Bash:
 
 ```bash
-echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"item\":\"<name>\",\"action\":\"archived\"}" >> .claude/logs/session-archive.jsonl
+echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"item\":\"<name>\",\"action\":\"archived\"}" >> .claude/logs/session-archive.jsonl  # timeout: 5000
 ```
 
 ### Step 5: Confirm to user
@@ -166,6 +168,8 @@ Call TaskList (or use TaskCreate/TaskUpdate context) to get tasks with status `c
 
 ### Step 2: Collect parked items
 
+Derive MEMORY_DIR using the canonical snippet from `<constants>`, then list parked files:
+
 ```bash
 PROJECT="$(git rev-parse --show-toplevel)"
 SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
@@ -178,19 +182,19 @@ Read each file with the Read tool for its `name` and `description`.
 ### Step 3: Collect recent git commits
 
 ```bash
-git log --oneline --since="$(date -u -d '8 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-8H '+%Y-%m-%dT%H:%M:%SZ')" 2>/dev/null | head -20
+git log --oneline --since="$(date -u -d '8 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-8H '+%Y-%m-%dT%H:%M:%SZ')" 2>/dev/null | head -20  # timeout: 3000
 ```
 
 If the date flag syntax fails on the current platform, fall back to:
 
 ```bash
-git log --oneline -15
+git log --oneline -15  # timeout: 3000
 ```
 
 ### Step 4: Collect archived items from this session
 
 ```bash
-[ -f .claude/logs/session-archive.jsonl ] && tail -20 .claude/logs/session-archive.jsonl || echo "none"
+[ -f .claude/logs/session-archive.jsonl ] && tail -20 .claude/logs/session-archive.jsonl || echo "none"  # timeout: 5000
 ```
 
 Filter entries with `ts` matching today's date.

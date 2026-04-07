@@ -65,5 +65,5 @@ When a `PreToolUse` hook needs to approve or block a tool call, use `hookSpecifi
 ```
 
 - `permissionDecision`: `"allow"` or `"block"` — use `"block"` to prevent the tool call
-- **Deprecated**: top-level `"decision"` and `"reason"` fields — these still work but may be removed in a future Claude Code release; check release notes for removal timeline; migrate to `hookSpecificOutput`
+- **Deprecated**: top-level `"decision"` and `"reason"` fields — these still work but may be removed in a future Claude Code release; check release notes for removal timeline; migrate to `hookSpecificOutput` <!-- verified: 2026-04-06; re-check quarterly against Claude Code CHANGELOG for removal -->
 - Most hooks do not need to emit a decision at all — only emit when the hook is specifically acting as a gatekeeper (e.g. blocking destructive commands)

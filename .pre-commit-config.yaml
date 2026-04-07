@@ -69,7 +69,7 @@ repos:
           - mdformat-config
 
   - repo: https://github.com/lycheeverse/lychee.git
-    rev: nightly # run `pre-commit autoupdate` to set; verify release at https://github.com/lycheeverse/lychee/releases
+    rev: lychee-v0.23.0
     hooks:
       - id: lychee
         args:

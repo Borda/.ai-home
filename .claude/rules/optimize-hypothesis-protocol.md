@@ -3,7 +3,6 @@ description: JSONL schema for hypotheses.jsonl, checkpoint.json, and journal.md 
 paths:
   - .experiments/**
   - .claude/skills/optimize/**
-  - .claude/rules/optimize-hypothesis-protocol.md
 ---
 
 ## Run Directory Layout
@@ -23,14 +22,14 @@ One JSON object per line. Field groups are written by separate agents in two pas
 
 **Pass 1 — ai-researcher (oracle):**
 
-| Field            | Type    | Description                                                                                   |
-| ---------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `hypothesis`     | `str`   | What to test — concrete, implementable change                                                 |
-| `rationale`      | `str`   | Literature or experiment grounding for the hypothesis                                         |
-| `confidence`     | `float` | Oracle confidence [0–1]; entries < 0.7 are deprioritized to end of queue                      |
-| `expected_delta` | `str`   | Expected metric change (e.g. `"+1–3% val_loss"`)                                              |
-| `priority`       | `int`   | Execution order (1 = highest); journal-sourced entries use lower values than oracle entries   |
-| `source`         | `str`   | `"oracle"` for ai-researcher entries; `"journal"` for entries generated from journal feedback |
+| Field            | Type    | Description                                                                                                                       |
+| ---------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `hypothesis`     | `str`   | What to test — concrete, implementable change                                                                                     |
+| `rationale`      | `str`   | Literature or experiment grounding for the hypothesis                                                                             |
+| `confidence`     | `float` | Oracle confidence [0–1]; entries < 0.7 are deprioritized to end of queue                                                          |
+| `expected_delta` | `str`   | Expected metric change (e.g. `"+1–3% val_loss"`)                                                                                  |
+| `priority`       | `int`   | Execution order (1 = highest); journal-sourced entries use lower values than oracle entries                                       |
+| `source`         | `str`   | `"oracle"` for ai-researcher entries; `"journal"` for journal-sourced entries; `"team"` for team-mode hypothesis agents (Phase A) |
 
 **Pass 2 — solution-architect (feasibility filter):** annotates in place, preserving order
 
@@ -53,21 +52,8 @@ One JSON object per line. Field groups are written by separate agents in two pas
 }
 ```
 
-**After feasibility annotation:**
-
-```json
-{
-  "hypothesis": "...",
-  "rationale": "...",
-  "confidence": 0.85,
-  "expected_delta": "+2% val_acc",
-  "priority": 1,
-  "source": "oracle",
-  "feasible": true,
-  "blocker": null,
-  "codebase_mapping": "src/model.py:Encoder.forward"
-}
-```
+**After feasibility annotation** (3 fields added by solution-architect — see Pass 2 table above):
+`feasible: true`, `blocker: null`, `codebase_mapping: "src/model.py:Encoder.forward"`
 
 ## Feasibility Filter Rules
 
@@ -134,3 +120,24 @@ Rules:
 - Never execute a journal-sourced hypothesis without a feasibility annotation — `feasible` must be present before it enters the campaign loop
 - Journal hypotheses inherit the same JSONL schema as oracle hypotheses; `source: "journal"` is the only distinguishing field
 - Priority assignment: `priority` must be numerically higher (lower priority) than all existing oracle entries so journal hypotheses run after the original queue is exhausted
+
+## Team Mode Extensions
+
+When `--team` is active, hypothesis agents in Phase A produce entries with `source: "team"` and three additional optional fields that are absent from oracle/journal entries:
+
+| Field          | Type  | Description                                                                                                                                                |
+| -------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axis`         | `str` | The optimization axis the hypothesis belongs to (e.g., `"model architecture"`)                                                                             |
+| `agent_type`   | `str` | Specialist agent type to use for implementation (e.g., `"perf-optimizer"`, `"ai-researcher"`)                                                              |
+| `change_scope` | `str` | Estimated blast radius: `"small"` (1–2 files), `"medium"` (3–5 files), `"large"` (6+ files or architectural) (primary Phase B sort key — small runs first) |
+
+**Backfill rule** (for R0 `--researcher`/`--architect` entries merged into a team queue): see Phase A Step 5 in `.claude/skills/optimize/modes/run.md` for the full backfill logic.
+
+**Team-mode output files** (in `<RUN_DIR>/`, alongside `hypotheses.jsonl`):
+
+| File                                | Written by     | Description                                                          |
+| ----------------------------------- | -------------- | -------------------------------------------------------------------- |
+| `hypotheses-<axis-slug>.jsonl`      | Phase A agents | Per-axis raw hypothesis output; merged into queue in Phase B         |
+| `hypothesis-analyst-<axis-slug>.md` | Phase A agents | Full analysis and Confidence block (file-handoff protocol)           |
+| `team-queue.jsonl`                  | Phase B lead   | Final ordered execution queue (post-sort, post-user-gate)            |
+| `team-results.jsonl`                | Phase C lead   | Per-hypothesis outcome log (kept/reverted, metric delta, commit SHA) |

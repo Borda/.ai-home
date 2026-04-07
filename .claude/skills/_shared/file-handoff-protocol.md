@@ -21,7 +21,8 @@ The spawned agent **must**:
   "severity": {
     "critical": 0,
     "high": 1,
-    "medium": 2
+    "medium": 2,
+    "low": 0
   },
   "file": "<path>",
   "confidence": 0.88,
@@ -66,7 +67,7 @@ Main context receives only the envelope JSON.
 | ------------ | -------- | ----------------------------------------------------------------------------- |
 | `status`     | yes      | `"done"`, `"done_with_concerns"`, `"needs_context"`, `"timed_out"`, `"error"` |
 | `findings`   | yes      | total finding count (0 if none)                                               |
-| `severity`   | yes      | `{"critical":N,"high":N,"medium":N}`                                          |
+| `severity`   | yes      | `{"critical":N,"high":N,"medium":N,"low":N}`                                  |
 | `file`       | yes      | absolute path to the written findings file                                    |
 | `confidence` | yes      | agent's self-reported confidence (0–1)                                        |
 | `summary`    | yes      | one-line human-readable description of what was found or done                 |

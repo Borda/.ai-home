@@ -46,9 +46,9 @@ Severity tiers:
 
 ## Python Matrix
 
-- Python matrix must start at **3.11** minimum (Python 3.10 reaches EOL Oct 2026 — check [endoflife.date/python](https://endoflife.date/python) for the current schedule; canonical source: `.claude/rules/python-code.md`) <!-- verified: 2026-04-04 -->
+- Python matrix must start at **3.11** minimum (canonical source: `.claude/rules/python-code.md`) <!-- verified: 2026-04-04 -->
 - Always test on at least 2 Python versions
-- Recommended matrix: `['3.11', '3.12', '3.13', '3.14']` <!-- verified: 2026-04-04 -->
+- Recommended matrix: `['3.11', '3.12', '3.13', '3.14']` <!-- verified: 2026-04-04 --> — note: `3.14` is pre-release (alpha); use `allow-failures: true` or a separate experimental matrix cell until 3.14 reaches stable
 - Always set `fail-fast: false` on the strategy block — early exit hides failures in other matrix cells
 
 ## Other Rules

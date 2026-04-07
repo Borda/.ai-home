@@ -336,34 +336,34 @@ When included, vary the phrasing: "apologies for not getting back sooner" / "apo
 
 *Shared voice applies. Format and mandatory elements only.*
 
-Two parts, always.
+Two parts. Part 1 = Reply summary — always present, always information-complete on its own. Part 2 = Inline suggestions — optional, adds location-specific detail.
 
-**PART 1 — Overall comment** (GitHub Markdown, post as a top-level PR comment):
+**PART 1 — Reply summary** (always present; always complete and honest on its own):
 
-1. `@handle` + specific praise naming the technique or approach — not generic ("great PR!") but concrete ("the two-phase exponential + binary search probe is a clean approach")
-2. Scope line: "N things need sorting before I merge" — sets expectations immediately
-3. One prose paragraph per **blocking/high** issue: `file.py:line-range` → plain-language impact → concrete fix in the same sentence. No line-wrapping at column width — prose paragraphs are single long lines. **If the issue also appears in the inline table (Part 2), keep the Part 1 mention to one clause only — the inline comment is the detailed version.**
-4. **Nit/low items**: do not list individually — bundle as a single `"Minor:"` line such as `"Minor: a handful of style nits in the diff — easy cleanup."` No details in Part 1 for nits.
-5. Close: `"Fix those N and you're good to merge."` — decisive, no hedging
-6. **Use full GitHub Markdown**: headers (`##`), bullet lists, code spans and fenced blocks, `> blockquotes` for cited excerpts or linked specs, and inline links to relevant docs/resources where they help the contributor understand the fix.
+1. **Acknowledgement + Praise** — `@handle` + warm specific opening; name what's genuinely good: the technique, structural decision, test strategy, API choice — concrete, not generic ("great PR!"). 1–3 observations.
+2. **Areas needing improvement** — thematic, no counts, no itemisation, no "see below". Name the concern areas concretely enough that the contributor knows what to look at without needing Part 2 (e.g. "error handling in `_run_tracker_on_detections` needs a guard against empty detection files, and direct unit tests for that function are missing"). Omit entirely only when the verdict is a true LGTM.
+3. **Optional intro sentence** — only when Part 2 follows: e.g. `"I've left inline suggestions with specifics."` — omit if no Part 2.
 
-**PART 2 — Inline comments table** (one row per specific location, post as individual diff comments):
+**PART 2 — Inline suggestions** (optional; post as individual diff comments or a follow-up block):
+
+One unified table — all findings in a single place, no separate prose:
 
 ```
 | Importance | Confidence | File | Line | Comment |
 |------------|------------|------|------|---------|
-| high | 0.95 | `src/foo/bar.py` | 42 | one-sentence observation + concrete suggestion |
-| medium | 0.80 | `src/foo/bar.py` | 87 | one-sentence observation + concrete suggestion |
+| high | 0.95 | `src/foo/bar.py` | 42 | what's wrong and concrete fix — 1-2 sentences for high items since there is no prose paragraph |
+| medium | 0.80 | `src/foo/bar.py` | 87 | one-sentence observation + suggestion |
+| low | 0.70 | `src/foo/bar.py` | 101 | nit or minor style note |
 ```
 
 - **Importance** values: `high`, `medium`, `low`
 - **Confidence** (0.0–1.0): how certain the finding is based on evidence in the diff
-- **Column order**: Importance and Confidence are the two leftmost columns — they are the most decision-relevant and should be visible without scrolling
-- **Row ordering**: high → medium → low importance; within the same tier, sort by Confidence descending (most certain first)
-- **Nit/low items**: omit from the inline table entirely — mention them only in Part 1's bundled `"Minor:"` line
-- Each row maps to a single diff line or tight range. Comment is 1–2 sentences max: what's wrong and how to fix it.
+- **Column order**: Importance and Confidence are the two leftmost columns — most decision-relevant
+- **Row ordering**: high → medium → low importance; within same tier, sort by Confidence descending
+- **Comment length**: 1-2 sentences per row; high-importance rows may use 2 sentences since there is no separate prose paragraph
+- **Use full GitHub Markdown** throughout: code spans, fenced blocks, `> blockquotes` for cited excerpts, inline links where they help the contributor
 
-**When to produce both parts**: any request to write a contributor reply, review summary for a contributor, or `--reply` output from `/review`. Only produce Part 1 alone when there are no specific line-level issues to call out (e.g., a simple "LGTM").
+**When to produce both parts**: any request to write a contributor reply, review summary for a contributor, or `--reply` output from `/review`. Only produce the Reply summary (Part 1) alone when there are no specific line-level issues to call out (e.g., a simple "LGTM"). Inline suggestions (Part 2) are optional when there are no location-specific findings.
 
 ### Issue Replies — structural divergences
 
@@ -519,10 +519,10 @@ gh release list --limit 5
 
 </workflow>
 
-\<notes>
+<notes>
 
 **Link integrity**: Follow `.claude/rules/quality-gates.md` — never include a URL without fetching it first. Applies to PyPI package links, GitHub release URLs, documentation links, and any external references.
 
 **Scope redirects**: when declining an out-of-scope request and suggesting external resources (docs, forums, trackers), either (a) omit the URL and name the resource without linking, or (b) fetch the URL first per the link-integrity rule above. Prefer (a) for well-known resources where the URL is obvious (numpy.org, Stack Overflow) to avoid the fetch overhead.
 
-\</notes>
+</notes>

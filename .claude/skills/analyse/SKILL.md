@@ -30,8 +30,12 @@ quickly. Produces actionable, structured output — not just summaries.
 
 ## Step 1: Flag parsing
 
-If `$ARGUMENTS` contains `--reply`, strip it and set `REPLY_MODE=true`. `REPLY_MODE` is only
-meaningful when `$ARGUMENTS` is a number — silently ignored for `health` and `ecosystem`.
+```bash
+REPLY_MODE=false; CLEAN_ARGS=$ARGUMENTS; if echo "$ARGUMENTS" | grep -q -- '--reply'; then REPLY_MODE=true; CLEAN_ARGS=$(echo "$ARGUMENTS" | sed 's/--reply//g' | xargs); fi
+```
+
+`REPLY_MODE` is only meaningful when `$CLEAN_ARGS` is a number — silently ignored for
+`health` and `ecosystem`.
 
 ## Step 2: Cache layer (numeric arguments only)
 
@@ -41,7 +45,7 @@ GitHub rate limits when re-analysing the same item in the same day.
 ```bash
 CACHE_DIR=".cache/gh"
 TODAY=$(date +%Y-%m-%d)
-CACHE_FILE="$CACHE_DIR/$ARGUMENTS-$TODAY.json"
+CACHE_FILE="$CACHE_DIR/$CLEAN_ARGS-$TODAY.json"
 mkdir -p "$CACHE_DIR"
 ```
 
@@ -49,7 +53,7 @@ mkdir -p "$CACHE_DIR"
 
 - Read `type`, `item`, and `comments` fields from the JSON
 - Skip all primary `gh` item fetches in `modes/thread.md`
-- Print `[cache] #$ARGUMENTS ($TODAY)` as a one-line status note
+- Print `[cache] #$CLEAN_ARGS ($TODAY)` as a one-line status note
 - Still run wide-net searches (dynamic — never cached)
 
 **Cache miss** — after fetching in `modes/thread.md`, write:
@@ -58,7 +62,7 @@ mkdir -p "$CACHE_DIR"
 jq -n \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg type "$TYPE" \
-  --argjson number "$ARGUMENTS" \
+  --argjson number "$CLEAN_ARGS" \
   --argjson item "$ITEM" \
   --arg comments "$COMMENTS" \
   '{"ts":$ts,"type":$type,"number":$number,"item":$item,"comments":$comments}' \
@@ -82,7 +86,7 @@ If cache miss:
 
 ```bash
 # Step 1: try the issues API (covers both issues and PRs)
-ITEM=$(gh api "repos/{owner}/{repo}/issues/$ARGUMENTS" 2>/dev/null)
+ITEM=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" 2>/dev/null)
 
 if [ -n "$ITEM" ]; then
   TYPE=$(echo "$ITEM" | jq -r 'if .pull_request then "pr" else "issue" end')
@@ -93,7 +97,7 @@ else
       repository(owner:$owner,name:$repo){
         discussion(number:$number){ title }
       }
-    }' -f owner='{owner}' -f repo='{repo}' -F number=$ARGUMENTS \
+    }' -f owner='{owner}' -f repo='{repo}' -F number=$CLEAN_ARGS \
     --jq '.data.repository.discussion.title' 2>/dev/null)
   [ -n "$DISC" ] && TYPE="discussion" || TYPE="unknown"
 fi
@@ -110,9 +114,17 @@ Read `.claude/skills/analyse/modes/<mode>.md` and execute all steps defined ther
 | `health`          | `modes/health.md`    |
 | `ecosystem`       | `modes/ecosystem.md` |
 
-## Step 5: Draft contributor reply (--reply only, thread mode only)
+## Step 5: Reply gate — STOP CHECK
 
-If `REPLY_MODE` is not set, skip this step entirely.
+**Run this step before the Confidence block regardless of `--reply` mode.**
+
+If `REPLY_MODE=true`: your response is **incomplete** until you have executed Step 6 below
+and written the reply file. Do not add a Confidence block or end your response here —
+proceed to Step 6 immediately.
+
+If `REPLY_MODE=false`: skip Step 6 and end with the Confidence block now.
+
+## Step 6: Draft contributor reply (only when --reply, thread mode only)
 
 **Reuse vs recreate**: reuse an existing report only if it exists *and* the item hasn't had
 new activity since it was written.
@@ -120,12 +132,12 @@ new activity since it was written.
 ```bash
 TODAY=$(date +%Y-%m-%d)
 mkdir -p .reports/analyse/thread
-REPORT_FILE=".reports/analyse/thread/output-analyse-thread-$ARGUMENTS-$TODAY.md"
+REPORT_FILE=".reports/analyse/thread/output-analyse-thread-$CLEAN_ARGS-$TODAY.md"
 
 DRIFT=false
 if [ -f "$REPORT_FILE" ]; then
   REPORT_MTIME=$(stat -f %m "$REPORT_FILE" 2>/dev/null || stat -c %Y "$REPORT_FILE")
-  UPDATED_AT=$(gh api "repos/{owner}/{repo}/issues/$ARGUMENTS" --jq '.updated_at' 2>/dev/null)
+  UPDATED_AT=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" --jq '.updated_at' 2>/dev/null)
   UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)
   [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
 fi

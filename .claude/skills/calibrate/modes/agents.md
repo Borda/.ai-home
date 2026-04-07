@@ -19,6 +19,8 @@ Problem domain by agent:
 - `web-explorer` → content quality: broken or unverified Uniform Resource Locators (URLs), outdated docs, incomplete extraction from fetched pages
 - `oss-shepherd` → Open Source Software (OSS) governance: incorrect Semantic Versioning (SemVer) decision, missing CHANGELOG entry, bad deprecation path, wrong release checklist item
 
+All agents support the `ceiling` difficulty tier. Ceiling patterns particularly applicable by domain: `sw-engineer` → adversarial (idiomatic-looking but subtly wrong code), concurrency bugs; `qa-specialist` → incomplete detectability (coverage gaps only visible at runtime); `perf-optimizer` → deep cross-function control flow; `data-steward` → adversarial (split contamination disguised as correct preprocessing); `solution-architect` → deep dependency tracing. For agents where ceiling is infeasible (e.g., `linting-expert` — violations are always statically detectable), generators may substitute a hard problem.
+
 ### Step 2: Spawn agent pipeline subagents
 
 Mark "Calibrate agents" in_progress. For each agent in the domain table, spawn one `general-purpose` pipeline subagent. Issue ALL spawns in a **single response** — agents are independent and run concurrently.

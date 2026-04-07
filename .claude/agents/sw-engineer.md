@@ -274,8 +274,10 @@ Only add when explicitly needed — avoid complexity creep:
 
 \</output_format>
 
-\<notes>
+<notes>
 
 **Scope boundary**: `sw-engineer` owns implementation correctness, type safety, SOLID structure, and test-driven development. For adjacent concerns: `linting-expert` for ruff/mypy rule configuration, pre-commit setup, and **mandatory final code validation before handover to user**; `qa-specialist` for **mandatory test coverage and edge-case review before handover to user**; `solution-architect` for API surface design, Architecture Decision Records (ADRs), and breaking-change strategy; `perf-optimizer` for profiling-first performance work.
 
-\</notes>
+**Worktree isolation**: this agent runs with `isolation: worktree` — each invocation gets its own temporary git worktree under `.claude/worktrees/<id>/`. Constraints: permissions in `settings.local.json` are snapshotted at worktree-creation time and not updated retroactively; path-specific allow rules must already be present in `settings.json` before spawning. If the agent makes no changes the worktree is cleaned up automatically; if changes are made, the worktree path and branch are returned to the orchestrator for cherry-pick or merge.
+
+</notes>

@@ -44,16 +44,19 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 
 ## Step 1: Identify scope and context (run in parallel for PR mode)
 
-If `$ARGUMENTS` contains `--reply`, strip it from the arguments and set `REPLY_MODE=true`. Pass the remaining arguments to the rest of the workflow.
+```bash
+# Parse --reply flag — must run before any gh calls
+REPLY_MODE=false; CLEAN_ARGS=$ARGUMENTS; if echo "$ARGUMENTS" | grep -q -- '--reply'; then REPLY_MODE=true; CLEAN_ARGS=$(echo "$ARGUMENTS" | sed 's/--reply//g' | xargs); fi
+```
 
 ```bash
-# If $ARGUMENTS is a PR number — run all four in parallel:
-gh pr diff $ARGUMENTS --name-only   # files changed in PR                    # timeout: 6000
-gh pr view $ARGUMENTS               # PR description and metadata             # timeout: 6000
-gh pr checks $ARGUMENTS             # CI status — don't review if CI is red  # timeout: 15000
-gh pr view $ARGUMENTS --json reviews,labels,milestone                         # timeout: 6000
+# If $CLEAN_ARGS is a PR number — run all four in parallel:
+gh pr diff $CLEAN_ARGS --name-only   # files changed in PR                    # timeout: 6000
+gh pr view $CLEAN_ARGS               # PR description and metadata             # timeout: 6000
+gh pr checks $CLEAN_ARGS             # CI status — don't review if CI is red  # timeout: 15000
+gh pr view $CLEAN_ARGS --json reviews,labels,milestone                         # timeout: 6000
 
-# If $ARGUMENTS is a path: use it directly
+# If $CLEAN_ARGS is a path: use it directly
 
 # If no argument: find recently changed files
 git diff --name-only HEAD~1 HEAD  # timeout: 3000
@@ -77,7 +80,7 @@ Use classification to skip optional agents:
 
 ### Linked issue analysis (PR mode only)
 
-Parse the PR body (from `gh pr view $ARGUMENTS`) for issue references (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract all referenced issue numbers into `ISSUE_NUMS` (list). Cap at 3 issues maximum.
+Parse the PR body (from `gh pr view $CLEAN_ARGS`) for issue references (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract all referenced issue numbers into `ISSUE_NUMS` (list). Cap at 3 issues maximum.
 
 If `ISSUE_NUMS` is non-empty, spawn one **sw-engineer** agent per issue at the start of Step 2 (in parallel with Codex co-review — both are independent of each other). Each issue agent should:
 
@@ -96,13 +99,13 @@ Set up the run directory (shared by Codex and all agent spawns in Step 3):
 ```bash
 TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 RUN_DIR=".reports/review/$TIMESTAMP"
-mkdir -p "$RUN_DIR"
+mkdir -p "$RUN_DIR"  # timeout: 5000
 ```
 
 Check availability:
 
 ```bash
-claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "codex (openai-codex) available" || echo "⚠ codex (openai-codex) not found — skipping co-review"
+claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "codex (openai-codex) available" || echo "⚠ codex (openai-codex) not found — skipping co-review"  # timeout: 15000
 ```
 
 If Codex is available, run a comprehensive review on the diff:
@@ -163,14 +166,7 @@ If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/iss
 
 **Agent 6 — solution-architect (optional, for PRs touching public API boundaries)**: If the diff touches `__init__.py` exports, adds/modifies Protocols or Abstract Base Classes (ABCs), changes module structure, or introduces new public classes — evaluate API design quality, coupling impact, and backward compatibility. Skip if changes are internal implementation only.
 
-**Health monitoring** (CLAUDE.md §8): after spawning all agents, create a checkpoint:
-
-```bash
-REVIEW_CHECKPOINT="/tmp/review-check-$(date +%s)"
-touch "$REVIEW_CHECKPOINT"
-```
-
-Every `$MONITOR_INTERVAL` seconds, run `find "$RUN_DIR" -newer "$REVIEW_CHECKPOINT" -type f | wc -l` — new files = alive; zero new files for `$HARD_CUTOFF` seconds = stalled. Grant one `$EXTENSION` extension if the output file tail explains the delay. On timeout: read partial output; mark the agent ⏱ in the final report. Never silently omit timed-out agents.
+**Health monitoring** (CLAUDE.md §8): Agent calls are synchronous — Claude awaits each response natively; no Bash checkpoint polling is available. If any agent does not return within `$HARD_CUTOFF` seconds (~15 min), use the Read tool to surface any partial results already written to `$RUN_DIR` and continue with what was found; mark timed-out agents with ⏱ in the final report. Grant one `$EXTENSION` extension if the output file tail explains the delay. Never silently omit timed-out agents.
 
 ## Step 4: Post-agent checks (run in parallel)
 
@@ -323,9 +319,15 @@ Example prompt: `"use the qa-specialist to add a test for StreamReader.read_chun
 
 Only print a `### Codex Delegation` section to the terminal when tasks were actually delegated — omit entirely if nothing was delegated. (do not re-write the output file).
 
-**STOP CHECK — `REPLY_MODE=true`**: your response is **incomplete** until you have executed Step 8 below and written the reply file. Do not add a Confidence block or end your response here.
+## Step 8: Reply gate — STOP CHECK
 
-## Step 8: Draft contributor reply (only when --reply)
+**Run this step before the Confidence block regardless of `--reply` mode.**
+
+If `REPLY_MODE=true`: your response is **incomplete** until you have executed Step 9 below and written the reply file. Do not add a Confidence block or end your response here — proceed to Step 9 immediately.
+
+If `REPLY_MODE=false`: skip Step 9 and end with the Confidence block now.
+
+## Step 9: Draft contributor reply (only when --reply)
 
 If `REPLY_MODE` is not set, skip this step.
 
@@ -333,13 +335,13 @@ Spawn the **oss-shepherd** agent with:
 
 - The review output file path from Step 6
 - The PR number and contributor handle (if known from Step 1)
-- Prompt: "Read the review report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block: (1) overall PR comment in GitHub Markdown (full MD: headers, bullets, code blocks, `> blockquotes`, links) — one prose paragraph per blocking/high issue; items also in the inline table get one clause only, not a full paragraph; nit/low items bundled as a single 'Minor:' line; decisive close; (2) inline comments table with columns `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; ordered high → medium → low, then most confident first within each tier; nit/low items omitted from the table entirely. Use all blocking and high findings. No column-width line-wrapping in prose. Write your full output to `.temp/output-reply-<PR#>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `overall=N_issues blocking=N | inline=N_rows | → .temp/output-reply-<PR#>-<date>.md`"
+- Prompt: "Read the review report at `<path>`. Produce the standard two-part contributor reply per your `<voice>` block. **Part 1 — Reply summary** (always present, always complete on its own): (a) acknowledgement + praise naming what is genuinely good — technique, structural decisions, test quality — 1–3 concrete observations, not generic; (b) thematic areas needing improvement — no counts, no itemisation, no 'see below'; name the concern areas concretely enough that the contributor knows what to look at without Part 2; (c) optional closing sentence only when Part 2 follows (e.g. 'I've left inline suggestions with specifics.'). **Part 2 — Inline suggestions** (optional; single unified table, all findings in one place — no separate prose paragraphs): `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; high → medium → low, then most confident first within tier; 1–2 sentences per row for high items; include all high/medium/low findings in one table. No column-width line-wrapping in prose. Write your full output to `.temp/output-reply-<PR#>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `part1=done | part2=N_rows | → .temp/output-reply-<PR#>-<date>.md`"
 
 Print compact terminal summary:
 
 ```
-  Overall comment  — N issues (M blocking, K minor)
-  Inline comments  — N rows
+  Part 1  — reply summary (complete standalone)
+  Part 2  — N inline suggestions
 
   Reply:  .temp/output-reply-<PR#>-<date>.md
 ```

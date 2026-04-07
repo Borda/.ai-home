@@ -3,7 +3,7 @@ name: distill
 description: One-time snapshot that extracts patterns from work history and accumulated lessons, then distills them into concrete improvements — new agent/skill suggestions, roster quality review, memory pruning, or consolidating lessons and feedback into rules and agent/skill updates.
 argument-hint: '[review | prune | lessons | "<recurring task description>"]'
 disable-model-invocation: true
-allowed-tools: Read, Edit, Bash, Glob, Write, AskUserQuestion
+allowed-tools: Read, Edit, Bash, Glob, Grep, Write, AskUserQuestion
 effort: high
 ---
 
@@ -32,12 +32,7 @@ Use the Glob tool to enumerate agents (pattern `agents/*.md`, path `.claude/`) a
 
 For each agent/skill found, extract: name, description, tools, purpose.
 
-```bash
-# Check if OpenSpace MCP is installed and active
-[ -f ~/.claude/openspace/skills.db ] && echo "OpenSpace active" || echo "OpenSpace not installed — graduation check will be skipped"
-```
-
-Store the result conceptually (active vs not) for use in Step 2.
+If OpenSpace is installed, also check for any synthesized skill patterns (`~/.claude/openspace/skills.db`) that could be consolidated with the new rule — the presence of that file signals OpenSpace is active; store the result conceptually (active vs not) for use in Step 2.
 
 ## Step 2: Analyze work patterns
 
@@ -50,6 +45,7 @@ Store the result conceptually (active vs not) for use in Step 2.
 Otherwise, look for signals of repetitive or specialist work. The first three git commands are independent — run them in parallel:
 
 ```bash
+# timeout: 3000
 # --- run these three in parallel ---
 
 # Recent git history — what kinds of changes are common?
@@ -71,6 +67,7 @@ If `$ARGUMENTS` was provided, use it as additional context for the pattern analy
 If the Step 1 check showed OpenSpace active, run:
 
 ```bash
+# timeout: 5000
 HOME_SKILLS="$HOME/.claude/skills/"
 diff -rq "$HOME_SKILLS" .claude/skills/ 2>/dev/null | grep "^Files" | sed "s|Files ${HOME_SKILLS}||;s|\.claude/skills/||" | head -20
 ```
@@ -143,10 +140,6 @@ Anti-pattern checklist — reject the candidate if any apply:
 ### No Action Needed
 [pattern]: already handled by [existing agent/skill]
 
-### OpenSpace Graduation Candidates (N skills drifted from project)
-- `<skill-name>`: evolved by OpenSpace — review diff, then `cp -r ~/.claude/skills/<name> .claude/skills/<name>` + git commit to graduate; or discard if unwanted
-[If OpenSpace not installed: skip this section entirely]
-
 ## Confidence
 **Score**: [0.N]
 **Gaps**: [e.g., git history too shallow, task files not present, descriptions too generic to compare]
@@ -162,6 +155,7 @@ Locate, evaluate, and trim the project memory file.
 <!-- Note: this slug derivation is also used in audit/SKILL.md Check 11. If the auto-memory path convention changes, update both files. -->
 
 ```bash
+# timeout: 3000
 PROJECT="$(git rev-parse --show-toplevel)"
 MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|[/.]|-|g')/memory/MEMORY.md"
 echo "Memory file located."
@@ -200,8 +194,9 @@ Read accumulated lessons and feedback, then identify patterns that should be pro
 Find and read all source material in parallel:
 
 ```bash
+# timeout: 5000
 # .notes/lessons.md (if it exists)
-[ -f .notes/lessons.md ] && echo "found" || echo "not found"
+ls .notes/lessons.md 2>/dev/null && echo "found" || echo "not found"
 
 # Memory feedback files
 PROJECT="$(git rev-parse --show-toplevel)"
@@ -313,7 +308,7 @@ If the user selects (a), apply changes:
 
 After applying:
 
-1. Run cross-reference checks — use Grep to confirm new rule files are referenced from CLAUDE.md if they belong there (Check 14d from `/audit`)
+1. Run cross-reference checks — use Grep to verify new rule files are referenced from `CLAUDE.md` or the agent files that govern them (any rule with project-wide applicability should appear as a `See .claude/rules/<name>.md` reference in `CLAUDE.md`; agent-scoped rules should appear in the relevant agent file)
 2. Print a compact apply summary:
 
 ```

@@ -32,10 +32,8 @@ Usage: /optimize sweep "goal description" [--flags]
 
 ### Step S2: Non-interactive plan
 
-Run plan mode (P-P0 through P-P3 from `modes/run.md`) with these behavioral overrides:
+Run plan mode steps P-P2 and P-P3 from `modes/run.md` (P-P0 profiling flow skipped — `<goal>` is always a text string; P-P1 scope guard skipped — goal was provided explicitly) with these behavioral overrides:
 
-- Skip P-P0 profiling flow — `<goal>` is always a text string, not a file path.
-- Skip P-P1 scope guard — the goal was provided explicitly; do not reject it.
 - **P-P2 (config presentation)**: Accept all auto-detected defaults without prompting the user. Print the proposed config as an informational block prefixed `sweep: auto-config →` but do NOT wait for user confirmation.
 - If `--colab[=HW]` or `--compute=colab` was passed, write `compute: colab` (and `colab_hw: <HW>` if provided) into the Config block.
 - **P-P3 (write program.md)**: Write to `<--out path>` if provided; otherwise to `program.md` at project root.
@@ -100,6 +98,10 @@ Run Default Mode (R1–R7 from `modes/run.md`) against the program file from S2,
 - `--team`
 - `--codex`
 - `--researcher` / `--architect` (combine both for dual-agent pipeline)
+
+> Note: `--journal` and `--hypothesis` are not available in sweep mode (see S1).
+
+> **`--team` and interactivity**: when `--team` is passed, sweep becomes semi-interactive — run mode's Phase B presents a user confirmation gate before Phase C begins. The gate cannot be bypassed from sweep context; sweep will pause and wait for user input at that point. This is expected behavior.
 
 On completion, the standard R6 terminal summary is printed. Additionally, prepend:
 
