@@ -1,0 +1,46 @@
+{
+  "agents": {
+    "self-mentor": [
+      "Review Checklist",
+      "calibration coverage"
+    ],
+    "solution-architect": [
+      "ADR Skeleton",
+      "Migration Risk Matrix"
+    ],
+    "web-explorer": [
+      "Minimum Source Protocol",
+      "migration delta table"
+    ]
+  },
+  "skills": {
+    "audit": [
+      "## Input Schema",
+      "## Workflow \\(Exact Commands\\)",
+      "run-gates.sh",
+      "write-result.sh",
+      "## Fail-fast Rules"
+    ],
+    "develop": [
+      "## Input Schema",
+      "## Workflow \\(Exact Commands\\)",
+      "run-gates.sh",
+      "write-result.sh",
+      "## Fail-fast Rules"
+    ],
+    "resolve": [
+      "## Input Schema",
+      "## Workflow \\(Exact Commands\\)",
+      "run-gates.sh",
+      "write-result.sh",
+      "## Fail-fast Rules"
+    ],
+    "review": [
+      "## Input Schema",
+      "## Workflow \\(Exact Commands\\)",
+      "run-gates.sh",
+      "write-result.sh",
+      "## Fail-fast Rules"
+    ]
+  }
+}

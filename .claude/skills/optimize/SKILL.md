@@ -1,7 +1,29 @@
 ---
 name: optimize
-description: Performance orchestrator with five modes. `plan` = interactive wizard → writes `program.md` config; also accepts a file path to auto-detect profiling targets via cProfile. `judge` = research-supervisor review of `program.md` — validates experimental methodology (hypothesis clarity, measurement validity, control adequacy, scope, strategy fit) and emits APPROVED / NEEDS-REVISION / BLOCKED verdict before the expensive run loop. `run` = sustained metric-improvement loop with atomic commits, auto-rollback, and experiment logging; accepts a `program.md` file and an optional clarification prompt. `resume` = continue a crashed or stopped run. `sweep` = non-interactive end-to-end pipeline: plan (auto-config) → judge+refine loop (up to 3 iterations, auto-applies Required Changes) → run. Supports --team, --colab[=H100|L4|T4|A100], --codex, and --compute=local|colab|docker in run/resume/sweep (--colab and --docker are mutually exclusive).
-argument-hint: plan <goal|file> [out.md] | judge [file.md] [--skip-validation] | run <file.md> [clarification] [--compute=local|colab|docker] [--team] [--colab[=H100|L4|T4|A100]] [--codex] [--researcher] [--architect] [--journal (req: --researcher|--architect)] [--hypothesis <path> (req: --researcher|--architect)] | resume [file.md] [--team] [--colab[=H100|L4|T4|A100]] [--codex] [--compute=local|colab|docker] | sweep "goal" [--team] [--colab[=H100|L4|T4|A100]] [--codex] [--compute=local|colab|docker] [--researcher] [--architect] [--out <path>] [--skip-validation]
+description: >-
+  Performance orchestrator with five modes. `plan` = interactive wizard →
+  writes `program.md` config; also accepts a file path to auto-detect profiling
+  targets via cProfile. `judge` = research-supervisor review of `program.md` —
+  validates experimental methodology (hypothesis clarity, measurement validity,
+  control adequacy, scope, strategy fit) and emits APPROVED / NEEDS-REVISION /
+  BLOCKED verdict before the expensive run loop. `run` = sustained
+  metric-improvement loop with atomic commits, auto-rollback, and experiment
+  logging; accepts a `program.md` file and an optional clarification prompt.
+  `resume` = continue a crashed or stopped run. `sweep` = non-interactive
+  end-to-end pipeline: plan (auto-config) → judge+refine loop (up to 3
+  iterations, auto-applies Required Changes) → run. Supports --team,
+  --colab[=H100|L4|T4|A100], --codex, and --compute=local|colab|docker in
+  run/resume/sweep (--colab and --docker are mutually exclusive).
+argument-hint: >-
+  plan <goal|file> [out.md] | judge [file.md] [--skip-validation] | run
+  <file.md> [clarification] [--compute=local|colab|docker] [--team]
+  [--colab[=H100|L4|T4|A100]] [--codex] [--researcher] [--architect]
+  [--journal (req: --researcher|--architect)] [--hypothesis <path> (req:
+  --researcher|--architect)] | resume [file.md] [--team]
+  [--colab[=H100|L4|T4|A100]] [--codex] [--compute=local|colab|docker] | sweep
+  "goal" [--team] [--colab[=H100|L4|T4|A100]] [--codex]
+  [--compute=local|colab|docker] [--researcher] [--architect] [--out <path>]
+  [--skip-validation]
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 effort: high

@@ -134,6 +134,30 @@ Parent agent responsibilities:
 - Integrate subagent outputs back into one coherent change
 - Make final judgment on conflicts, overlaps, and release readiness
 
+### Automatic spawn patterns (all agents)
+
+- `sw-engineer`: implementation, refactors, ML/backend feature delivery
+- `qa-specialist`: bugfix verification, edge-case testing, regression hardening
+- `squeezer`: performance, memory, throughput, profiling-driven optimization
+- `doc-scribe`: API/docs/changelog updates and migration notes
+- `security-auditor`: auth, secrets, deserialization, dependency/supply-chain risk
+- `data-steward`: datasets, splits, augmentation, reproducibility and leakage checks
+- `ci-guardian`: CI workflows, release automation, trusted publishing, flaky pipelines
+- `linting-expert`: ruff/mypy/pre-commit configuration and suppression hygiene
+- `oss-shepherd`: issue triage, maintainer review, SemVer and release governance
+- `solution-architect`: architecture planning, API contracts, migration design
+- `web-explorer`: authoritative external docs/changelogs/API delta research
+- `self-mentor`: configuration drift, instruction overlap, calibration/gate hygiene
+
+### Collaboration team patterns
+
+- Architecture/public API changes: `solution-architect` + `sw-engineer` + `qa-specialist` + `doc-scribe`
+- Security-sensitive features: `security-auditor` + `sw-engineer` + `qa-specialist`
+- Data pipeline changes: `data-steward` + `sw-engineer` + `qa-specialist`
+- Toolchain/CI quality changes: `ci-guardian` + `linting-expert` + `self-mentor`
+- External migration/release-note driven changes: `web-explorer` + `solution-architect` + `sw-engineer`
+- Release readiness: `oss-shepherd` + `ci-guardian` + `doc-scribe` + `qa-specialist`
+
 ### Spawn `sw-engineer` when:
 
 - Implementing a multi-step feature or subsystem where isolated file ownership helps
@@ -208,6 +232,34 @@ Parent agent responsibilities:
 - A deprecation cycle needs to be planned or verified (pyDeprecate)
 - A PyPI release is being prepared (version bump, CHANGELOG, tag, publish)
 - Contributor onboarding or CONTRIBUTING.md needs attention
+
+### Spawn `solution-architect` when:
+
+- An architecture or API contract decision is required before implementation
+- A compatibility or migration plan must be defined across modules
+- Refactor scope crosses subsystem boundaries with coupling risks
+- Multiple implementation options require explicit tradeoff analysis
+
+### Spawn `web-explorer` when:
+
+- The task depends on current external docs, release notes, or changelogs
+- Package/API migration deltas must be verified against primary sources
+- Exact references and source-backed evidence are required for decisions
+- Volatile ecosystem/tooling behavior could invalidate cached assumptions
+
+### Spawn `self-mentor` when:
+
+- Config/skill/agent drift or duplication is suspected
+- Routing quality, calibration leakage, or weak gate coverage is reported
+- New skills/agents are added and consistency checks are needed
+- Prompt/instruction hygiene needs a focused quality pass
+
+______________________________________________________________________
+
+## Commit Request Format
+
+When the user asks to commit (or asks for a commit summary), load and follow:
+`.codex/skills/_shared/commit-response-template.md`
 
 ______________________________________________________________________
 

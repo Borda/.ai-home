@@ -2,7 +2,7 @@
 # OpenAI Codex CLI — Borda project config (Rust CLI v0.105+, TOML only)
 # `config_file` paths are relative to this file
 
-model                              = "gpt-5.3-codex"
+model                              = "gpt-5.4"
 review_model                       = "gpt-5.4"
 model_reasoning_effort             = "medium"
 model_reasoning_summary            = "auto"
@@ -21,6 +21,7 @@ job_max_runtime_seconds = 3600
 multi_agent     = true
 child_agents_md = true  # propagate AGENTS.md scope to sub-agents
 personality     = true
+codex_hooks     = true
 
 [tui]
 status_line = [
@@ -52,6 +53,56 @@ model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
 web_search = "live"
 model_reasoning_summary = "concise"
+
+[skills]
+
+[[skills.config]]
+path = "skills/review"
+enabled = true
+
+[[skills.config]]
+path = "skills/develop"
+enabled = true
+
+[[skills.config]]
+path = "skills/resolve"
+enabled = true
+
+[[skills.config]]
+path = "skills/audit"
+enabled = true
+
+[[skills.config]]
+path = "skills/calibrate"
+enabled = true
+
+[[skills.config]]
+path = "skills/release"
+enabled = true
+
+[[skills.config]]
+path = "skills/investigate"
+enabled = true
+
+[[skills.config]]
+path = "skills/sync"
+enabled = true
+
+[[skills.config]]
+path = "skills/manage"
+enabled = true
+
+[[skills.config]]
+path = "skills/analyse"
+enabled = true
+
+[[skills.config]]
+path = "skills/optimize"
+enabled = true
+
+[[skills.config]]
+path = "skills/research"
+enabled = true
 
 [agents.sw-engineer]
 description = "Core ML/backend implementation: SOLID, type-safety, doctest-driven, reproducible ML configs. Python 3.10+."
@@ -88,3 +139,15 @@ config_file = "agents/linting-expert.toml"
 [agents.oss-shepherd]
 description = "OSS lifecycle: issue triage, PR review, SemVer decisions, pyDeprecate, release checklist, trusted publishing."
 config_file = "agents/oss-shepherd.toml"
+
+[agents.solution-architect]
+description = "System design and API planning: ADRs, interface contracts, migration plans, coupling and compatibility analysis."
+config_file = "agents/solution-architect.toml"
+
+[agents.web-explorer]
+description = "Web and external-doc research: package versions, changelogs, migration guides, release notes, API reference extraction."
+config_file = "agents/web-explorer.toml"
+
+[agents.self-mentor]
+description = "Configuration quality reviewer: detect duplication, drift, stale references, weak gates, and instruction hygiene issues."
+config_file = "agents/self-mentor.toml"

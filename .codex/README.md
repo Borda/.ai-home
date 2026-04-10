@@ -2,7 +2,7 @@
 
 ← [Back to root README](../README.md) · [Claude deep reference](../.claude/README.md)
 
-Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex) (Rust implementation). This file covers agent spawn rules, model strategy, runtime profiles, execution architecture, and Claude integration internals. For the high-level overview and cross-tool workflow sequences, see the root README.
+Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex) (Rust implementation). This file covers agent spawn rules, model strategy, runtime profiles, execution architecture, mirrored skill usage, and Claude integration internals.
 
 <details>
 <summary><strong>Contents</strong></summary>
@@ -14,8 +14,13 @@ Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex
 - [🧠 Model Strategy & Profiles](#-model-strategy--profiles)
   - [Model Strategy](#model-strategy)
   - [Profiles](#profiles)
+- [🧭 Skills In Codex](#-skills-in-codex)
+  - [Built-in vs mirrored commands](#built-in-vs-mirrored-commands)
+  - [Usage examples](#usage-examples)
+- [🪙 RTK Integration](#-rtk-integration)
 - [🏗️ Architecture](#-architecture)
   - [Multi-agent execution model](#multi-agent-execution-model)
+  - [Mirrored skills and gates](#mirrored-skills-and-gates)
   - [AGENTS.md layering](#agentsmd-layering)
   - [MCP server](#mcp-server)
 - [🤝 Integration with Claude](#-integration-with-claude)
@@ -24,22 +29,20 @@ Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex
 
 ## 🔄 Config Sync
 
-This repo (`.codex/`) is the source of truth — home (`~/.codex/`) is a downstream copy:
+This repo (`.codex/`) is the source of truth. Home (`~/.codex/`) is a downstream copy:
 
 ```bash
-cp -r .codex/ ~/.codex/    # activate globally (config_file paths are relative — no rewriting needed)
+cp -r .codex/ ~/.codex/    # activate globally (config_file paths are relative)
 ```
 
-Run after editing any agent config, `config.toml`, or `AGENTS.md`. Unlike `.claude/`, there is no drift-detection command — copy directly.
-
-A project-local `AGENTS.md` at the repo root extends the global `~/.codex/AGENTS.md` automatically — no additional config needed.
+Run after editing any agent config, `config.toml`, hooks, or `AGENTS.md`.
 
 <details>
 <summary><strong>Install</strong></summary>
 
 ```bash
 npm install -g @openai/codex    # install Codex CLI
-cp -r .codex/ ~/.codex/         # activate globally (config_file paths are relative — no rewriting needed)
+cp -r .codex/ ~/.codex/         # activate globally
 ```
 
 </details>
@@ -48,57 +51,58 @@ cp -r .codex/ ~/.codex/         # activate globally (config_file paths are relat
 
 ### Reference table
 
-All agents run on `gpt-5.3-codex` — differentiation is via reasoning effort only (see [Model Strategy & Profiles](#-model-strategy--profiles)).
+All agents are standardized on `gpt-5.4`. Differentiation is via reasoning effort and role instructions.
 
-| Agent                | Effort | Purpose                                                                 |
-| -------------------- | ------ | ----------------------------------------------------------------------- |
-| **sw-engineer**      | high   | SOLID implementation, doctest-driven dev, ML pipeline architecture      |
-| **qa-specialist**    | xhigh  | Edge-case matrix, The Borda Standard, adversarial test review           |
-| **squeezer**         | high   | Profile-first optimization, GPU throughput, memory efficiency           |
-| **doc-scribe**       | medium | 6-point Google/Napoleon docstrings, README stewardship, CHANGELOG       |
-| **security-auditor** | xhigh  | OWASP Python, ML supply chain, secrets, CI/CD hygiene *(read-only)*     |
-| **data-steward**     | high   | Split leakage, DataLoader reproducibility, augmentation correctness     |
-| **ci-guardian**      | medium | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
-| **linting-expert**   | medium | ruff, mypy, pre-commit config, rule progression, suppression discipline |
-| **oss-shepherd**     | high   | Issue triage, PR review, SemVer, pyDeprecate, release checklist         |
+| Agent                  | Effort | Purpose                                                                 |
+| ---------------------- | ------ | ----------------------------------------------------------------------- |
+| **sw-engineer**        | high   | SOLID implementation, doctest-driven dev, ML pipeline architecture      |
+| **qa-specialist**      | xhigh  | Edge-case matrix, The Borda Standard, adversarial test review           |
+| **squeezer**           | high   | Profile-first optimization, GPU throughput, memory efficiency           |
+| **doc-scribe**         | medium | 6-point Google/Napoleon docstrings, README stewardship, CHANGELOG       |
+| **security-auditor**   | xhigh  | OWASP Python, ML supply chain, secrets, CI/CD hygiene *(read-only)*     |
+| **data-steward**       | high   | Split leakage, DataLoader reproducibility, augmentation correctness     |
+| **ci-guardian**        | medium | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
+| **linting-expert**     | medium | ruff, mypy, pre-commit config, rule progression, suppression discipline |
+| **oss-shepherd**       | high   | Issue triage, PR review, SemVer, pyDeprecate, release checklist         |
+| **solution-architect** | high   | System design, ADRs, API compatibility, migration planning              |
+| **web-explorer**       | medium | External docs/release-note extraction and evidence gathering            |
+| **self-mentor**        | medium | Config quality checks, drift/leak detection, workflow hygiene           |
 
 ### Spawn rules
 
 Codex selects agents autonomously based on task type (defined in `AGENTS.md`). You can also address agents by name in your prompt.
 
-**Automatic spawn patterns** (from `AGENTS.md`):
+Automatic spawn patterns (from `AGENTS.md`):
 
-- `sw-engineer` handles core implementation; on completion Codex fans out to `qa-specialist` + `doc-scribe` concurrently
-- `security-auditor` is spawned whenever the task touches auth, credentials, external APIs, model weights, or pickle loading
-- `data-steward` is spawned when the task touches data pipelines, splits, augmentation, or DataLoaders
-- `squeezer` is spawned for profiling, throughput, and memory optimization tasks
-- `ci-guardian` is spawned for CI workflow and publishing tasks
+- `sw-engineer` handles core implementation; on completion Codex can fan out to `qa-specialist` + `doc-scribe`
+- `security-auditor` is used when tasks touch auth, credentials, external APIs, model weights, or deserialization
+- `data-steward` is used when tasks touch data pipelines, splits, augmentation, or DataLoaders
+- `squeezer` is used for profiling, throughput, and memory optimization tasks
+- `ci-guardian` is used for CI workflow and publishing tasks
 
-**When to address by name** vs letting Codex decide:
+When to address by name vs letting Codex decide:
 
-- Use by name when you want a specific perspective that task-type detection might not trigger (e.g., `"use the security-auditor to review src/api/auth.py"` even if the task description looks like a feature)
-- Let Codex decide for broad tasks — multi-agent fan-out happens automatically per the spawn matrix in `AGENTS.md`
-
-**Fan-out example:**
-
-```
-sw-engineer (implement) → qa-specialist + doc-scribe (concurrent)
-                       ↘ security-auditor (if auth or secrets scope detected)
-```
+- Use by name when you want a specific perspective that task-type detection might not trigger
+- Let Codex decide for broad tasks; orchestration can fan out automatically
 
 ## 🧠 Model Strategy & Profiles
 
 ### Model Strategy
 
-All agents use `gpt-5.3-codex`. Differentiation is via `model_reasoning_effort`:
+Session defaults:
 
-| Effort     | Roles                                             | Why                                                    |
-| ---------- | ------------------------------------------------- | ------------------------------------------------------ |
-| **xhigh**  | qa-specialist, security-auditor                   | Adversarial: exhaustive search for what could go wrong |
-| **high**   | sw-engineer, squeezer, data-steward, oss-shepherd | Analytical: depth without unbounded budget             |
-| **medium** | doc-scribe, ci-guardian, linting-expert           | Writing/config: quality over deductive intensity       |
+- `model = "gpt-5.4"`
+- `review_model = "gpt-5.4"`
+- `approval_policy = "on-request"`
+- `sandbox_mode = "workspace-write"`
 
-The review model (`gpt-5.4`, set via `review_model` in `config.toml`) is used for Codex's own internal review pass — separate from agent effort levels.
+Reasoning allocation:
+
+| Effort     | Roles                                                                 | Why                                                    |
+| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| **xhigh**  | qa-specialist, security-auditor                                       | Adversarial: exhaustive search for what could go wrong |
+| **high**   | sw-engineer, squeezer, data-steward, oss-shepherd, solution-architect | Analytical: depth without unbounded budget             |
+| **medium** | doc-scribe, ci-guardian, linting-expert, web-explorer, self-mentor    | Writing/config/research balance                        |
 
 ### Profiles
 
@@ -109,16 +113,71 @@ codex --profile deep-review "full security audit of src/api/"
 codex --profile fast-edit "fix the typo in the docstring"
 ```
 
-| Profile       | What changes                                                          | When to use                                                  |
-| ------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `cautious`    | `approval_policy = "untrusted"` — every command requires confirmation | Unfamiliar codebases, production systems, destructive ops    |
-| `fast-edit`   | `gpt-5-codex` model, medium reasoning, concise summary, 2 max threads | Narrow mechanical edits where speed > depth                  |
-| `fresh-docs`  | `web_search = "live"`, concise summary                                | Questions about volatile docs, library versions, API changes |
-| `deep-review` | `gpt-5.4` model, xhigh reasoning, live web search, concise summary    | Broad or high-risk changes needing maximum review depth      |
+| Profile       | What changes                                                        | When to use                                                  |
+| ------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `cautious`    | `approval_policy = "untrusted"`                                     | Unfamiliar codebases, production systems, destructive ops    |
+| `fast-edit`   | `model = "gpt-5-codex"`, medium reasoning, low verbosity, 2 threads | Narrow mechanical edits where speed > depth                  |
+| `fresh-docs`  | `web_search = "live"`, concise summaries                            | Questions about volatile docs, library versions, API changes |
+| `deep-review` | `model = "gpt-5.4"`, `xhigh` reasoning, live web search             | Broad/high-risk changes needing maximum review depth         |
 
-The default profile (no flag) is `approval_policy = "on-request"` with `gpt-5.3-codex` at medium reasoning effort — optimized for everyday agentic coding.
+## 🧭 Skills In Codex
 
-**When to use a profile vs editing effort directly:** Use a profile for session-level mode switches; edit `agents/*.toml` only for permanent per-agent changes. Profiles override the base config without touching the files.
+### Built-in vs mirrored commands
+
+Codex built-in slash commands (for example `/fast`) work normally.
+
+Mirrored workflow skills in `.codex/skills/*` are instruction assets, not custom slash commands. That means:
+
+- `/investigate`, `/resolve`, `/review` are not recognized as Codex slash commands in this setup
+- Use prompt-based invocation instead
+
+### Usage examples
+
+Interactive prompt usage:
+
+```text
+run investigate on this branch and find root cause of failing CI
+run resolve on the current working tree and fix high-severity findings
+run review, then develop, then audit for issue #42
+```
+
+One-shot shell usage:
+
+```bash
+codex "run investigate for current failing pytest and write findings artifact"
+codex "run resolve on this diff and apply required quality gates"
+```
+
+Agent targeting examples:
+
+```text
+use the qa-specialist to review tests/ for missing edge cases
+use the solution-architect to produce a minimal migration plan for this API change
+use the self-mentor to review .codex drift and weak gates
+```
+
+## 🪙 RTK Integration
+
+Codex hooks are enabled in `config.toml`:
+
+```toml
+[features]
+codex_hooks = true
+```
+
+Configured hook files:
+
+- `.codex/hooks.json`
+- `.codex/hooks/rtk-enforce.js`
+
+Behavior:
+
+- If `rtk` is not installed, hook is a no-op
+- If command is already `rtk ...`, hook is a no-op
+- For known RTK-eligible prefixes, hook denies once and instructs rerun as `rtk <cmd>`
+- For excluded risky patterns (for example `git push`, destructive git deletes), it passes through normal approvals unchanged
+
+Note: current Codex `PreToolUse` parsing does not apply in-place command rewrites via `updatedInput`, so deny-and-rerun is the native fallback.
 
 ## 🏗️ Architecture
 
@@ -127,77 +186,69 @@ The default profile (no flag) is `approval_policy = "on-request"` with `gpt-5.3-
 Configured in `config.toml`:
 
 ```toml
-max_threads = 4                # max concurrent agents
-max_depth = 2                  # max spawn depth (orchestrator → agent → sub-agent)
-job_max_runtime_seconds = 3600 # hard 1-hour cutoff per Codex session
+max_threads = 4
+max_depth = 2
+job_max_runtime_seconds = 3600
 ```
 
-**How Codex schedules agents:**
+How Codex schedules agents:
 
-1. The lead agent (or the base Codex session) classifies the task and determines which specialist agents to spawn
-2. Agents spawn concurrently up to `max_threads`; each runs in its own sandboxed context
-3. Agents at depth 2 (spawned by a spawned agent) cannot themselves spawn further — `max_depth = 2` prevents unbounded recursion
-4. If a sub-agent's work exceeds `job_max_runtime_seconds`, it is killed and its partial output is surfaced to the orchestrator
+1. The lead agent (or base session) classifies the task and decides which specialists to spawn
+2. Agents spawn concurrently up to `max_threads`
+3. Agents at depth 2 cannot spawn further (`max_depth = 2`)
+4. Jobs exceeding `job_max_runtime_seconds` are stopped and surfaced to the orchestrator
 
-`sandbox_mode = "workspace-write"` — agents can read/write within the workspace but cannot make outbound network calls or run arbitrary system commands without approval (unless the profile relaxes this).
+### Mirrored skills and gates
+
+Mirrored workflow backbone:
+
+- Core loop: `review`, `develop`, `resolve`, `audit`
+- Extended set: `calibrate`, `release`, `investigate`, `sync`, `manage`, `analyse`, `optimize`, `research`
+
+Shared gate references:
+
+- `.codex/skills/_shared/quality-gates.md`
+- `.codex/skills/_shared/run-gates.sh`
+- `.codex/skills/_shared/write-result.sh`
+- `.codex/skills/_shared/severity-map.md`
+
+Artifact contract:
+
+- `.reports/codex/<skill>/<timestamp>/result.json`
+
+Calibration runner:
+
+```bash
+.codex/calibration/run.sh
+```
 
 ### AGENTS.md layering
 
-Codex loads agent instructions in layers, with more specific layers overriding the global baseline:
+Codex loads agent instructions in layers, with more specific layers overriding broader ones:
 
-**Layer 1 — Global baseline** (`~/.codex/AGENTS.md` or `.codex/AGENTS.md` in this repo):
+- Global baseline: `~/.codex/AGENTS.md` or project `.codex/AGENTS.md`
+- Project-local override: repo root `AGENTS.md`
 
-- The Borda Standard: coding quality rules, Python 3.10+ baseline, doctest-driven development, naming conventions
-- Freshness policy: prefer live docs over cached assumptions for volatile tooling
-- Runtime profile descriptions
-- Spawn rules: which agent types to invoke for which task categories
-
-**Layer 2 — Project-local** (`AGENTS.md` at the repo root):
-
-- Environment bootstrap commands (how to install deps, activate env)
-- Lint/type-check/test/build commands for this specific project
-- Package manager (uv, pip, poetry)
-- Release entrypoint and acceptance criteria
-- Any project-specific overrides to the global Borda Standard
-
-When project-local `AGENTS.md` exists, it extends and overrides the global baseline — Codex merges both. Project-local guidance takes precedence for all overlapping rules.
-
-**What project-local AGENTS.md must define** (per Borda Standard):
-
-- Environment bootstrap command
-- Lint + type-check + test + build commands
-- Package manager
-- Release entrypoint
-- Task completion criteria
+Project-local instructions take precedence for overlapping rules.
 
 ### MCP server
 
-`config.toml` configures one MCP server:
+`config.toml` configures:
 
 ```toml
 [mcp_servers.openaiDeveloperDocs]
 url = "https://developers.openai.com/mcp"
 ```
 
-**Purpose:** Gives Codex and its agents live access to OpenAI's developer documentation — API references, model capabilities, SDK changelogs. Used by the freshness policy: "For OpenAI and Codex-specific questions, prefer the configured OpenAI developer docs MCP server when available, then fall back to primary web sources."
-
-**Activation:** The MCP server is always-on for Codex sessions (no opt-in required, unlike Claude's `colab-mcp`). Codex queries it automatically when the task touches OpenAI APIs or Codex-specific behavior.
+Purpose: live OpenAI/Codex documentation lookups for freshness-critical guidance.
 
 ## 🤝 Integration with Claude
 
-→ Claude's perspective on this integration: [`.claude/README.md` — Integration with Codex](../.claude/README.md#-integration-with-codex) · Full architecture: [root README](../README.md#-claude--codex-integration)
+→ Claude-side integration details: [`.claude/README.md` — Integration with Codex](../.claude/README.md#-integration-with-codex) · Full architecture: [root README](../README.md#-claude--codex-integration)
 
-**What Claude delegates to Codex:**
+Typical division:
 
-- Mechanical, diff-scoped tasks: add docstrings, rename symbols, add type annotations across a module
-- PR review comment application (via `/resolve`)
-- Codex pre-pass in the tiered review pipeline (Tier 1) — diff-focused review before Claude's parallel agents
+- Codex: focused mechanical implementation, diff-scoped edits, fast in-repo execution
+- Claude: long-horizon orchestration, broader review topology, final synthesis
 
-**What Claude retains:**
-
-- Long-horizon planning and research (`/survey`, `/research`, `/develop plan`)
-- Orchestration of multiple agents in defined topologies
-- Judgment calls: design decisions, spec approval, test validity assessment
-- Final validation: Claude always reviews Codex output with lint + tests before marking work complete
-
-**Why the division works:** Claude has a mental model of which files are "in scope" for a task; Codex reads the diff and codebase independently, without that context. Their blind spots are complementary — the union of both passes catches more than either alone.
+The combined workflow catches blind spots better than either tool alone.

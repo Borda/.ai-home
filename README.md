@@ -96,8 +96,10 @@ borda.ai-home/
 ├── .codex/                 # OpenAI Codex CLI
 │   ├── README.md           # full reference: agents, profiles, Claude integration
 │   ├── AGENTS.md           # global instructions and subagent spawn rules
-│   ├── config.toml         # multi-agent config (gpt-5.3-codex baseline)
-│   └── agents/             # per-agent model and instruction overrides
+│   ├── config.toml         # multi-agent config (gpt-5.4 baseline)
+│   ├── agents/             # per-agent model and instruction overrides
+│   ├── calibration/        # self-calibration harness + fixed task set
+│   └── skills/             # codex-native workflow skills
 ├── .pre-commit-config.yaml
 ├── .gitignore
 └── README.md
@@ -117,10 +119,10 @@ Specialist roles with deep domain knowledge — requested by name, or auto-selec
 | **oss-shepherd**       | ✓      | ✓     | Issue triage, PR review, SemVer, releases, trusted publishing |
 | **perf-optimizer**     | ✓      | —     | Profile-first CPU/GPU/memory/I/O, torch.compile               |
 | **qa-specialist**      | ✓      | ✓     | pytest, hypothesis, mutation testing, ML test patterns        |
-| **self-mentor**        | ✓      | —     | Config quality review, duplication detection, cross-ref audit |
-| **solution-architect** | ✓      | —     | System design, ADRs, API surface, migration plans             |
+| **self-mentor**        | ✓      | ✓     | Config quality review, duplication detection, cross-ref audit |
+| **solution-architect** | ✓      | ✓     | System design, ADRs, API surface, migration plans             |
 | **sw-engineer**        | ✓      | ✓     | Architecture, implementation, SOLID principles, type safety   |
-| **web-explorer**       | ✓      | —     | API version comparison, migration guides, PyPI tracking       |
+| **web-explorer**       | ✓      | ✓     | API version comparison, migration guides, PyPI tracking       |
 
 ## 🤖 Claude Code
 
@@ -371,7 +373,7 @@ Run after any session with significant corrections, or monthly as routine hygien
 
 ## 🤖 Codex CLI
 
-Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex) (Rust implementation). Nine specialist roles on `gpt-5.3-codex`, auto-selected by task type or addressed by name. See the Agents table above for the full roster with Claude/Codex availability.
+Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex) (Rust implementation). Default session model is `gpt-5.4`, with 12 specialist roles and a mirrored codex-native skill backbone (`review/develop/resolve/audit` + `calibrate/release/investigate/sync/manage/analyse/optimize/research`).
 
 ### Usage
 
@@ -379,6 +381,28 @@ Multi-agent configuration for [OpenAI Codex CLI](https://github.com/openai/codex
 codex                                                          # interactive — auto-selects agents
 codex "use the qa-specialist to review src/api/auth.py"        # address agent by name
 codex --profile deep-review "full security audit of src/api/" # activate a profile
+```
+
+### Codex Skill Invocation (Important)
+
+Codex does not expose your mirrored skills as slash commands. In this setup:
+
+- `/fast` works (built-in Codex command).
+- `/investigate`, `/resolve`, `/review` do not work as slash commands.
+
+Use prompt-based invocation instead:
+
+```text
+run investigate on this branch and find root cause of failing CI
+run resolve for the current working tree and fix high-severity findings
+run review, then develop, then audit for issue #42
+```
+
+One-shot examples:
+
+```bash
+codex "run investigate on current diff and produce investigation findings"
+codex "run resolve on this repo and apply required quality gates"
 ```
 
 ### Install
@@ -390,13 +414,16 @@ cp -r .codex/ ~/.codex/         # activate globally
 
 ### Files
 
-| File            | Purpose                                                     |
-| --------------- | ----------------------------------------------------------- |
-| `AGENTS.md`     | Global agent instructions, The Borda Standard, spawn rules  |
-| `config.toml`   | Multi-agent config: 4 runtime profiles, MCP server, sandbox |
-| `agents/*.toml` | Per-agent model and reasoning effort overrides              |
+| File                | Purpose                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `AGENTS.md`         | Global agent instructions, The Borda Standard, spawn rules                 |
+| `config.toml`       | Multi-agent config: profiles, MCP server, sandbox, skills                  |
+| `agents/*.toml`     | Per-agent model and reasoning effort overrides                             |
+| `skills/*/SKILL.md` | Codex-native workflow skills (core skills are execution-ready)             |
+| `skills/_shared/*`  | Shared execution helpers (`run-gates.sh`, `write-result.sh`, severity map) |
+| `calibration/*`     | Self-calibration harness (`run.sh`, `tasks.json`, `benchmarks.json`)       |
 
-→ Deep reference: spawn rules, profiles, architecture, and Claude integration — see [`.codex/README.md` → Agents](.codex/README.md#-agents)
+→ Deep reference: skills, quality gates, calibration, and architecture — see [`.codex/README.md`](.codex/README.md)
 
 ## 🤝 Claude + Codex Integration
 
