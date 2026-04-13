@@ -19,10 +19,6 @@ Turn an unformed idea into a branching exploration tree, then distill that tree 
 
 Examples:
 
-- `/brainstorm add a caching layer to the pipeline`
-
-- `/brainstorm redesign how agents hand off to each other`
-
 - `/brainstorm I want users to be able to export results as CSV`
 
 - **`--tight`** — reduced-ceremony mode: cap clarifying questions at 5 (not 10), cap tree operations at 5 (not 10), require only 1 closed branch (not 2) before saving. Good for well-scoped ideas where the problem is already understood.

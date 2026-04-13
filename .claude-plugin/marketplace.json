@@ -1,0 +1,13 @@
+{
+  "name": "borda-ai-home",
+  "owner": {
+    "name": "Borda"
+  },
+  "plugins": [
+    {
+      "description": "Production-grade Claude Code config: specialist agents, slash-command skills, and event-driven hooks for Python/ML OSS development",
+      "name": "foundry",
+      "source": "./plugins/foundry"
+    }
+  ]
+}

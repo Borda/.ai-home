@@ -38,11 +38,7 @@ All modes share a quality stack, a mandatory Codex pre-pass, and a progressive r
 Examples:
 
 - `/develop feature add batched predict() method to Classifier in src/classifier`
-- `/develop fix 123`
 - `/develop fix TypeError when passing None to transform()`
-- `/develop refactor simplify error handling in src/transforms.py`
-- `/develop feature --team add authentication flow`
-- `/develop plan improve caching in the data loader`
 
 </inputs>
 
@@ -249,7 +245,7 @@ Read `.claude/skills/_shared/worktree-protocol.md` before spawning any worktree 
 - Follow-up chains:
   - Feature changes public API → `/release` to prepare CHANGELOG + migration guide
   - Feature/fix is performance-sensitive → `/optimize plan <file>` for profile-first bottleneck analysis
-  - Any mode touches `.claude/` config files → spawn `self-mentor` on changed files, then `/sync` to propagate
+  - Any mode touches `.claude/` config files → spawn `self-mentor` on changed files, then `/foundry:init link` to propagate
   - Mechanical follow-up beyond Codex step → spawn `Agent(subagent_type="codex:codex-rescue")` to delegate additional tasks
   - External validation → `/review` if an independent multi-agent review is desired beyond the built-in self-review gates
 

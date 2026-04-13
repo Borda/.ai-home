@@ -1,0 +1,167 @@
+{
+  "description": "foundry plugin hooks: task/agent tracking, teammate quality gates, and tool preprocessing",
+  "hooks": {
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/lint-on-save.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "statusMessage": "Logging tool",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/rtk-rewrite.js\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/md-compress.js\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Read"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "async": true,
+            "command": "mkdir -p ~/.claude/state && claude auth status > ~/.claude/state/subscription.json 2>/dev/null",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "statusMessage": "Tracking agent",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "statusMessage": "Completing agent",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/teammate-quality.js\"",
+            "statusMessage": "Quality gate",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/teammate-quality.js\"",
+            "statusMessage": "Quality gate",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

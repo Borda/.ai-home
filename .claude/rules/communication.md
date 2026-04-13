@@ -1,5 +1,7 @@
 ---
 description: Response style, framing, and output routing rules
+paths:
+  - '**'
 ---
 
 ## Re: Anchor

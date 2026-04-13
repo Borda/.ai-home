@@ -96,7 +96,7 @@ Common categories to consider:
 - **Config / permission error** — settings.json allow entry missing; hook path wrong; settings.local.json override
 - **State pollution** — stale lock file, leftover tmp artifact, or cached state conflicts with current run
 - **Recent change regression** — a git commit or config edit introduced the issue (check `git log`)
-- **Sync drift** — project `.claude/` and home `~/.claude/` diverged; use `/sync` to check
+- **Sync drift** — project `.claude/` and `~/.claude/` diverged; compare them manually or run `/audit setup` (covers drift detection)
 - **External service** — network unavailable, API rate-limited, or remote tool unreachable
 
 ## Step 4: Auxiliary review (optional)
@@ -160,7 +160,7 @@ Stop when one hypothesis is confirmed with clear evidence, or all top-3 are rule
   - `/develop fix` — code regression confirmed (application code only — NOT for `.claude/` changes)
   - `/manage update <name> "<change directive>"` — `.claude/` agent/skill/rule content needs updating (use this, NOT `/develop`, for any proposed change to `.claude/`)
   - `/audit fix` — structural/quality issue in `.claude/` config confirmed
-  - `/sync apply` — drift between project and home `.claude/` confirmed
+  - `/foundry:init link` — propagate project `.claude/` to `~/.claude/` (foundry plugin is the distribution path)
   - Manual step: <exact command to run>
   - Further investigation needed: <what additional info would resolve it>
 ```

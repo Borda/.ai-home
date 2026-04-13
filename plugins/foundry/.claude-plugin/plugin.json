@@ -1,0 +1,20 @@
+{
+  "author": {
+    "name": "Jirka",
+    "url": "https://github.com/Borda/.ai-home"
+  },
+  "description": "OSS Claude Code config: agents, skills, and hooks for professional AI-assisted development workflows",
+  "hooks": "./hooks/hooks.json",
+  "keywords": [
+    "agents",
+    "skills",
+    "hooks",
+    "workflow",
+    "development",
+    "ai-assisted"
+  ],
+  "license": "MIT",
+  "name": "foundry",
+  "repository": "https://github.com/Borda/.ai-home",
+  "version": "0.1.0"
+}

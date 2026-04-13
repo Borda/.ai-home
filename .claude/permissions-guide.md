@@ -85,7 +85,7 @@ ______________________________________________________________________
 | `Bash(mkdir -p .developments/*)`      | Create `.developments/` skill run subdirs           | `/develop` creates a run dir for review-cycle artifacts                                                   |
 | `Bash(mkdir -p .temp/)`               | Create the `.temp/` prose output directory          | Skills write quality-gates prose output (research, review, resolve, session) to `.temp/`                  |
 | `Bash(time:*)`                        | Measure wall-clock execution time                   | Establish baseline before an optimisation pass                                                            |
-| `Bash(rsync:*)`                       | Efficient file sync between directories             | `/sync` uses this to propagate config files; `--dry-run` for drift reports, no `--delete` ever            |
+| `Bash(rsync:*)`                       | Efficient file sync between directories             | File mirroring and drift detection; `--dry-run` for preview, no `--delete` ever                           |
 | `Bash(sed:*)`                         | Stream editor for text transformation               | Rewrite paths, strip comments, process file content in pipelines                                          |
 | `Bash(awk:*)`                         | Column-oriented text processing                     | Extract fields, compute sums, reformat tabular output                                                     |
 | `Bash(cat:*)`                         | Concatenate and print file contents                 | Pipe multi-file content into a command; display small files                                               |
@@ -100,7 +100,7 @@ ______________________________________________________________________
 | `Bash(which:*)`                       | Locate an executable on PATH                        | Verify a tool is installed before invoking it                                                             |
 | `Bash(env:*)`                         | Print or set environment variables                  | Inspect current env, run a command with a modified environment                                            |
 | `Bash(comm:*)`                        | Compare two sorted files line by line               | `/audit` Check 1: diff on-disk agent/skill names against MEMORY.md roster                                 |
-| `Bash(mktemp:*)`                      | Create a temporary file with a unique name          | `/sync` creates a temp settings.json before comparing with rsync --checksum                               |
+| `Bash(mktemp:*)`                      | Create a temporary file with a unique name          | Create temporary files for safe content comparison before overwriting                                     |
 | `Bash(touch:*)`                       | Create a file or update its modification time       | `/audit` health monitoring: create per-agent checkpoint files for stall detection                         |
 | `Bash(printf:*)`                      | Formatted output (supports escape sequences)        | Color-coded terminal output in audit and hook scripts                                                     |
 | `Bash(basename:*)`                    | Strip directory and suffix from a file path         | Extract agent/skill names from full file paths in audit and manage scripts                                |
@@ -239,7 +239,6 @@ Only skills that are invoked **programmatically** (by another skill, hook, or au
 
 | Permission         | Description                                        | Why programmatic (not user-invoked)                                                                      |
 | ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Skill(sync)`      | Invoke the `/sync` skill without user confirmation | CLAUDE.md and hooks reference running sync after config changes; called non-interactively                |
 | `Skill(calibrate)` | Invoke the `/calibrate` skill without confirmation | Post-fix quality gate in `/develop` and CLAUDE.md self-improvement loop; runs without user at the prompt |
 
 ______________________________________________________________________

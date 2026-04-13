@@ -1,5 +1,7 @@
 ---
 description: Pagination and completeness rules for external APIs and the gh CLI — never work on partial result sets
+paths:
+  - '**'
 ---
 
 ## Core Principle

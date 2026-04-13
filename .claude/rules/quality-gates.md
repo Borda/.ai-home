@@ -1,5 +1,7 @@
 ---
 description: Output quality standards — Confidence block, link verification, output routing
+paths:
+  - '**'
 ---
 
 ## Confidence Block (required on all analysis tasks)

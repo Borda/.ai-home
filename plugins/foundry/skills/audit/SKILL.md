@@ -1,7 +1,7 @@
 ---
 name: audit
 description: "Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness. Two mutually exclusive action modes: 'fix [high|medium|all]' auto-fixes at the requested severity level; 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes."
-argument-hint: '[agents|skills|rules|communication|setup] fix [high|medium|all] | upgrade'
+argument-hint: '[agents|skills|rules|communication|setup|plugin] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 effort: high
@@ -26,7 +26,8 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
   - `skills` — restrict sweep to skill files only, report only
   - `rules` — restrict sweep to rule files only, report only
   - `communication` — restrict sweep to communication governance files: `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
-  - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, and plugin integration (Checks 1, 2, 3, 6, 6b, 10, 11, 12, 14, 19); skip Step 3 (no per-file self-mentor spawns)
+  - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, plugin integration, and post-install user state (Checks 1–11, I1, I2, I3); Step 3 runs for `init` SKILL.md only (one self-mentor spawn); Checks I1–I3 read `~/.claude/` not `.claude/`
+  - `plugin` — restrict sweep to plugin integration only: codex plugin (Check 7), foundry plugin + init validation (Check 8, including 8g); Step 3 runs for `init` SKILL.md only (one self-mentor spawn)
   - Scope and fix level can be combined: `agents fix medium`, `rules fix all` — scope always precedes `fix`
   - **Invalid combinations** (report error and stop): `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade`
 
@@ -85,14 +86,14 @@ if [ ! -d ".claude" ]; then
     exit 1
 fi
 
-# jq availability — Check 6 depends on it
+# jq availability — Check 4 depends on it
 if preflight_ok jq; then
     JQ_AVAILABLE=true
 elif command -v jq &>/dev/null; then # timeout: 5000
     preflight_pass jq
     JQ_AVAILABLE=true
 else
-    printf "${YEL}⚠ MISSING${NC}: jq not found — Check 6 (permissions-guide drift) will be skipped\n"
+    printf "${YEL}⚠ MISSING${NC}: jq not found — Check 4 (permissions-guide drift) will be skipped\n"
     JQ_AVAILABLE=false
 fi
 
@@ -103,19 +104,19 @@ else
     preflight_ok git || preflight_pass git
 fi
 
-# node availability — Check 11 (RTK prefix parsing) and upgrade mode (hook syntax check) depend on it
+# node availability — Check 10 (RTK prefix parsing) and upgrade mode (hook syntax check) depend on it
 if preflight_ok node; then
     NODE_AVAILABLE=true
 elif command -v node &>/dev/null; then # timeout: 5000
     preflight_pass node
     NODE_AVAILABLE=true
 else
-    printf "${YEL}⚠ MISSING${NC}: node not found — Check 11 (RTK hook parsing) and upgrade hook syntax check will be skipped\n"
+    printf "${YEL}⚠ MISSING${NC}: node not found — Check 10 (RTK hook parsing) and upgrade hook syntax check will be skipped\n"
     NODE_AVAILABLE=false
 fi
 ```
 
-If `.claude/` is missing, abort immediately. Missing `jq` is a warning — the audit continues with Check 6 skipped.
+If `.claude/` is missing, abort immediately. Missing `jq` is a warning — the audit continues with Check 4 skipped.
 
 ## Step 1: Run pre-commit (if configured)
 
@@ -143,6 +144,8 @@ Enumerate everything in scope using built-in tools:
 - **Hooks**: Glob tool, pattern `hooks/*`, path `.claude/`
 
 Record the full file list — this becomes the audit scope for Steps 3–4. Cross-reference checks in Step 3 depend on this inventory being current. If MEMORY.md has not been updated since the last agent or skill was added or removed, run a live disk scan now rather than relying on the cached roster. Stale inventory is the primary cause of false-negative cross-reference findings.
+
+**Setup scope**: when `$SCOPE` is `setup`, also collect `plugins/foundry/skills/init/SKILL.md` for the Step 3 self-mentor spawn — this is the only per-file spawn in setup scope. Checks I1–I3 (from `checks-install.md`) run in Step 4 against `~/.claude/` to validate post-install user state.
 
 ## Step 3: Per-file audit via self-mentor
 
@@ -183,11 +186,21 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 
 ## Step 4: System-wide checks
 
-> **Full implementation instructions** (bash scripts, reasoning notes, severity tables, and sub-check details for all 21 checks) are in `.claude/skills/audit/templates/system-checks.md`. Read that file at the start of this step before executing any check.
+> **Full implementation instructions** are split across 4 scope files in `.claude/skills/audit/templates/`. Read only the file(s) for the active scope at the start of this step — do not read all 4 files unless running a full sweep.
+>
+> | Scope           | File(s) to read                                                        |
+> | --------------- | ---------------------------------------------------------------------- |
+> | `setup`         | `checks-setup.md` + `checks-install.md`                                |
+> | `plugin`        | `checks-setup.md` (Checks 7, 8 only)                                   |
+> | `agents`        | `checks-agents.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13) |
+> | `skills`        | `checks-skills.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13) |
+> | `rules`         | `checks-shared.md` (run only: 18, 12, 13)                              |
+> | `communication` | `checks-shared.md` (run only: 15, 16, 12, 13)                          |
+> | No scope (full) | all 4 files                                                            |
 
 Run the following checks. Use native tools first (Glob, Grep, Read); Bash only for pipeline operations the native tools cannot do.
 
-**Agent roster consistency policy**: evaluate the agent system as a set of capabilities, not just files. For every overlap surfaced in checks 13 or 16, make an explicit judgment:
+**Agent roster consistency policy**: evaluate the agent system as a set of capabilities, not just files. For every overlap surfaced in checks 20 or 17, make an explicit judgment:
 
 - **keep** when both roles own meaningfully different acceptance criteria
 - **sharpen** when both roles are justified but one or both descriptions/handoffs are too fuzzy
@@ -202,39 +215,44 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 
 **Scope filter**: when `$SCOPE` is set, run only the checks listed for that scope; skip all others silently.
 
-- `agents` — Checks 4, 5, 8, 13, 16, 17, 21
-- `skills` — Checks 4, 5, 7, 16, 17, 18, 20, 21
-- `rules` — Checks 15, 17, 21
-- `communication` — Checks 5, 9, 17, 21
-- `setup` — Checks 1, 2, 3, 6, 6b, 10, 11, 12, 14, 19 (Step 3 skipped)
+- `agents` — Checks 14, 15, 19, 20, 17, 12, 13
+- `skills` — Checks 14, 15, 21, 17, 12, 23, 22, 13
+- `rules` — Checks 18, 12, 13
+- `communication` — Checks 15, 16, 12, 13
+- `setup` — Checks 1, 2, 3, 4, 5, 9, 10, 11, 7, 6, 8, I1, I2, I3 (Step 3: one self-mentor spawn for `init` SKILL.md only; I1–I3 read `~/.claude/`)
+- `plugin` — Checks 7, 8 (Step 3: one self-mentor spawn for `init` SKILL.md only)
 - No scope argument — run all checks
 
 ### Check summary
 
-| #   | Name                                   | Severity      | Scope         | Notes                                                                                             |
-| --- | -------------------------------------- | ------------- | ------------- | ------------------------------------------------------------------------------------------------- |
-| 1   | Inventory drift (MEMORY.md vs disk)    | medium        | setup         | Agents + skills on disk vs MEMORY.md roster                                                       |
-| 2   | README vs disk                         | medium        | setup         | Agent/skill table rows in README vs disk                                                          |
-| 3   | settings.json permissions              | medium        | setup         | Bash commands in skills vs allow list                                                             |
-| 4   | Orphaned follow-up references          | medium        | agents/skills | Skill-name refs in SKILL.md vs disk inventory                                                     |
-| 5   | Hardcoded user paths                   | high          | agents/skills | `/Users/`/`/home/` in config files + settings.json                                                |
-| 6   | permissions-guide.md drift             | medium        | setup         | Every allow entry must have a guide row, and vice versa                                           |
-| 6b  | Permission safety audit                | critical/high | setup         | Allow entries must be non-destructive, reversible, local-only                                     |
-| 7   | Skill frontmatter conflicts            | critical      | skills        | `context:fork` + `disable-model-invocation:true` is broken                                        |
-| 8   | Model tier appropriateness             | medium/high   | agents        | Tier policy: opusplan/opus/sonnet/haiku — report only                                             |
-| 9   | Example value vs. token cost           | low           | agents/skills | Inline examples: high-value vs. low-value (prose restatement)                                     |
-| 10  | Agent color drift                      | medium        | setup         | statusline COLOR_MAP vs agent frontmatter `color:`                                                |
-| 11  | RTK hook alignment                     | high/medium   | setup         | RTK_PREFIXES vs installed RTK subcommands — skip if rtk absent                                    |
-| 12  | Memory health                          | low           | setup         | 12a duplicate rules, 12b stale version pins, 12c absorbed feedback files                          |
-| 13  | Agent description routing              | medium/low    | agents        | 13a overlap pairs, 13b NOT-for coverage, 13c trigger specificity, 13d keep/sharpen/prune decision |
-| 14  | codex plugin integration               | medium        | setup         | Plugin installed and enabled; dispatches work                                                     |
-| 15  | Rules integrity                        | high/medium   | rules         | 15a inventory, 15b frontmatter, 15c redundancy, 15d cross-ref integrity                           |
-| 16  | Cross-file content duplication         | medium        | agents/skills | ≥40% consecutive step overlap between files; for agents, recommend canonical owner or merge path  |
-| 17  | File length                            | medium        | all           | Agents >300, skills >600, rules >200 lines — report only                                          |
-| 18  | Bash misuse / native tool substitution | medium        | agents/skills | `cat`/`grep`/`find`/`echo >`/`sed` replaceable by native tools                                    |
-| 19  | Stale settings.json allow entries      | low           | setup         | Allow entries with no usage in any `.claude/` file                                                |
-| 20  | Calibration coverage gap               | medium/low    | skills        | Unregistered calibratable modes; stale domain table entries                                       |
-| 21  | Heading hierarchy continuity           | medium        | all           | Heading level jumps >1 (e.g. `##` → `####`)                                                       |
+| #   | Name                                   | Severity          | Scope         | Notes                                                                                         |
+| --- | -------------------------------------- | ----------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| 1   | Inventory drift (MEMORY.md vs disk)    | medium            | setup         | Agents + skills on disk vs MEMORY.md roster                                                   |
+| 2   | README vs disk                         | medium            | setup         | Agent/skill table rows in README vs disk                                                      |
+| 3   | settings.json permissions              | medium            | setup         | Bash commands in skills vs allow list                                                         |
+| 4   | permissions-guide.md drift             | medium            | setup         | Every allow entry must have a guide row, and vice versa                                       |
+| 5   | Permission safety audit                | critical/high     | setup         | Allow entries must be non-destructive, reversible, local-only                                 |
+| 6   | Stale settings.json allow entries      | low               | setup         | Allow entries with no usage in any .claude/ file                                              |
+| 7   | codex plugin integration               | medium            | setup         | Plugin installed and enabled; dispatches work                                                 |
+| 8   | foundry plugin correctness             | critical/high/med | setup         | 8a manifest, 8b symlinks, 8c hook scripts, 8d hooks.json, 8e dry-run validate, 8f perms drift |
+| 9   | Agent color drift                      | medium            | setup         | statusline COLOR_MAP vs agent frontmatter color:                                              |
+| 10  | RTK hook alignment                     | high/medium       | setup         | RTK_PREFIXES vs installed RTK subcommands - skip if rtk absent                                |
+| 11  | Memory health                          | low               | setup         | 11a duplicate rules, 11b stale version pins, 11c absorbed feedback files                      |
+| I1  | Plugin cache intact                    | high              | setup         | foundry in ~/.claude/plugins/installed_plugins.json; installPath exists                       |
+| I2  | Settings merge complete                | medium            | setup         | statusLine, permissions.allow, enabledPlugins.codex in ~/.claude/settings.json                |
+| I3  | Link health (conditional)              | high              | setup         | Symlinks in ~/.claude/agents/ and ~/.claude/skills/ resolve; fix: /foundry:init link          |
+| 12  | File length                            | medium            | all           | Agents >300, skills >600, rules >200 lines - report only                                      |
+| 13  | Heading hierarchy continuity           | medium            | all           | Heading level jumps >1 (e.g. ## to ####)                                                      |
+| 14  | Orphaned follow-up references          | medium            | agents/skills | Skill-name refs in SKILL.md vs disk inventory                                                 |
+| 15  | Hardcoded user paths                   | high              | agents/skills | /Users/ and /home/ in config files + settings.json                                            |
+| 16  | Example value vs. token cost           | low               | agents/skills | Inline examples: high-value vs. low-value (prose restatement)                                 |
+| 17  | Cross-file content duplication         | medium            | agents/skills | 40%+ consecutive step overlap; recommend canonical owner or merge path                        |
+| 18  | Rules integrity                        | high/medium       | rules         | 18a inventory, 18b frontmatter, 18c redundancy, 18d cross-ref integrity                       |
+| 19  | Model tier appropriateness             | medium/high       | agents        | Tier policy: opusplan/opus/sonnet/haiku - report only                                         |
+| 20  | Agent description routing              | medium/low        | agents        | 20a overlap pairs, 20b NOT-for coverage, 20c trigger specificity, 20d keep/sharpen/prune      |
+| 21  | Skill frontmatter conflicts            | critical          | skills        | context:fork + disable-model-invocation:true is broken                                        |
+| 22  | Calibration coverage gap               | medium/low        | skills        | Unregistered calibratable modes; stale domain table entries                                   |
+| 23  | Bash misuse / native tool substitution | medium            | agents/skills | cat/grep/find/echo>/sed replaceable by native tools                                           |
 
 ### Claude Code docs freshness (within Step 4)
 
@@ -433,7 +451,7 @@ Output the complete audit summary:
 Low-confidence files re-audited: N | Still uncertain after retry: N (see gaps above)
 
 ### Next Step
-Run `/sync apply` to propagate clean config to ~/.claude/
+Run `/foundry:init link` to propagate clean config to ~/.claude/
 ```
 
 ## Mode: upgrade
@@ -465,7 +483,7 @@ If any critical or high issues are known from a recent `/audit` run, or the gate
 
 Run the **Claude Code docs freshness** check from Step 4 of the main audit workflow: spawn web-explorer, validate current config against latest docs, apply genuine-value filter, produce the Upgrade Proposals table. Cap at 5 total (max 3 capability, any number of config).
 
-**RTK hook alignment** — also run Check 11 from the main audit workflow (inline, no subagent needed):
+**RTK hook alignment** — also run Check 10 from the main audit workflow (inline, no subagent needed):
 
 - If `rtk` is not installed or `.claude/hooks/rtk-rewrite.js` does not exist: skip silently.
 - Otherwise: run `rtk --help`, extract `RTK_PREFIXES` from the hook, compare, and add any findings as **config proposals** in the table:
@@ -531,12 +549,12 @@ Mark "A/B test capability proposals" completed.
 | 2 | ... | agents/sw-engineer.md | −0.02 | +0.01 | ✗ reverted |
 
 ### Next Steps
-- `/sync apply` — propagate accepted changes to ~/.claude/
+- `/foundry:init link` — propagate accepted changes to ~/.claude/
 - `/audit` — confirm clean baseline after upgrades
 - Reverted items: run `/calibrate <agent> full` for deeper A/B signal (N=10 vs N=3 used here)
 ```
 
-Propose `/sync apply` to the user after upgrade completes — do not auto-execute. Print: `→ Run \`/sync apply\` to propagate accepted changes to ~/.claude/\`
+Propose `/foundry:init link` to the user after upgrade completes — do not auto-execute. Print: `→ Run \`/foundry:init link\` to propagate accepted changes to ~/.claude/\`
 
 </workflow>
 
@@ -555,20 +573,19 @@ Propose `/sync apply` to the user after upgrade completes — do not auto-execut
 - **Relationship to self-mentor**: `self-mentor` is a single-file reactive audit; `/audit` is the system-wide sweep that runs self-mentor at scale and adds cross-file checks
 - `general-purpose` is a built-in Claude Code agent type (no `.claude/agents/general-purpose.md` file needed); no custom system prompt, all tools available.
 - **Paths must be portable**: `.claude/` for project-relative paths, `~/` or `$HOME/` for home paths — never a literal `/Users/` or `/home/` path; this rule applies to ALL config files including `settings.json`
-- Pre-flight for `/sync` — run clean before `/sync apply`.
 - **Bash error logging**: if a bash block in Pre-flight checks or Step 4 fails unexpectedly, append a JSONL line to `.claude/logs/audit-errors.jsonl` (`{"ts":"<ISO>","check":"<N>","error":"<message>"}`) for post-mortem — do not swallow errors silently.
 - **Parallel execution rule**: After Step 2 (file collection), launch Steps 3 and 4 in the same response — all self-mentor agent spawns AND all system-wide bash checks must be issued together. Do NOT run Step 3 first and Step 4 second. Aggregation (Step 5) waits for both to complete. The docs-freshness web-explorer (within Step 4) also launches in that same parallel batch.
 - **Token cost**: Step 3 (self-mentor spawns) is the most expensive part of the audit. For a quick structural scan where you mainly need cross-reference and inventory validation, the system-wide checks in Step 4 are often sufficient on their own. Consider running `/audit agents` or `/audit skills` to scope the sweep, or skip Step 3 entirely for a fast pass when you already trust per-file quality.
 - **Skill-creator complement**: For testing whether skill trigger descriptions fire correctly (trigger accuracy, A/B description testing), see the official skill-creator utility from Anthropic. `/audit` checks structural quality; `skill-creator` validates that the right skill is selected by Claude Code's dispatcher when the user types a command.
 - Follow-up chains:
-  - Audit clean → `/sync apply` to propagate verified config to `~/.claude/`
+  - Audit clean → `/foundry:init link` to propagate verified config to `~/.claude/`
   - Audit found structural issues → review flagged files manually before syncing
   - Audit found many low items → run `/audit fix all` to auto-fix them, or run `/develop refactor` for a targeted cleanup pass
   - After fixing agent instructions (from audit findings) → `/calibrate <agent>` to verify the fix improved recall and confidence calibration
-  - Audit Check 13 found description overlap → `/calibrate routing` to verify behavioral routing impact; update descriptions for confused pairs based on the routing report
+  - Audit Check 20 found description overlap → `/calibrate routing` to verify behavioral routing impact; update descriptions for confused pairs based on the routing report
   - Audit surfaced upgrade proposals → `/audit upgrade` to apply with correctness checks and calibrate A/B evidence for capability changes
   - `/audit upgrade` reverted a capability change → run `/calibrate <agent> full` for deeper signal (N=10 vs N=3 used in upgrade mode)
-  - Audit Check 20 found unregistered calibratable mode → update `calibrate/modes/skills.md` domain table and run `/calibrate skills` to verify the new target works
-  - Audit Check 20 found stale domain table entry → remove it from `calibrate/modes/skills.md`
+  - Audit Check 22 found unregistered calibratable mode → update `calibrate/modes/skills.md` domain table and run `/calibrate skills` to verify the new target works
+  - Audit Check 22 found stale domain table entry → remove it from `calibrate/modes/skills.md`
 
 </notes>

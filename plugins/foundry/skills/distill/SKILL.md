@@ -317,7 +317,7 @@ Applied N changes — <date>
   Skipped:        N (already covered or too narrow)
 ```
 
-3. Remind the user: "Run `/sync apply` to propagate rule changes to `~/.claude/`"
+3. Remind the user: "Run `/foundry:init link` to propagate rule changes to `~/.claude/`"
 
 End your response with a `## Confidence` block per CLAUDE.md output standards.
 
@@ -344,8 +344,8 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - Follow-up chains:
 
   - Suggestion accepted for new agent/skill → `/manage create` to scaffold and register it
-  - Suggestion to enhance existing → edit the agent/skill directly, then `/sync`
-  - `lessons` proposals applied → `/sync apply` to propagate; `/audit rules` to verify new rule files are structurally sound
+  - Suggestion to enhance existing → edit the agent/skill directly, then `/foundry:init link`
+  - `lessons` proposals applied → `/foundry:init link` to propagate; `/audit rules` to verify new rule files are structurally sound
 
 - **OpenSpace integration**: when OpenSpace MCP is active (`~/.claude/openspace/skills.db` exists), distill detects evolved skill variants by diffing `~/.claude/skills/` against `.claude/skills/`. Graduation = manual `cp -r ~/.claude/skills/<name> .claude/skills/<name>` + git commit; discard evolved variants that don't meet quality bar. See `docs/specs/2026-03-31-openspace-mcp-integration.md` for the full graduation flow. <!-- path is project-local (Borda.local/docs/specs/) — not synced to ~/.claude/ -->
 
