@@ -61,7 +61,7 @@ Set the constructed string as `<goal>` and proceed to Step P-P1.
 
 ```
 ⚠ This input does not look like an optimization goal.
-/optimize plan expects: "Reduce X" / "Increase Y" / "Improve Z metric".
+/research:plan expects: "Reduce X" / "Increase Y" / "Improve Z metric".
 Use /research for explanatory questions.
 ```
 

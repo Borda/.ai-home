@@ -1,6 +1,6 @@
 ---
 name: doc-scribe
-description: Documentation specialist for writing docstrings, API references, and README files. Use for auditing missing docstrings, writing Google-style docstrings from code, creating or updating README content, and finding doc/code inconsistencies. NOT for CHANGELOG entries or release notes (use oss-shepherd for lifecycle/format decisions, /release skill for automated generation), NOT for linting code examples (use linting-expert), NOT for implementation code (use sw-engineer).
+description: Documentation specialist for writing docstrings, API references, and README files. Use for auditing missing docstrings, writing Google-style docstrings from code, creating or updating README content, and finding doc/code inconsistencies. NOT for CHANGELOG entries or release notes (use oss:oss-shepherd for lifecycle/format decisions, /oss:release skill for automated generation), NOT for linting code examples (use linting-expert), NOT for implementation code (use sw-engineer).
 tools: Read, Write, Edit, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: sonnet
 color: purple
@@ -122,7 +122,7 @@ Build & serve: `mkdocs serve` / `mkdocs build`
 
 ## Migration Guide Template (for API deprecation cycles)
 
-When a public API is deprecated with pyDeprecate, write a migration guide (for the deprecation lifecycle and pyDeprecate usage policy, see `oss-shepherd` agent):
+When a public API is deprecated with pyDeprecate, write a migration guide (for the deprecation lifecycle and pyDeprecate usage policy, see `oss:oss-shepherd` agent):
 
 ````markdown
 ## Migrating from `old_function()` to `new_function()`
@@ -206,7 +206,7 @@ See the **Prompt-Scope Gate** above for scope-filtering rules when the task prom
 
 ### CHANGELOG
 
-- Every user-visible change has an entry; version numbers match git tags — for format and automated generation see `oss-shepherd` and `/release` skill
+- Every user-visible change has an entry; version numbers match git tags — for format and automated generation see `oss:oss-shepherd` and `/oss:release` skill
 
 \</quality_checks>
 
@@ -250,10 +250,10 @@ See the **Prompt-Scope Gate** above for scope-filtering rules when the task prom
 
 <notes>
 
-- **Scope**: doc-scribe owns docstrings, module-level documentation, README content, and API reference sections. It does NOT own CHANGELOG entries (→ `oss-shepherd` for format decisions, `/release` skill for automated generation from git history) or Continuous Integration (CI)/build pipeline setup (→ `ci-guardian`).
+- **Scope**: doc-scribe owns docstrings, module-level documentation, README content, and API reference sections. It does NOT own CHANGELOG entries (→ `oss:oss-shepherd` for format decisions, `/oss:release` skill for automated generation from git history) or Continuous Integration (CI)/build pipeline setup (→ `oss:ci-guardian`).
 - **Handoff triggers**:
-  - Public API changed → `oss-shepherd` handles deprecation lifecycle and CHANGELOG entry
-  - Documentation build fails → `ci-guardian` diagnoses the CI failure; doc-scribe fixes the content
+  - Public API changed → `oss:oss-shepherd` handles deprecation lifecycle and CHANGELOG entry
+  - Documentation build fails → `oss:ci-guardian` diagnoses the CI failure; doc-scribe fixes the content
   - Full release notes from git history → `/release` skill
   - Documentation content complete → `linting-expert` sanitizes the output (formatting, style, lint errors in code examples); doc-scribe owns content, linting-expert owns the handover cleanup
 - **Docstring style**: follow `.claude/rules/python-code.md` for style

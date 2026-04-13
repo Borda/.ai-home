@@ -1,4 +1,4 @@
-<!-- Mode-file include: loaded by .claude/skills/optimize/modes/run.md — not a standalone skill -->
+<!-- Team mode include: loaded by research:run when --team flag is set -->
 
 <!-- Implements one mode extension: Team Mode (--team flag, Phases A–D) -->
 

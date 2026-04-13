@@ -32,7 +32,7 @@ If `<goal>` is missing or empty, stop:
 
 ```
 ⚠ sweep requires a goal prompt.
-Usage: /optimize sweep "goal description" [--flags]
+Usage: /research:sweep "goal description" [--flags]
 ```
 
 ### Step S2: Non-interactive plan
@@ -90,9 +90,9 @@ Follow-up hint (blocked or unresolved):
 
 ```
 Fix the issues above in <program path>, then:
-  /optimize judge <program path>          ← re-validate
-  /optimize run <program path>            ← run when approved
-  /optimize sweep "revised goal" [flags]  ← re-sweep from scratch
+  /research:judge <program path>          ← re-validate
+  /research:run <program path>            ← run when approved
+  /research:sweep "revised goal" [flags]  ← re-sweep from scratch
 ```
 
 ### Step S5: Run

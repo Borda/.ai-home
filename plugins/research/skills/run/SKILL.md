@@ -24,20 +24,20 @@ STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run
 
 **Agent strategy mapping** (`agent_strategy` in config → ideation agent to spawn):
 
-| `agent_strategy` | Specialist agent     | When to use                                  |
-| ---------------- | -------------------- | -------------------------------------------- |
-| `auto`           | heuristic            | Default — infer from metric_cmd keywords     |
-| `perf`           | `perf-optimizer`     | latency, throughput, memory, GPU utilization |
-| `code`           | `sw-engineer`        | coverage, complexity, lines, coupling        |
-| `ml`             | `ai-researcher`      | accuracy, loss, F1, AUC, BLEU                |
-| `arch`           | `solution-architect` | coupling, cohesion, modularity metrics       |
+| `agent_strategy` | Specialist agent         | When to use                                  |
+| ---------------- | ------------------------ | -------------------------------------------- |
+| `auto`           | heuristic                | Default — infer from metric_cmd keywords     |
+| `perf`           | `foundry:perf-optimizer` | latency, throughput, memory, GPU utilization |
+| `code`           | `sw-engineer`            | coverage, complexity, lines, coupling        |
+| `ml`             | `ai-researcher`          | accuracy, loss, F1, AUC, BLEU                |
+| `arch`           | `solution-architect`     | coupling, cohesion, modularity metrics       |
 
 > note: solution-architect uses opusplan tier — higher cost per ideation call
 
 **Auto-inference keyword heuristics** (applied when `agent_strategy: auto` or omitted; checked against `## Goal` text AND metric command):
 
 - contains `pytest`, `coverage`, `complexity` → `code` → `sw-engineer`
-- contains `time`, `latency`, `bench`, `throughput`, `memory` → `perf` → `perf-optimizer`
+- contains `time`, `latency`, `bench`, `throughput`, `memory` → `perf` → `foundry:perf-optimizer`
 - contains `accuracy`, `loss`, `f1`, `auc`, `train`, `val`, `eval` → `ml` → `ai-researcher`
 - no keyword match → `perf` (default fallback)
 
@@ -109,7 +109,7 @@ If neither `--researcher` nor `--architect` is set, skip to Step R1.
 
 - If absent or starts with `--` → `clarification_prompt = null`
 - If a quoted string (starts and ends with `"`) → extract as `clarification_prompt`, strip the surrounding quotes
-- If a bare unquoted token (no leading `--`, no surrounding `"`) → accept it as `clarification_prompt` as-is; print a one-line advisory: `ℹ clarification set to "<token>" (tip: quote multi-word hints — e.g. "/optimize run program.md \"focus on sort\" --codex")`
+- If a bare unquoted token (no leading `--`, no surrounding `"`) → accept it as `clarification_prompt` as-is; print a one-line advisory: `ℹ clarification set to "<token>" (tip: quote multi-word hints — e.g. "/research:run program.md \"focus on sort\" --codex")`
 
 After clarification extraction, any remaining non-flag tokens (tokens that do not start with `--`) are unrecognized. For each such token, print:
 
@@ -118,7 +118,7 @@ After clarification extraction, any remaining non-flag tokens (tokens that do no
   Known positional args: <program.md path> [clarification]
   Known flags: --team, --colab[=HW], --codex, --compute=local|colab|docker, --docker, --researcher, --architect, --journal, --hypothesis <path>
   If you meant to override the algo, edit the ## Config block in your program.md (algo: sort) and update ## Metric to match.
-  If you meant to set a clarification hint, pass it as a quoted string: "/optimize run program.md \"sort improvements\" --codex"
+  If you meant to set a clarification hint, pass it as a quoted string: "/research:run program.md \"sort improvements\" --codex"
 ```
 
 Do not stop the run for unrecognized tokens — warn and continue.

@@ -21,12 +21,12 @@ Triggered by `judge` or `judge <file.md>`.
 
 **Input resolution** (priority order):
 
-1. Explicit argument: `/optimize judge path/to/plan.md`
+1. Explicit argument: `/research:judge path/to/plan.md`
 2. Auto-detect: `program.md` at project root
 3. Latest state: scan `.experiments/state/*/state.json` for most recent with `status: running` and non-null `program_file` field
 4. If nothing found: stop with error:
    ```
-   No program.md found. Run /optimize plan <goal> first, or provide a path: /optimize judge <path.md>
+   No program.md found. Run /research:plan <goal> first, or provide a path: /research:judge <path.md>
    ```
 
 **Parsing** — use the program-file section-parsing rules from Step R1 in `.claude/skills/research/run/SKILL.md` (find `## <Section>` headings, extract first fenced code block, parse as `key: value` lines, warn on unrecognized keys). The `--skip-validation` flag and `colab_hw` are judge-specific and extracted independently — they are not part of R1.
@@ -229,8 +229,8 @@ Read full review: <RUN_DIR>/methodology.md
 <ordered list of specific fixes for each non-pass finding, critical first; include exact edits to program.md>
 
 ### Supervisor Decision
-[APPROVED] Experimental protocol is sound. Proceed: `/optimize run <path>`
-[NEEDS-REVISION] Refine the protocol (see Required Changes above), then re-submit: `/optimize judge <path>`
+[APPROVED] Experimental protocol is sound. Proceed: `/research:run <path>`
+[NEEDS-REVISION] Refine the protocol (see Required Changes above), then re-submit: `/research:judge <path>`
 [BLOCKED] Fundamental design flaw — the experiment as designed cannot produce valid results. Fix items 1-N before proceeding.
 
 ## Confidence
@@ -252,8 +252,8 @@ Validation:   metric=<value> guard=pass|fail  (or "skipped — --skip-validation
 Codex:        reviewed | skipped
 → saved to .temp/output-optimize-judge-<branch>-<date>.md
 ---
-Next: /optimize run <path>                         [APPROVED]
-Next: fix protocol, re-run /optimize judge <path>      [NEEDS-REVISION or BLOCKED]
+Next: /research:run <path>                         [APPROVED]
+Next: fix protocol, re-run /research:judge <path>      [NEEDS-REVISION or BLOCKED]
 ```
 
 ## Notes
