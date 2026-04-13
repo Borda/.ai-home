@@ -1,3 +1,20 @@
+---
+name: debug
+description: Investigation-first debugging — gather evidence, form confirmed root-cause hypothesis, write regression test, apply minimal fix via fix mode handoff.
+argument-hint: <symptom or failing test>
+effort: medium
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
+
+- status `completed` if the work is clearly done
+- status `deleted` if orphaned / no longer relevant
+- keep `in_progress` only if genuinely continuing
+
+**Task tracking**: immediately after Step 1 (scope is known), create TaskCreate entries for all steps of this workflow before doing any other work. Mark each step in_progress when starting it, completed when done.
+
 # Debug Mode
 
 Systematic investigation-first debugging. Gather evidence and trace the data flow before writing any test or fix — form a confirmed root-cause hypothesis, then hand off to fix mode for the reproduce-fix-verify cycle.
@@ -25,14 +42,14 @@ gh issue view <number >--comments
 
 Use Grep (pattern: failing symbol, class, or error keyword; path: `src/`) to trace the call path from entry point to failure site.
 
-Spawn a **sw-engineer** agent to map the execution path and produce:
+Spawn a **foundry:sw-engineer** agent to map the execution path and produce:
 
 - Entry point to failure: which modules does the call cross?
 - What state is mutated along the way?
 - What invariant is violated at the point of failure?
 - Any recent commit that touched this path (from git log output)
 
-**Complexity gate**: if the root cause spans 3+ modules or requires a design change, flag it and use `AskUserQuestion` to ask whether to proceed, with options: "Continue debug (Recommended)" (fix the root cause in this session), "Open /develop feature" (open a wider feature track instead).
+**Scope gate**: if the root cause spans 3+ modules, flag the complexity smell. Use `AskUserQuestion` to present the scope concern before proceeding, with options: "Narrow scope (Recommended)" / "Proceed anyway".
 
 Present the agent's analysis summary before proceeding.
 
@@ -40,7 +57,7 @@ Present the agent's analysis summary before proceeding.
 
 Find the nearest similar working code path and compare exhaustively:
 
-1. Locate 2–3 code paths that handle similar input or perform similar work *successfully*
+1. Locate 2-3 code paths that handle similar input or perform similar work *successfully*
 2. List **every** difference between the working path and the broken one — not just the obvious one
 3. Check across axes:
    - Same input, different environment (versions, config, data shape)?
@@ -73,29 +90,31 @@ Emit this handoff block:
 
 ```
 Root cause: <confirmed hypothesis from Step 3>
-Suspect file(s): <files identified in Steps 1–2>
+Suspect file(s): <files identified in Steps 1-2>
 Evidence: <key signals that confirmed the hypothesis>
 ```
 
-→ Proceed with `/develop fix` from **Step 2** (regression test). The root cause is already known — fix's Step 1 analysis is complete.
+-> Proceed with `/develop fix` from **Step 2** (regression test). The root cause is already known — fix's Step 1 analysis is complete.
+
+Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Guard, Quality Stack, Codex Pre-pass, Progressive Review Loop, and Codex Mechanical Delegation steps.
 
 ## Team Assignments
 
 **When to use team mode**: root cause unclear after Step 2, OR failure spans 3+ modules.
 
-- **Teammate 1–3 (sw-engineer × 2–3, model=opus)**: each investigates a distinct root-cause hypothesis independently
+- **Teammate 1-3 (foundry:sw-engineer x 2-3, model=opus)**: each investigates a distinct root-cause hypothesis independently
 
 **Coordination:**
 
 1. Lead broadcasts current evidence: `{symptom: <description>, traceback: <key lines>}`
 2. Each teammate claims one hypothesis and investigates it independently — no overlap
 3. Lead facilitates cross-challenge between competing analyses
-4. Lead synthesises the consensus root cause, then executes Steps 3–4 (hypothesis gate, hand off to fix) alone
+4. Lead synthesises the consensus root cause, then executes Steps 3-4 (hypothesis gate, hand off to fix) alone
 
 **Spawn prompt template:**
 
 ```
-You are a sw-engineer teammate debugging: [symptom].
+You are a foundry:sw-engineer teammate debugging: [symptom].
 Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
 Report findings to @lead using deltaT# or epsilonT# codes.

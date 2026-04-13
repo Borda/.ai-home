@@ -1,3 +1,16 @@
+---
+name: judge
+description: Research-supervisor review of program.md — validates experimental methodology (hypothesis clarity, measurement validity, control adequacy, scope, strategy fit) and emits APPROVED / NEEDS-REVISION / BLOCKED verdict before the expensive run loop.
+argument-hint: [<program.md>] [--skip-validation]
+effort: medium
+allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+## --team flag (committee mode)
+
+If `--team` is present in arguments: after emitting the verdict (Step J5/J6), read `.claude/skills/research/run/modes/team.md` Phase A (hypothesis generation only). Spawn 2–3 reviewers using the team protocol to independently audit the methodology — majority rules on the verdict. This is the "committee" review mode.
+
 # Judge Mode (Steps J1–J6)
 
 Triggered by `judge` or `judge <file.md>`.
@@ -16,7 +29,7 @@ Triggered by `judge` or `judge <file.md>`.
    No program.md found. Run /optimize plan <goal> first, or provide a path: /optimize judge <path.md>
    ```
 
-**Parsing** — use the program-file section-parsing rules from Step R1 in `.claude/skills/optimize/modes/run.md` (find `## <Section>` headings, extract first fenced code block, parse as `key: value` lines, warn on unrecognized keys). The `--skip-validation` flag and `colab_hw` are judge-specific and extracted independently — they are not part of R1.
+**Parsing** — use the program-file section-parsing rules from Step R1 in `.claude/skills/research/run/SKILL.md` (find `## <Section>` headings, extract first fenced code block, parse as `key: value` lines, warn on unrecognized keys). The `--skip-validation` flag and `colab_hw` are judge-specific and extracted independently — they are not part of R1.
 
 **Placeholder substitution** — after parsing, apply the same substitution step as R1: resolve all `{field_name}` tokens in `metric_cmd` and `guard_cmd` using the corresponding field from `## Config`, falling back to any declared default for that field. Since judge has no `clarification_prompt`, skip the clarification-override step.
 

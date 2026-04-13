@@ -1,3 +1,20 @@
+---
+name: plan
+description: Analysis-only planning — classify and scope a task without writing code; outputs a structured plan to .plans/active/.
+argument-hint: <goal>
+effort: medium
+allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
+
+- status `completed` if the work is clearly done
+- status `deleted` if orphaned / no longer relevant
+- keep `in_progress` only if genuinely continuing
+
+**Task tracking**: immediately after Step 1 (scope is known), create TaskCreate entries for all steps of this workflow before doing any other work. Mark each step in_progress when starting it, completed when done.
+
 # Plan Mode
 
 Analysis-only mode that produces a structured plan without writing any code. Use this to understand scope, risks, and effort before committing to a full `/develop feature|fix|refactor`.
@@ -6,11 +23,11 @@ Analysis-only mode that produces a structured plan without writing any code. Use
 
 Determine the task type and affected surface.
 
-Spawn a **sw-engineer** agent with the full goal text from `$ARGUMENTS`. The agent should:
+Spawn a **foundry:sw-engineer** agent with the full goal text from `$ARGUMENTS`. The agent should:
 
 - Classify the task as `feature`, `fix`, or `refactor`
 - Identify affected files and modules (search the codebase — do not guess)
-- Assess complexity: small (1–3 files, self-contained), medium (4–8 files or 1–2 modules), large (cross-module, API changes, or 3+ modules)
+- Assess complexity: small (1-3 files, self-contained), medium (4-8 files or 1-2 modules), large (cross-module, API changes, or 3+ modules)
 - List risks: breaking changes, missing tests, unclear requirements, external dependencies
 - Note any complexity smells: ambiguous goal, scope creep risk, missing reproduction case, directory-wide refactor without explicit goal
 
@@ -18,7 +35,7 @@ The agent returns its findings inline (no file handoff needed — output is shor
 
 ## Step 2: Structured plan
 
-Derive a filename slug from the goal: take the first 4–5 meaningful words, lowercase, hyphen-separated (e.g. `"improve caching in data loader"` → `plan_improve-caching-data-loader.md`). Write the plan to `.plans/active/<slug>` (create or overwrite). Store the full path as `PLAN_FILE` — used in Steps 3 and Final output.
+Derive a filename slug from the goal: take the first 4-5 meaningful words, lowercase, hyphen-separated (e.g. `"improve caching in data loader"` -> `plan_improve-caching-data-loader.md`). Write the plan to `.plans/active/<slug>` (create or overwrite). Store the full path as `PLAN_FILE` — used in Steps 3 and Final output.
 
 ```markdown
 # Plan: <goal>
@@ -65,9 +82,9 @@ Derive a filename slug from the goal: take the first 4–5 meaningful words, low
 
 Spawn the execution agents for this classification in parallel. Each reads `<PLAN_FILE>` and returns **only** a compact JSON — no prose, no analysis:
 
-- **feature**: sw-engineer, qa-specialist, linting-expert
-- **fix**: sw-engineer, qa-specialist
-- **refactor**: sw-engineer, linting-expert, qa-specialist
+- **feature**: foundry:sw-engineer, foundry:qa-specialist, foundry:linting-expert
+- **fix**: foundry:sw-engineer, foundry:qa-specialist
+- **refactor**: foundry:sw-engineer, foundry:linting-expert, foundry:qa-specialist
 
 Each agent receives only the plan file path and their role — no conversation history, no unrelated context. Prompt (substitute `<ROLE>` and `<PLAN_FILE>`):
 
@@ -75,24 +92,24 @@ Each agent receives only the plan file path and their role — no conversation h
 
 Agents return inline (verdicts are ~150 bytes — no file handoff needed). Collect all results:
 
-- All `ok: true`, empty `blockers`, `q`, and `concerns` → note `✓ agents ready` in final output and proceed
-- Any `ok: false`, non-empty `blockers` or `q` → enter the **internal resolution loop** below before surfacing anything to the user
-- Non-empty `concerns` with `ok: true` → surface as advisory notes in the final output (not blockers, but domain-specific flags the user should know before starting)
+- All `ok: true`, empty `blockers`, `q`, and `concerns` -> note `✓ agents ready` in final output and proceed
+- Any `ok: false`, non-empty `blockers` or `q` -> enter the **internal resolution loop** below before surfacing anything to the user
+- Non-empty `concerns` with `ok: true` -> surface as advisory notes in the final output (not blockers, but domain-specific flags the user should know before starting)
 
 ### Internal resolution loop (max 3 iterations)
 
 For each blocker or open question:
 
 1. **Attempt autonomous resolution** — search the codebase, read relevant files, re-read the goal. Also search the web for similar issues and established patterns (e.g. known library constraints, common implementation trade-offs) — use WebSearch for this. If the answer can be determined from any of these sources, update `<PLAN_FILE>` and mark the item resolved.
-2. **Re-query the raising agent** — send only the resolved item: `{"a":"<ROLE>","resolved":"<item>","answer":"<resolution>"}`. If the agent returns `ok: true` → resolved; remove from the blockers list.
-3. After all resolvable items are cleared, re-check: if all agents are now `ok: true` → `✓ agents ready`.
+2. **Re-query the raising agent** — send only the resolved item: `{"a":"<ROLE>","resolved":"<item>","answer":"<resolution>"}`. If the agent returns `ok: true` -> resolved; remove from the blockers list.
+3. After all resolvable items are cleared, re-check: if all agents are now `ok: true` -> `✓ agents ready`.
 
 **Escalate to user only what cannot be resolved autonomously** — a blocker requires user input when: it depends on a business decision, an undocumented external constraint, a missing credential/secret, or a genuine ambiguity in the goal that has two equally valid interpretations.
 
 For each escalated item, present:
 
 - **Issue**: one sentence — what is blocking or unclear
-- **Alternatives**: 2–3 concrete options with trade-offs
+- **Alternatives**: 2-3 concrete options with trade-offs
 - **Recommendation**: which option to pick and why
 
 Do not escalate: items resolvable by reading the codebase, items that are risks (not blockers), or items already addressed in the plan.
@@ -133,11 +150,11 @@ Co-review corrections applied (<N> agents, omit table if none):
 **Print to terminal**:
 
 ```
-Plan → <PLAN_FILE>
+Plan -> <PLAN_FILE>
 
 <brief content exactly as written to the file>
 
-→ /develop <classification> <goal> when ready
+-> /develop <classification> <goal> when ready
 ```
 
 If unresolved items were escalated, print each after the brief:
@@ -148,6 +165,6 @@ If unresolved items were escalated, print each after the brief:
   Recommendation: <option> — <reason>
 ```
 
-Wait for user input before printing `→ /develop ...`.
+Wait for user input before printing `-> /develop ...`.
 
 No quality stack, no Codex pre-pass, no review loop. Exit after printing the summary.

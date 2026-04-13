@@ -1,8 +1,53 @@
-<!-- Mode-file include: loaded by .claude/skills/optimize/SKILL.md — not a standalone skill -->
+---
+name: run
+description: Sustained metric-improvement loop with atomic commits, auto-rollback, and experiment logging. Iterates with specialist agents, commits atomically, auto-rolls back on regression. Accepts a program.md file path. Supports --resume, --team, --colab, --codex, --researcher, --architect, --journal, --hypothesis.
+argument-hint: <program.md> [clarification] [--resume <program.md>] [--team] [--compute=local|colab|docker] [--colab[=H100|L4|T4|A100]] [--codex] [--researcher] [--architect] [--journal] [--hypothesis <path>]
+effort: high
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
 
-<!-- Implements two modes: default run (R0–R7), resume (see Resume Mode section) -->
+<constants>
 
-<!-- Plan mode: see modes/plan.md — Team mode extension: see modes/team.md -->
+Campaign mode only:
+
+```
+MAX_ITERATIONS:             20 (ceiling: 50 — never exceed without explicit user override)
+STUCK_THRESHOLD:            5 consecutive discards → escalation
+GUARD_REWORK_MAX:           2 attempts before revert
+VERIFY_TIMEOUT_SEC:         120 (local), 300 (--colab)
+COLAB_KNOWN_HW:             H100, L4, T4, A100
+SUMMARY_INTERVAL:           10 iterations
+DIMINISHING_RETURNS_WINDOW: 5 iterations < 0.5% each → warn user and suggest stopping
+STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run — see .claude/rules/artifact-lifecycle.md)
+```
+
+**Agent strategy mapping** (`agent_strategy` in config → ideation agent to spawn):
+
+| `agent_strategy` | Specialist agent     | When to use                                  |
+| ---------------- | -------------------- | -------------------------------------------- |
+| `auto`           | heuristic            | Default — infer from metric_cmd keywords     |
+| `perf`           | `perf-optimizer`     | latency, throughput, memory, GPU utilization |
+| `code`           | `sw-engineer`        | coverage, complexity, lines, coupling        |
+| `ml`             | `ai-researcher`      | accuracy, loss, F1, AUC, BLEU                |
+| `arch`           | `solution-architect` | coupling, cohesion, modularity metrics       |
+
+> note: solution-architect uses opusplan tier — higher cost per ideation call
+
+**Auto-inference keyword heuristics** (applied when `agent_strategy: auto` or omitted; checked against `## Goal` text AND metric command):
+
+- contains `pytest`, `coverage`, `complexity` → `code` → `sw-engineer`
+- contains `time`, `latency`, `bench`, `throughput`, `memory` → `perf` → `perf-optimizer`
+- contains `accuracy`, `loss`, `f1`, `auc`, `train`, `val`, `eval` → `ml` → `ai-researcher`
+- no keyword match → `perf` (default fallback)
+
+**Stuck escalation sequence** (at STUCK_THRESHOLD consecutive discards):
+
+1. Switch to a different agent type (rotate through: `code` → `ml` → `perf` → `code`; if current is `ml`, next is `perf`; if current is `perf`, next is `code`)
+2. Spawn 2 agents in parallel with competing strategies; keep whichever improves metric
+3. Stop, report progress, surface to user — do not continue looping blindly
+
+</constants>
 
 ## Default Mode (Steps R1–R7)
 
@@ -56,6 +101,8 @@ If neither `--researcher` nor `--architect` is set, skip to Step R1.
 
 ### Step R1: Load / build config
 
+**`--resume` flag detection**: check if `--resume` is present in arguments. If yes, extract the optional program.md path that follows it (if any). Jump directly to the `## Resume Mode` section and execute from there. The remainder of Step R1 and Steps R2–R7 are skipped for resume mode.
+
 **Auto-detect**: if the first non-flag argument ends in `.md`, treat it as a program file path and parse it. Otherwise, treat it as a text goal (existing behavior).
 
 **Clarification prompt** (`.md` file path only): after extracting the `.md` file path argument, inspect the next token (before any `--` flags):
@@ -82,7 +129,7 @@ Do not stop the run for unrecognized tokens — warn and continue.
 2. Extract the first fenced code block following that heading.
 3. Parse the block as `key: value` lines; multi-value fields use indented `  - value` list items. Path values containing spaces must be wrapped in double quotes.
 4. Missing required fields (`command` under `## Metric` and `## Guard`) → stop with a clear error.
-5. `agent_strategy: auto` (or omitted) → apply keyword heuristics from `<constants>` in `.claude/skills/optimize/SKILL.md` to `## Goal` text and metric command.
+5. `agent_strategy: auto` (or omitted) → apply keyword heuristics from `<constants>` above to `## Goal` text and metric command.
 6. `target` under `## Metric`: `direction: higher` → stop when metric ≥ target; `direction: lower` → stop when metric ≤ target. If `target` is omitted, run until `max_iterations`.
 7. Unrecognized keys and section headings → warn once, then ignore.
 8. `## Notes` and the `# Program:` title are never parsed — human-only. (Legacy `# Campaign:` heading is accepted as an alias.)
@@ -144,7 +191,7 @@ Run all checks before touching code. Fail fast with a clear message if any fail:
 
 ### Step R3: Select ideation agent
 
-Apply the `agent_strategy` mapping from `<constants>` in `.claude/skills/optimize/SKILL.md`. If `auto`, apply keyword heuristics to `metric_cmd`. Log selected agent to `state.json`.
+Apply the `agent_strategy` mapping from `<constants>` above. If `auto`, apply keyword heuristics to `metric_cmd`. Log selected agent to `state.json`.
 
 ### Step R4: Establish baseline (iteration 0)
 
@@ -186,7 +233,7 @@ Then proceed to Step R5.
 
 ### Step R5: Iteration loop
 
-**`--team` mode**: If `--team` is active, Read `.claude/skills/optimize/modes/team.md` and execute Phases A–D in place of the standard iteration loop below.
+**`--team` mode**: If `--team` is active, Read `.claude/skills/research/run/modes/team.md` and execute Phases A–D in place of the standard iteration loop below.
 
 For each iteration `i` from 1 to `max_iterations`:
 
@@ -469,7 +516,7 @@ TaskUpdate R5 subject: `R5: Iter N/max — last: <status>, best: <best_metric>`
 #### Phase 9 — Progress checks
 
 - **Summary every SUMMARY_INTERVAL iterations**: print compact table (iteration, metric, delta, status) for the last N iterations.
-- **Stuck detection**: if last `STUCK_THRESHOLD` entries all have `status: reverted|no-op|hook-blocked`, trigger escalation (see `<constants>` in `.claude/skills/optimize/SKILL.md`). Log escalation action.
+- **Stuck detection**: if last `STUCK_THRESHOLD` entries all have `status: reverted|no-op|hook-blocked`, trigger escalation (see `<constants>` above). Log escalation action.
 - **Diminishing returns**: if last `DIMINISHING_RETURNS_WINDOW` kept entries each improved < 0.5%, print a warning and suggest stopping. Do not auto-stop — let the user decide.
 - **Early stop**: if `target` is set in the program file (or config), stop when the metric crosses it (`direction: higher` → metric ≥ target; `direction: lower` → metric ≤ target). Mark `state.json` `status: goal-achieved`.
 - **Context compaction** (every SUMMARY_INTERVAL iterations): write a full iteration summary table to `.experiments/state/<run-id>/progress-<i>.md` and actively discard verbose per-iteration details from working memory. Retain in working memory only: current metric value, iteration count, JSONL file path, and `best_commit`. This prevents linear context growth in long campaigns — full history is always recoverable from `experiments.jsonl` and `ideation-<i>.md` files on disk.

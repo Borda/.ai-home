@@ -1,3 +1,20 @@
+---
+name: refactor
+description: Test-first refactoring — audit coverage, add characterization tests, apply changes with safety net, run quality stack and review loop.
+argument-hint: <target file or directory> <goal>
+effort: high
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
+
+- status `completed` if the work is clearly done
+- status `deleted` if orphaned / no longer relevant
+- keep `in_progress` only if genuinely continuing
+
+**Task tracking**: immediately after Step 1 (scope is known), create TaskCreate entries for all steps of this workflow before doing any other work. Mark each step in_progress when starting it, completed when done.
+
 # Refactor Mode
 
 Test-first refactoring. Audit test coverage, add characterization tests if missing, then apply changes with a safety net.
@@ -13,13 +30,15 @@ If `<target>` is a directory: use the Glob tool (pattern `**/*.py`, path `<targe
 wc -l <target>/**/*.py 2>/dev/null || wc -l <target>
 ```
 
-Spawn a **sw-engineer** agent to analyze the code and identify:
+Spawn a **foundry:sw-engineer** agent to analyze the code and identify:
 
 - Public API surface (functions, classes, methods that external code calls)
 - Internal complexity hotspots (cyclomatic complexity, deep nesting, long functions)
 - Code smells relevant to the stated goal
 - Dependencies and coupling between modules
 - **Complexity smell**: Directory or cross-module scope — flag it; consider team mode
+
+**Scope gate**: if the target is directory-wide scope (10+ files) regardless of goal, flag the complexity smell. Use `AskUserQuestion` to present the scope concern before proceeding, with options: "Narrow scope (Recommended)" / "Proceed anyway".
 
 ## Step 2: Audit test coverage
 
@@ -52,7 +71,7 @@ If the audit seems incomplete: re-examine before proceeding to Step 3. Gaps in t
 
 ## Step 3: Add characterization tests (if needed)
 
-For every **uncovered** or **partially covered** public API, spawn a **qa-specialist** agent to generate characterization tests:
+For every **uncovered** or **partially covered** public API, spawn a **foundry:qa-specialist** agent to generate characterization tests:
 
 - Import the function, call it with representative inputs, assert the **current** output
 - Use `pytest.mark.parametrize` for multiple input/output pairs
@@ -91,7 +110,7 @@ For each change:
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass before cycle 1.
 
-Full review of the refactored code. This is a **loop** — review → targeted refactoring (return to Step 4) → re-review until only nits remain. Maximum 3 outer cycles. (Step 4's "max 5 change-test cycles" bound applies within each individual pass through Step 4, independently of this outer loop.)
+Full review of the refactored code. This is a **loop** — review -> targeted refactoring (return to Step 4) -> re-review until only nits remain. Maximum 3 outer cycles. (Step 4's "max 5 change-test cycles" bound applies within each individual pass through Step 4, independently of this outer loop.)
 
 **Each cycle:**
 
@@ -117,6 +136,8 @@ Full review of the refactored code. This is a **loop** — review → targeted r
 
 **After 3 cycles**: if substantive issues remain, stop — surface them to the user before proceeding.
 
+Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Guard, Quality Stack, Codex Pre-pass, Progressive Review Loop, and Codex Mechanical Delegation steps.
+
 ## Final Report
 
 ```
@@ -136,7 +157,7 @@ Full review of the refactored code. This is a **loop** — review → targeted r
 
 ### Test Results
 - All tests passing: yes/no
-- Coverage: before% → after%
+- Coverage: before% -> after%
 
 ### Follow-up
 - [any remaining items that need manual review]
@@ -151,8 +172,8 @@ Full review of the refactored code. This is a **loop** — review → targeted r
 
 **When to use team mode**: target is a directory OR cross-module scope.
 
-- **Teammate 1 (sw-engineer, model=opus)**: performs the refactoring (Step 4)
-- **Teammate 2 (qa-specialist, model=opus)**: writes characterization tests (Step 3) in parallel
+- **Teammate 1 (foundry:sw-engineer, model=opus)**: performs the refactoring (Step 4)
+- **Teammate 2 (foundry:qa-specialist, model=opus)**: writes characterization tests (Step 3) in parallel
 
 **Coordination:**
 
@@ -164,7 +185,7 @@ Full review of the refactored code. This is a **loop** — review → targeted r
 **Spawn prompt template:**
 
 ```
-You are a [sw-engineer|qa-specialist] teammate refactoring: [target].
+You are a [foundry:sw-engineer|foundry:qa-specialist] teammate refactoring: [target].
 Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2. Apply file locking protocol for concurrent edits.
 Your task: [refactoring steps 4 | characterization tests step 3].
 Compact Instructions: preserve file paths, test results, coverage numbers. Discard verbose tool output.

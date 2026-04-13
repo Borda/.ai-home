@@ -1,6 +1,11 @@
-<!-- Mode-file include: loaded by .claude/skills/optimize/SKILL.md — not a standalone skill -->
-
-<!-- Implements one mode: plan (P-P0–P-P3) -->
+---
+name: plan
+description: Interactive wizard that scans the codebase, proposes a metric/guard/agent config, and writes a program.md run spec. Also runs cProfile on a file path to surface bottlenecks before prompting for optimization goal.
+argument-hint: <goal> | <file.py> [out.md]
+effort: medium
+allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
 
 ## Plan Mode (Steps P-P0–P-P3)
 
@@ -133,6 +138,10 @@ Print:
 ✓ Program saved to program.md
 
 Next steps:
-  /optimize judge program.md   ← validate plan before running (recommended)
-  /optimize run program.md     ← start iteration loop directly
+  /research:judge program.md   ← validate plan before running (recommended)
+  /research:run program.md     ← start iteration loop directly
 ```
+
+## --team flag
+
+If `--team` is present in arguments: after the program.md is written, also read `.claude/skills/research/run/modes/team.md` to understand the team protocol. Inform the user that `--team` applies at the run step (not the plan step), and that they can use `/research:run <program.md> --team` to execute the plan with team mode active.

@@ -1,3 +1,20 @@
+---
+name: fix
+description: Reproduce-first bug resolution — capture bug in failing regression test, apply minimal fix, run quality stack and review loop.
+argument-hint: <symptom or issue #>
+effort: medium
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
+
+- status `completed` if the work is clearly done
+- status `deleted` if orphaned / no longer relevant
+- keep `in_progress` only if genuinely continuing
+
+**Task tracking**: immediately after Step 1 (scope is known), create TaskCreate entries for all steps of this workflow before doing any other work. Mark each step in_progress when starting it, completed when done.
+
 # Fix Mode
 
 Reproduce-first bug resolution. Capture the bug in a failing regression test, apply the minimal fix, then verify.
@@ -18,11 +35,13 @@ If an error message or pattern was provided: use the Grep tool (pattern `<error_
 python -m pytest --tb=long <test_path >-v 2>&1 | tail -40
 ```
 
-Spawn a **sw-engineer** agent to analyze the failing code path and identify:
+Spawn a **foundry:sw-engineer** agent to analyze the failing code path and identify:
 
 - The root cause (not just the symptom)
 - The minimal code surface that needs to change
 - Any related code that might be affected by the fix
+
+**Scope gate**: if the root cause spans 3+ modules, flag the complexity smell. Use `AskUserQuestion` to present the scope concern before proceeding, with options: "Narrow scope (Recommended)" / "Proceed anyway".
 
 ## Step 2: Reproduce the bug
 
@@ -35,7 +54,7 @@ python -m pytest --tb=short <test_file >:: <test_name >-v
 # If no test exists — write a regression test that captures the bug
 ```
 
-Spawn a **qa-specialist** agent to write the regression test if one doesn't exist:
+Spawn a **foundry:qa-specialist** agent to write the regression test if one doesn't exist:
 
 - The test must **fail** against the current code (proving the bug exists)
 - Use `pytest.mark.parametrize` if the bug affects multiple input patterns
@@ -74,7 +93,7 @@ Make the minimal change to fix the root cause:
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass before cycle 1.
 
-Full review of the fix. This is a **loop** — review → fix → re-review until only nits remain. Maximum 3 cycles.
+Full review of the fix. This is a **loop** — review -> fix -> re-review until only nits remain. Maximum 3 cycles.
 
 **Each cycle:**
 
@@ -100,6 +119,8 @@ Full review of the fix. This is a **loop** — review → fix → re-review unti
 6. **If substantive gaps remain**: start the next cycle (max 3 total).
 
 **After 3 cycles**: if substantive issues remain, stop — surface them to the user before proceeding.
+
+Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Guard, Quality Stack, Codex Pre-pass, Progressive Review Loop, and Codex Mechanical Delegation steps.
 
 ## Final Report
 
@@ -139,19 +160,19 @@ Full review of the fix. This is a **loop** — review → fix → re-review unti
 
 **When to use team mode**: root cause unclear after Step 1, OR bug spans 3+ modules.
 
-- **Teammate 1–3 (sw-engineer x 2–3, model=opus)**: each investigates a distinct root-cause hypothesis independently
+- **Teammate 1-3 (foundry:sw-engineer x 2-3, model=opus)**: each investigates a distinct root-cause hypothesis independently
 
 **Coordination:**
 
 1. Lead broadcasts current evidence: `{bug: <description>, traceback: <key lines>}`
 2. Each teammate investigates independently — claims a hypothesis
 3. Lead facilitates cross-challenge between competing analyses
-4. Lead synthesizes consensus root cause, then proceeds with Steps 2–4 (regression test, fix, review loop) alone
+4. Lead synthesizes consensus root cause, then proceeds with Steps 2-4 (regression test, fix, review loop) alone
 
 **Spawn prompt template:**
 
 ```
-You are a sw-engineer teammate debugging: [bug description].
+You are a foundry:sw-engineer teammate debugging: [bug description].
 Read .claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
 Report findings to @lead using deltaT# or epsilonT# codes.

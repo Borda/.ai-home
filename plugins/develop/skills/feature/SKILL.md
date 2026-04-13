@@ -1,3 +1,20 @@
+---
+name: feature
+description: TDD-first feature development — crystallise API as a demo test, drive implementation to pass it, run quality stack and progressive review loop.
+argument-hint: <goal>
+effort: high
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+disable-model-invocation: true
+---
+
+**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
+
+- status `completed` if the work is clearly done
+- status `deleted` if orphaned / no longer relevant
+- keep `in_progress` only if genuinely continuing
+
+**Task tracking**: immediately after Step 1 (scope is known), create TaskCreate entries for all steps of this workflow before doing any other work. Mark each step in_progress when starting it, completed when done.
+
 # Feature Mode
 
 TDD-first feature development. Crystallise the API as a demo use-case test, drive implementation to pass it, then document.
@@ -13,7 +30,7 @@ gh issue view <number >--comments
 
 If a free-text description was provided: use the Grep tool (pattern `<keyword>`, glob `**/*.py`, path `src/`) to search for related code before spawning the analysis agent.
 
-Spawn a **sw-engineer** agent to analyse the codebase and produce:
+Spawn a **foundry:sw-engineer** agent to analyse the codebase and produce:
 
 - **Purpose**: what problem does this feature solve, and for which users?
 - **Scope**: which files and modules are likely to change (entry points, data models, tests)?
@@ -31,7 +48,7 @@ Present the analysis summary before proceeding.
 
 Crystallise the intended API contract before any implementation exists. Choose the form based on scope:
 
-**Unit function / simple API** → inline doctest:
+**Unit function / simple API** -> inline doctest:
 
 ```python
 def predict(self, x: Tensor) -> Tensor:
@@ -42,7 +59,7 @@ def predict(self, x: Tensor) -> Tensor:
     """
 ```
 
-**Complex feature** (setup required, side effects, multi-step flow) → minimal example script:
+**Complex feature** (setup required, side effects, multi-step flow) -> minimal example script:
 
 ```python
 # examples/demo_<feature>.py  — throwaway script, run manually
@@ -109,7 +126,7 @@ Start from the Step 2 demo — it is already failing and becomes the first targe
    # script form
    python examples/demo_ <feature >.py 2>&1 | tail -5
    ```
-4. **Implement the minimal code** (spawn **sw-engineer** agent for non-trivial logic):
+4. **Implement the minimal code** (spawn **foundry:sw-engineer** agent for non-trivial logic):
    - Reuse or extend existing code identified in Step 1 — prefer subclassing or composing over parallel reimplementation
    - Match the project's existing patterns (naming, error handling, type annotations)
 5. **Run the demo/test — confirm it passes**
@@ -127,7 +144,7 @@ If Step 2 produced an example script: promote it into a formal pytest test now t
 
 Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass before cycle 1.
 
-Full review of the implementation. This is a **loop** — review → fix → re-review until only nits remain. Maximum 3 cycles.
+Full review of the implementation. This is a **loop** — review -> fix -> re-review until only nits remain. Maximum 3 cycles.
 
 **Each cycle:**
 
@@ -155,7 +172,7 @@ Full review of the implementation. This is a **loop** — review → fix → re-
 
 ## Step 5: Documentation
 
-Spawn a **doc-scribe** agent to update all affected documentation:
+Spawn a **foundry:doc-scribe** agent to update all affected documentation:
 
 - Add or update **docstrings** on new/modified functions and classes (Google style — Napoleon)
 - Update the module-level docstring if the feature adds a significant capability
@@ -167,6 +184,8 @@ Spawn a **doc-scribe** agent to update all affected documentation:
 # Verify doctests pass after doc updates
 python -m pytest --doctest-modules <target_module >-v 2>&1 | tail -20
 ```
+
+Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Guard, Quality Stack, Codex Pre-pass, Progressive Review Loop, and Codex Mechanical Delegation steps.
 
 ## Final Report
 
@@ -209,9 +228,9 @@ python -m pytest --doctest-modules <target_module >-v 2>&1 | tail -20
 
 **When to use team mode**: feature spans 3+ modules, OR changes a public API, OR involves auth/payment/data scope.
 
-- **Teammate 1 (sw-engineer, model=opus)**: implements the feature (Steps 2–3)
-- **Teammate 2 (qa-specialist, model=opus)**: writes TDD tests in parallel + security checks for auth/payment/data scope
-- **Teammate 3 (doc-scribe, model=sonnet)**: prepares documentation structure in parallel (Step 5)
+- **Teammate 1 (foundry:sw-engineer, model=opus)**: implements the feature (Steps 2-3)
+- **Teammate 2 (foundry:qa-specialist, model=opus)**: writes TDD tests in parallel + security checks for auth/payment/data scope
+- **Teammate 3 (foundry:doc-scribe, model=sonnet)**: prepares documentation structure in parallel (Step 5)
 
 **Coordination:**
 

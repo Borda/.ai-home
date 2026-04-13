@@ -1,7 +1,7 @@
 ---
-name: research
+name: topic
 description: Research State of the Art (SOTA) literature for an Artificial Intelligence / Machine Learning (AI/ML) topic, method, or architecture. Finds relevant papers, builds a comparison table, recommends the best implementation strategy for the current codebase, and optionally produces a phased implementation plan mapped to the codebase. Delegates deep analysis to the ai-researcher agent and codebase mapping to solution-architect.
-argument-hint: <topic> | plan [path-to-output.md] | --team
+argument-hint: <topic> [--team]
 allowed-tools: Read, Write, Grep, Glob, Agent, WebSearch, WebFetch, TaskCreate, TaskUpdate
 context: fork
 effort: high
