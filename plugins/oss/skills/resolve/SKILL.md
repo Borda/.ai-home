@@ -176,7 +176,7 @@ Map each finding bullet to the action item schema:
 | MEDIUM                   | `[suggest]`                            |
 | LOW                      | `[suggest]` (omit if total items > 10) |
 
-- `author`: the section owner agent (e.g., `sw-engineer` for Architecture, `qa-specialist` for Test Coverage)
+- `author`: the section owner agent (e.g., `foundry:sw-engineer` for Architecture, `qa-specialist` for Test Coverage)
 - `file` / `line`: extract from `file:line` notation in the finding bullet; leave blank if absent
 - `full_comment_text`: the full finding bullet text
 - All items carry the tag `[report]` as a prefix to `type` (e.g., `[report][req]`, `[report][suggest]`)
@@ -375,14 +375,14 @@ One-sentence summary: what independent changes landed on base after the contribu
 
 ## Step 7: Resolve per conflicted file
 
-Delegate per-file conflict edits to `sw-engineer`. Build the spawn prompt with all three context sources, then check the result before completing the merge.
+Delegate per-file conflict edits to `foundry:sw-engineer`. Build the spawn prompt with all three context sources, then check the result before completing the merge.
 
 ### 7a: Spawn sw-engineer
 
-Spawn `sw-engineer` with this prompt (fill in the bracketed sections from the steps indicated):
+Spawn `foundry:sw-engineer` with this prompt (fill in the bracketed sections from the steps indicated):
 
 ```
-Agent(sw-engineer, prompt="
+Agent(foundry:sw-engineer, prompt="
 You are resolving merge conflicts in a checked-out PR branch.
 
 ## Conflicted files
@@ -494,9 +494,9 @@ mkdir -p "$RUN_DIR" # timeout: 5000
 Spawn both agents in parallel:
 
 ```
-Agent(linting-expert): "Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
+Agent(foundry:linting-expert): "Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
 
-Agent(qa-specialist, maxTurns: 15): "Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
+Agent(foundry:qa-specialist, maxTurns: 15): "Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
 ```
 
 > **Health monitoring**: Agent calls are synchronous; Claude awaits responses natively. If no response within ~15 min, surface partial results from `$RUN_DIR` with ⏱.
@@ -656,9 +656,9 @@ mkdir -p "$RUN_DIR" # timeout: 5000
 Spawn both agents in parallel:
 
 ```
-Agent(linting-expert): "Review all files changed in HEAD (git diff HEAD~N..HEAD where N = number of commits just made). List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
+Agent(foundry:linting-expert): "Review all files changed in HEAD (git diff HEAD~N..HEAD where N = number of commits just made). List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
 
-Agent(qa-specialist, maxTurns: 15): "Review all files changed in the most recent commits for correctness, edge cases, and regressions. Flag any blocking issues. Write your full findings to $RUN_DIR/qa-specialist-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
+Agent(foundry:qa-specialist, maxTurns: 15): "Review all files changed in the most recent commits for correctness, edge cases, and regressions. Flag any blocking issues. Write your full findings to $RUN_DIR/qa-specialist-step12c.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
 ```
 
 > **Health monitoring**: Agent calls are synchronous; Claude awaits responses natively. If no response within ~15 min, surface partial results from `$RUN_DIR` with ⏱.
@@ -715,7 +715,7 @@ Mark the task `completed`, then print:
 - **`[gh]` items** (pr + report mode only): commit messages use: `[resolve #<id>] @<reviewer> (gh):` — same as plain `[req]`/`[suggest]` in pr mode, plus the `(gh)` source annotation.
 - **`[report]` items**: commit messages for these items should attribute the finding to the agent, not a GitHub commenter: `[resolve #<id>] /review finding by <agent-name> (report: <report-path>):` — this distinguishes automated findings from human reviewer requests in git history.
 - **Sources block**: always printed after mode resolution and before any GitHub API calls — gives the user a clear "abort if wrong source" moment with zero cost.
-- **Step 7 delegation** — Step 7 delegates per-file conflict edits to `sw-engineer`; resolve owns workflow orchestration and context (conflict list, motivation, merge-base log, diff stat); sw-engineer owns code-level semantic resolution (Read → Edit → stage); resolve retains the conflict report block and the `git merge --continue` call.
+- **Step 7 delegation** — Step 7 delegates per-file conflict edits to `foundry:sw-engineer`; resolve owns workflow orchestration and context (conflict list, motivation, merge-base log, diff stat); sw-engineer owns code-level semantic resolution (Read → Edit → stage); resolve retains the conflict report block and the `git merge --continue` call.
 - Follow-up chains:
   - After push → never approve or comment on the PR; the maintainer reviews the pushed commits and clicks Merge on GitHub
   - For `[question]` items left unanswered → record rationale in the resolve report only; do NOT post to the PR

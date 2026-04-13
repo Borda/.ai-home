@@ -95,7 +95,7 @@ Use classification to skip optional agents:
 
 Parse the PR body (from `gh pr view $CLEAN_ARGS`) for issue references (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract all referenced issue numbers into `ISSUE_NUMS` (list). Cap at 3 issues maximum.
 
-If `ISSUE_NUMS` is non-empty, spawn one **sw-engineer** agent per issue at the start of Step 2 (in parallel with Codex co-review — both are independent of each other). Each issue agent should:
+If `ISSUE_NUMS` is non-empty, spawn one **foundry:sw-engineer** agent per issue at the start of Step 2 (in parallel with Codex co-review — both are independent of each other). Each issue agent should:
 
 - Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
 - Fetch comments: `gh issue view <N> --comments`
@@ -148,9 +148,9 @@ Replace `$RUN_DIR` in the spawn prompt below with the actual path from Step 2.
 
 Launch agents simultaneously with the Agent tool (security augmentation is folded into Agent 1 — not a separate spawn; Agent 6 is optional). Every agent prompt must end with:
 
-> "Write your FULL findings (all sections, Confidence block) to `$RUN_DIR/<agent-name>.md` using the Write tool — where `<agent-name>` is e.g. `sw-engineer`, `qa-specialist`, `perf-optimizer`, `doc-scribe`, `linting-expert`, `solution-architect`. Then return to the caller ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"findings\":N,\"severity\":{\"critical\":0,\"high\":1,\"medium\":2},\"file\":\"$RUN_DIR/<agent-name>.md\",\"confidence\":0.88}`"
+> "Write your FULL findings (all sections, Confidence block) to `$RUN_DIR/<agent-name>.md` using the Write tool — where `<agent-name>` is e.g. `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`, `foundry:doc-scribe`, `foundry:linting-expert`, `foundry:solution-architect`. Then return to the caller ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"findings\":N,\"severity\":{\"critical\":0,\"high\":1,\"medium\":2},\"file\":\"$RUN_DIR/<agent-name>.md\",\"confidence\":0.88}`"
 
-**Agent 1 — sw-engineer**: Review architecture, SOLID adherence, type safety, error handling, and code structure. Check for Python anti-patterns (bare `except:`, `import *`, mutable defaults). Flag blocking issues vs suggestions.
+**Agent 1 — foundry:sw-engineer**: Review architecture, SOLID adherence, type safety, error handling, and code structure. Check for Python anti-patterns (bare `except:`, `import *`, mutable defaults). Flag blocking issues vs suggestions.
 
 **Error path analysis** (for new/changed code in the diff): For each error-handling path introduced or modified, produce a table:
 
@@ -167,7 +167,7 @@ Read the review checklist (use the Read tool to read `.claude/skills/review/chec
 
 If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/issue-*.md`. Read them. Evaluate whether the code changes address the root cause identified in each linked issue — not just the symptom or the PR description. If the PR addresses only a symptom while the root cause remains unfixed, flag as `[blocking] HIGH — root cause misalignment`. If the PR description diverges from the issue's stated problem (solving something different than what was reported), flag as `HIGH — PR/issue scope divergence`.
 
-**Agent 2 — qa-specialist**: Audit test coverage. Identify untested code paths, missing edge cases, and test quality issues. Check for Machine Learning (ML)-specific issues (non-deterministic tests, missing seed pinning). List the top 5 tests that should be added. Also check explicitly for missing tests in these patterns (these are Ground Truth (GT)-level findings, not afterthoughts):
+**Agent 2 — foundry:qa-specialist**: Audit test coverage. Identify untested code paths, missing edge cases, and test quality issues. Check for Machine Learning (ML)-specific issues (non-deterministic tests, missing seed pinning). List the top 5 tests that should be added. Also check explicitly for missing tests in these patterns (these are Ground Truth (GT)-level findings, not afterthoughts):
 
 - Concurrent access to shared state (when locks or shared variables are present)
 - Error paths: calling methods in wrong order (e.g., `log()` before `start()`)
@@ -179,17 +179,17 @@ If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/iss
 
 If `ISSUE_NUMS` is non-empty, linked issue analysis files exist at `$RUN_DIR/issue-*.md`. Read them. Check that tests cover the specific reproduction scenario described in the linked issue. If the issue includes a minimal reproduction or error trace that is not covered by new or existing tests, flag as `HIGH — issue reproduction not tested`.
 
-**Agent 3 — perf-optimizer**: Analyze code for performance issues. Look for algorithmic complexity issues, Python loops that should be NumPy/torch ops, repeated computation, unnecessary Input/Output (I/O). For ML code: check DataLoader config, mixed precision usage. Prioritize by impact.
+**Agent 3 — foundry:perf-optimizer**: Analyze code for performance issues. Look for algorithmic complexity issues, Python loops that should be NumPy/torch ops, repeated computation, unnecessary Input/Output (I/O). For ML code: check DataLoader config, mixed precision usage. Prioritize by impact.
 
-**Agent 4 — doc-scribe**: Check documentation completeness. Find public APIs without docstrings, missing Google style sections, outdated README sections, and CHANGELOG gaps. Verify examples actually run.
+**Agent 4 — foundry:doc-scribe**: Check documentation completeness. Find public APIs without docstrings, missing Google style sections, outdated README sections, and CHANGELOG gaps. Verify examples actually run.
 
 - **Algorithmic accuracy check**: For functions that compute mathematical results (moving averages, statistics, transforms, distances), verify that the docstring's behavioral claims match what the implementation actually computes. Specifically: does the described output shape/length match the actual algorithm? Does the standard name (e.g. "moving average") correspond to the actual implementation behavior (expanding-window vs. sliding-window)? If the implementation deviates from the conventional definition, flag as MEDIUM — the docstring must document the deviation, not just state the standard definition. **Deprecation check**: Always check whether datetime, os.path, or other stdlib functions used in the code have been deprecated in Python 3.10+ (e.g., `datetime.utcnow()` deprecated in 3.12, `os.path` vs `pathlib`). Flag deprecated stdlib usage as MEDIUM with the replacement. This is a frequent omission in general review but reliably caught by doc-scribe with this explicit trigger.
 
-**Agent 5 — linting-expert**: Static analysis audit. Check ruff and mypy would pass. Identify type annotation gaps on public APIs, suppressed violations without explanation, and any missing pre-commit hooks. Flag mismatched target Python version.
+**Agent 5 — foundry:linting-expert**: Static analysis audit. Check ruff and mypy would pass. Identify type annotation gaps on public APIs, suppressed violations without explanation, and any missing pre-commit hooks. Flag mismatched target Python version.
 
-**Security augmentation (conditional — fold into Agent 1 prompt, not a separate spawn)**: If the diff touches authentication, user input handling, dependency updates, or serialization — add to the sw-engineer agent prompt (Agent 1 above): check for Structured Query Language (SQL) injection, Cross-Site Scripting (XSS), insecure deserialization, hardcoded secrets, and missing input validation. Run `pip-audit` if dependency files changed. Skip if the PR is purely internal refactoring.
+**Security augmentation (conditional — fold into Agent 1 prompt, not a separate spawn)**: If the diff touches authentication, user input handling, dependency updates, or serialization — add to the foundry:sw-engineer agent prompt (Agent 1 above): check for Structured Query Language (SQL) injection, Cross-Site Scripting (XSS), insecure deserialization, hardcoded secrets, and missing input validation. Run `pip-audit` if dependency files changed. Skip if the PR is purely internal refactoring.
 
-**Agent 6 — solution-architect (optional, for PRs touching public API boundaries)**: If the diff touches `__init__.py` exports, adds/modifies Protocols or Abstract Base Classes (ABCs), changes module structure, or introduces new public classes — evaluate API design quality, coupling impact, and backward compatibility. Skip if changes are internal implementation only.
+**Agent 6 — foundry:solution-architect (optional, for PRs touching public API boundaries)**: If the diff touches `__init__.py` exports, adds/modifies Protocols or Abstract Base Classes (ABCs), changes module structure, or introduces new public classes — evaluate API design quality, coupling impact, and backward compatibility. Skip if changes are internal implementation only.
 
 **Health monitoring** (CLAUDE.md §8): Agent calls are synchronous — Claude awaits each response natively; no Bash checkpoint polling is available. If any agent does not return within `$HARD_CUTOFF` seconds, use the Read tool to surface any partial results already written to `$RUN_DIR` and continue with what was found; mark timed-out agents with ⏱ in the final report. Grant one `$EXTENSION` extension if the output file tail explains the delay. Never silently omit timed-out agents.
 
@@ -239,7 +239,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANG
 
 Read and follow the cross-validation protocol from `.claude/skills/_shared/cross-validation-protocol.md`. If `.claude/skills/_shared/cross-validation-protocol.md` is not present, skip Step 5.
 
-**Skill-specific**: use the **same agent type** that raised the finding as the verifier (e.g., sw-engineer verifies sw-engineer's critical finding).
+**Skill-specific**: use the **same agent type** that raised the finding as the verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer's critical finding).
 
 ## Step 6: Consolidate findings
 

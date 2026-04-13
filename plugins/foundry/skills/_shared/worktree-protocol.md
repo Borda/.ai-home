@@ -30,7 +30,7 @@ This applies to every command run "in" a worktree from the lead's context: `uv r
 The cleanest alternative: spawn an agent with `isolation: "worktree"`. That agent's CWD is the worktree root, so all its Bash calls use clean first-token patterns with no `cd` prefix needed.
 
 ```
-Agent(subagent_type="sw-engineer", isolation="worktree", prompt="...")
+Agent(subagent_type="foundry:sw-engineer", isolation="worktree", prompt="...")
 ```
 
 Reserve `cd /worktree && cmd` (even split across two calls) for cases where the lead must run a quick one-off check in the worktree without spawning a full agent.
