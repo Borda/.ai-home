@@ -69,6 +69,24 @@ Use classification to skip optional agents:
 - REFACTOR scope → skip Agent 6 (solution-architect)
 - FEATURE/MIXED → spawn all agents
 
+### Structural context (codemap, if installed)
+
+```bash
+PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
+    CHANGED_MODS=$(git diff HEAD --name-only | grep '\.py$' | sed 's|^src/||;s|\.py$||;s|/|.|g' | grep -v '__init__$')  # timeout: 3000
+    scan-query central --top 5 2>/dev/null  # timeout: 5000
+    for mod in $CHANGED_MODS; do scan-query rdeps "$mod" 2>/dev/null; done  # timeout: 5000
+fi
+```
+
+If codemap returns results: prepend a `## Structural Context (codemap)` block to the **Agent 1 (foundry:sw-engineer)** spawn prompt. Include:
+
+- Each changed module's `rdep_count` — label as **high risk** (>20), **moderate** (5–20), or **low** (<5)
+- `central --top 5` for project-wide blast-radius reference
+
+Agent 1 uses this to prioritize: modules with high `rdep_count` warrant deeper scrutiny on API compatibility, error handling, and behavioural correctness — downstream callers outside the diff are not otherwise visible to the reviewer. If codemap is not installed or index absent, skip silently.
+
 ## Step 2: Codex co-review
 
 Set up the run directory:

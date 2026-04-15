@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""scan-index — build the codemap structural index.
+
+Scans all Python files in the project using ast.parse (import graph)
+and computes structural metrics (rdep_count, dep_count).
+Writes .cache/scan/<project>.json.
+
+Usage:
+    scan-index
+    scan-index --root /path/to/project
+"""
+
+import argparse
+import ast
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+SCAN_VERSION = "2"
+
+SKIP_DIRS = {
+    ".git", ".venv", "venv", "__pycache__", ".tox",
+    "dist", "build", ".eggs", "node_modules", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache", "htmlcov",
+}
+
+
+def find_root() -> Path:
+    try:
+        root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        return Path(root)
+    except subprocess.CalledProcessError:
+        return Path.cwd()
+
+
+def detect_src_root(root: Path) -> Path:
+    """Return the effective Python source root.
+
+    For src-layout projects (src/ dir exists without __init__.py),
+    returns root/src so module names match importable names.
+    """
+    src_dir = root / "src"
+    if src_dir.is_dir() and not (src_dir / "__init__.py").exists():
+        return src_dir
+    return root
+
+
+def extract_imports(source: str, filename: str) -> list[str]:
+    """Extract direct import module names using ast."""
+    tree = ast.parse(source, filename=filename)
+    imports: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imports.add(node.module)
+    return sorted(imports)
+
+
+def path_to_module(filepath: Path, src_root: Path) -> str:
+    """Convert a file path to a dotted module name relative to src_root."""
+    rel = filepath.relative_to(src_root)
+    parts = list(rel.with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def count_loc(source: str) -> int:
+    return sum(1 for line in source.splitlines() if line.strip())
+
+
+def has_main_guard(source: str) -> bool:
+    return bool(re.search(r'if\s+__name__\s*==\s*[\'"]__main__[\'"]', source))
+
+
+def scan(root: Path) -> dict:
+    src_root = detect_src_root(root)
+    modules = []
+
+    python_files = sorted(root.rglob("*.py"))
+    for filepath in python_files:
+        rel = filepath.relative_to(root)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+
+        rel_path = rel
+        try:
+            name = path_to_module(filepath, src_root)
+        except ValueError:
+            # File is outside src_root (e.g. tests/ in a src-layout project)
+            name = path_to_module(filepath, root)
+
+        try:
+            source = filepath.read_text(encoding="utf-8", errors="replace")
+            imports = extract_imports(source, str(filepath))
+            modules.append({
+                "name": name,
+                "path": str(rel_path),
+                "loc": count_loc(source),
+                "dep_count": len(imports),
+                "direct_imports": imports,
+                "is_entry_point": has_main_guard(source),
+                "status": "ok",
+            })
+        except SyntaxError as exc:
+            modules.append({
+                "name": name,
+                "path": str(rel_path),
+                "status": "degraded",
+                "reason": f"SyntaxError: {exc}",
+            })
+        except Exception as exc:
+            modules.append({
+                "name": name,
+                "path": str(rel_path),
+                "status": "degraded",
+                "reason": str(exc),
+            })
+
+    # Compute rdep_count post-scan from the full import graph
+    rdep_counts: dict[str, int] = {}
+    for m in modules:
+        for imp in m.get("direct_imports", []):
+            rdep_counts[imp] = rdep_counts.get(imp, 0) + 1
+    for m in modules:
+        if m.get("status") == "ok":
+            m["rdep_count"] = rdep_counts.get(m["name"], 0)
+
+    return {
+        "scan_version": "2",
+        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "project": root.name,
+        "src_layout": src_root != root,
+        "modules": modules,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build the codemap structural index.")
+    parser.add_argument("--root", type=Path, default=None, help="Project root (default: git root or cwd)")
+    args = parser.parse_args()
+
+    try:
+        root = args.root or find_root()
+        project = root.name
+        out_dir = root / ".cache" / "scan"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{project}.json"
+
+        print(f"[codemap] Scanning {root} ...", file=sys.stderr)
+        index = scan(root)
+
+        ok = sum(1 for m in index["modules"] if m.get("status") == "ok")
+        degraded = sum(1 for m in index["modules"] if m.get("status") == "degraded")
+
+        with out_path.open("w") as f:
+            json.dump(index, f, indent=2)
+
+        print(f"[codemap] \u2713 {out_path}", file=sys.stderr)
+        print(f"[codemap]   {ok} modules indexed, {degraded} degraded", file=sys.stderr)
+        if degraded:
+            for m in index["modules"]:
+                if m.get("status") == "degraded":
+                    print(f"[codemap]   \u26a0 {m['path']}: {m['reason']}", file=sys.stderr)
+    except PermissionError as exc:
+        print(f"[codemap] ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

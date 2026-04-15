@@ -50,6 +50,17 @@ gh issue view <number >--comments
 
 If a free-text description was provided: use the Grep tool (pattern `<keyword>`, glob `**/*.py`, path `src/`) to search for related code before spawning the analysis agent.
 
+**Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
+
+```bash
+PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
+    scan-query central --top 5
+fi
+```
+
+If results are returned: prepend a `## Structural Context (codemap)` block to the foundry:sw-engineer spawn prompt with the hotspot JSON. This gives the analysis agent immediate complexity awareness without cold Glob/Grep exploration. If `scan-query` is not found or index is missing: proceed silently — do not mention codemap to the user.
+
 Spawn a **foundry:sw-engineer** agent to analyse the codebase and produce:
 
 - **Purpose**: what problem does this feature solve, and for which users?

@@ -33,6 +33,17 @@ Analysis-only mode that produces a structured plan without writing any code. Use
 
 Determine the task type and affected surface.
 
+**Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
+
+```bash
+PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
+    scan-query central --top 5
+fi
+```
+
+If results are returned: prepend a `## Structural Context (codemap)` block to the foundry:sw-engineer spawn prompt with the hotspot JSON. This gives the agent an immediate complexity picture for sizing effort and identifying risky modules before exploring the codebase. If `scan-query` is not found or index is missing: proceed silently — do not mention codemap to the user.
+
 Spawn a **foundry:sw-engineer** agent with the full goal text from `$ARGUMENTS`. The agent should:
 
 - Classify the task as `feature`, `fix`, or `refactor`

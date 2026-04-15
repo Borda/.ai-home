@@ -40,6 +40,17 @@ If `<target>` is a directory: use the Glob tool (pattern `**/*.py`, path `<targe
 wc -l <target>/**/*.py 2>/dev/null || wc -l <target>
 ```
 
+**Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
+
+```bash
+PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
+    scan-query central --top 5
+fi
+```
+
+If results are returned: prepend a `## Structural Context (codemap)` block to the foundry:sw-engineer spawn prompt with the hotspot JSON. Additionally, if the target maps to a module in the index, also include `scan-query deps <target_module>` (what the target imports — coupling) and `scan-query rdeps <target_module>` (what imports the target — blast radius of API changes). Derive `<target_module>` from the target path: strip the project root prefix, replace `/` with `.`, drop the `.py` extension. If `scan-query` is not found or index is missing: proceed silently — do not mention codemap to the user.
+
 Spawn a **foundry:sw-engineer** agent to analyze the code and identify:
 
 - Public API surface (functions, classes, methods that external code calls)

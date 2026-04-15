@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""scan-query — query the codemap structural index.
+
+Commands:
+  deps <module>           What does this module import?
+  rdeps <module>          What imports this module?
+  central [--top N]       Most-imported modules (highest blast radius)
+  coupled [--top N]       Modules with the most imports (highest coupling)
+  path <from> <to>        Shortest import path between two modules
+
+All output is JSON. Staleness is checked on every invocation — warns to
+stderr if Python files were committed after the index was built.
+
+Usage:
+    scan-query central --top 5
+    scan-query coupled --top 5
+    scan-query deps mypackage.auth
+    scan-query rdeps mypackage.models
+    scan-query path mypackage.api mypackage.db
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+from collections import deque
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Index location
+# ---------------------------------------------------------------------------
+
+def find_root() -> Path:
+    try:
+        root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        return Path(root)
+    except subprocess.CalledProcessError:
+        return Path.cwd()
+
+
+def find_index() -> Path:
+    root = find_root()
+    return root / ".cache" / "scan" / f"{root.name}.json"
+
+
+def load_index(path: Path) -> dict:
+    if not path.exists():
+        _exit_error(f"Index not found at {path}. Run /codemap:scan first.")
+    with path.open() as f:
+        return json.load(f)
+
+
+# ---------------------------------------------------------------------------
+# Staleness check
+# ---------------------------------------------------------------------------
+
+def check_staleness(scanned_at: str) -> bool:
+    """Return True if any Python code file changed after scanned_at."""
+    try:
+        result = subprocess.run(
+            [
+                "git", "log",
+                f"--since={scanned_at}",
+                "--name-only", "--pretty=",
+                "--",
+                "*.py",
+                ":!docs/", ":!*.md", ":!*.rst",
+                ":!.github/", ":!**/*.yml", ":!**/*.yaml",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return False
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
+
+
+def warn_if_stale(index: dict) -> None:
+    scanned_at = index.get("scanned_at", "")
+    if scanned_at and check_staleness(scanned_at):
+        print(
+            "⚠ codemap index may be stale — Python files changed since last scan. "
+            "Re-run /codemap:scan.",
+            file=sys.stderr,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def build_module_map(index: dict) -> dict[str, dict]:
+    return {m["name"]: m for m in index.get("modules", [])}
+
+
+def _exit_error(message: str) -> None:
+    print(json.dumps({"error": message}))
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+def cmd_deps(index: dict, module: str) -> None:
+    modules = build_module_map(index)
+    entry = modules.get(module)
+    if entry is None:
+        _exit_error(f"Module '{module}' not in index.")
+    print(json.dumps({
+        "module": module,
+        "direct_imports": entry.get("direct_imports", []),
+    }))
+
+
+def cmd_rdeps(index: dict, module: str) -> None:
+    result = sorted(
+        m["name"]
+        for m in index.get("modules", [])
+        if module in m.get("direct_imports", [])
+    )
+    print(json.dumps({"module": module, "imported_by": result}))
+
+
+def cmd_central(index: dict, top: int) -> None:
+    candidates = [
+        m for m in index.get("modules", [])
+        if m.get("status") != "degraded"
+    ]
+    ranked = sorted(candidates, key=lambda m: m.get("rdep_count", 0), reverse=True)[:top]
+    print(json.dumps({"central": [
+        {"name": m["name"], "rdep_count": m.get("rdep_count", 0), "path": m.get("path", "")}
+        for m in ranked
+    ]}))
+
+
+def cmd_coupled(index: dict, top: int) -> None:
+    candidates = [
+        m for m in index.get("modules", [])
+        if m.get("status") != "degraded"
+    ]
+    ranked = sorted(candidates, key=lambda m: m.get("dep_count", 0), reverse=True)[:top]
+    print(json.dumps({"coupled": [
+        {"name": m["name"], "dep_count": m.get("dep_count", 0), "path": m.get("path", "")}
+        for m in ranked
+    ]}))
+
+
+def cmd_path(index: dict, frm: str, to: str) -> None:
+    modules = build_module_map(index)
+    if frm not in modules:
+        _exit_error(f"Module '{frm}' not in index.")
+    if to not in modules:
+        _exit_error(f"Module '{to}' not in index.")
+
+    queue: deque[list[str]] = deque([[frm]])
+    visited: set[str] = {frm}
+    while queue:
+        path = queue.popleft()
+        node = path[-1]
+        if node == to:
+            print(json.dumps({"from": frm, "to": to, "path": path}))
+            return
+        for neighbour in modules.get(node, {}).get("direct_imports", []):
+            if neighbour not in visited and neighbour in modules:
+                visited.add(neighbour)
+                queue.append(path + [neighbour])
+
+    print(json.dumps({"from": frm, "to": to, "path": None, "error": "No import path found."}))
+
+
+def cmd_list(index: dict) -> None:
+    modules = [
+        {"name": m["name"], "path": m.get("path", ""), "status": m.get("status", "ok")}
+        for m in index.get("modules", [])
+    ]
+    print(json.dumps({"modules": modules}))
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Query the codemap structural index.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_deps = sub.add_parser("deps", help="What does a module import?")
+    p_deps.add_argument("module")
+
+    p_rdeps = sub.add_parser("rdeps", help="What imports a module?")
+    p_rdeps.add_argument("module")
+
+    p_central = sub.add_parser("central", help="Most-imported modules (highest blast radius).")
+    p_central.add_argument("--top", type=int, default=10, metavar="N")
+
+    p_coupled = sub.add_parser("coupled", help="Modules with the most imports (highest coupling).")
+    p_coupled.add_argument("--top", type=int, default=10, metavar="N")
+
+    p_path = sub.add_parser("path", help="Shortest import path between two modules.")
+    p_path.add_argument("frm", metavar="from")
+    p_path.add_argument("to")
+
+    sub.add_parser("list", help="List all indexed modules.")
+
+    args = parser.parse_args()
+
+    index_path = find_index()
+    index = load_index(index_path)
+    warn_if_stale(index)
+
+    if args.command == "deps":
+        cmd_deps(index, args.module)
+    elif args.command == "rdeps":
+        cmd_rdeps(index, args.module)
+    elif args.command == "central":
+        cmd_central(index, args.top)
+    elif args.command == "coupled":
+        cmd_coupled(index, args.top)
+    elif args.command == "path":
+        cmd_path(index, args.frm, args.to)
+    elif args.command == "list":
+        cmd_list(index)
+
+
+if __name__ == "__main__":
+    main()
