@@ -255,7 +255,7 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 | 23  | Bash misuse / native tool substitution | medium            | agents/skills | cat/grep/find/echo>/sed replaceable by native tools                                                               |
 | 24  | Skill sequence compatibility           | high/medium       | skills        | 24a target skill not on disk; 24b argument absent from argument-hint; scans skills, agents, READMEs               |
 | 25  | Implicit agent references              | high              | agents/skills | subagent_type without plugin prefix (e.g. "sw-engineer" instead of "foundry:sw-engineer"); exempt: built-in types |
-| 26  | Symbol and shortcut consistency       | medium/low        | agents/skills | 26a same-concept emoji conflict, 26b slash notation mixed, 26c body contradicts legend |
+| 26  | Symbol and shortcut consistency        | medium/low        | agents/skills | 26a same-concept emoji conflict, 26b slash notation mixed, 26c body contradicts legend                            |
 
 ### Claude Code docs freshness (within Step 4)
 

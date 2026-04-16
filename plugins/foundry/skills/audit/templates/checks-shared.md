@@ -219,14 +219,14 @@ Three sub-checks for within-file consistency of emoji symbols, slash-command not
 
 For each agent or skill file, extract lines containing emoji characters and the concept label they annotate. Group by concept label. Flag any concept that is represented by more than one distinct emoji within the same file.
 
-```bash
+````bash
 printf "=== Check 26a: Emoji/symbol consistency ===\n"
 for f in .claude/agents/*.md .claude/skills/*/SKILL.md; do # timeout: 5000
     [ -f "$f" ] || continue
     # Print filename + any line containing common status emoji (skip code fences)
     awk '/^```/{skip=!skip} !skip && /[🔴🟡🟢🔵⛔✅❌⚠️💭▶️🔗🔹🔸🚫]/{print FILENAME": "NR": "$0}' "$f" 2>/dev/null
 done
-```
+````
 
 Using model reasoning, review the output: identify concept labels (e.g., "closed", "open", "active focus", "merged") that appear with two or more distinct symbols within the same file. Example: a file that marks a branch as 🔴 (closed) in one section and ⛔ closed in another is a violation.
 
@@ -260,8 +260,8 @@ Using model reasoning: extract each (symbol, concept) pair from the legend. For 
 
 **Report only** — never auto-fix; symbol choices may be intentional or constrained by existing documentation.
 
-| Sub-check | Severity | Auto-fix |
+| Sub-check                                        | Severity | Auto-fix |
 | ------------------------------------------------ | -------- | -------- |
-| 26a — same concept, different symbols | medium | no |
-| 26b — directive notation mixed `/name` vs `name` | low | no |
-| 26c — body symbol contradicts legend | medium | no |
+| 26a — same concept, different symbols            | medium   | no       |
+| 26b — directive notation mixed `/name` vs `name` | low      | no       |
+| 26c — body symbol contradicts legend             | medium   | no       |

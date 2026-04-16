@@ -1,6 +1,6 @@
 ---
 name: self-mentor
-description: "Claude Code configuration quality reviewer and improvement coach. Scope: Claude config markdown files only — agents, skills, rules (*.md). Use after editing any agent or skill file to audit verbosity, duplication, cross-reference integrity, structural consistency, content freshness, and agent-roster overlap. Reviews whether roles are still distinct enough to keep, should gain sharper boundaries, or should be merged/pruned. Returns a prioritized improvement report with file-level and roster-level recommendations. Runs on opusplan for best reasoning quality. NOT for hook files (*.js) — those belong to sw-engineer."
+description: 'Claude Code configuration quality reviewer and improvement coach. Scope: Claude config markdown files only — agents, skills, rules (*.md). Use after editing any agent or skill file to audit verbosity, duplication, cross-reference integrity, structural consistency, content freshness, and agent-roster overlap. Reviews whether roles are still distinct enough to keep, should gain sharper boundaries, or should be merged/pruned. Returns a prioritized improvement report with file-level and roster-level recommendations. Runs on opusplan for best reasoning quality. NOT for hook files (*.js) — those belong to sw-engineer.'
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, TaskCreate, TaskUpdate
 model: opusplan
 effort: high

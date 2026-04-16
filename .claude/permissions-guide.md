@@ -10,75 +10,75 @@ ______________________________________________________________________
 
 ### Git — destructive local ops
 
-| Permission | Description | Why denied |
-| ----------------------------- | --------------------------- | -------------------------------------------- |
+| Permission              | Description               | Why denied                                   |
+| ----------------------- | ------------------------- | -------------------------------------------- |
 | `Bash(git branch -D:*)` | Force-delete local branch | Irreversible; requires explicit confirmation |
-| `Bash(git branch -d:*)` | Delete local branch | Requires explicit user confirmation |
-| `Bash(git tag -d:*)` | Delete local tag | Requires explicit user confirmation |
+| `Bash(git branch -d:*)` | Delete local branch       | Requires explicit user confirmation          |
+| `Bash(git tag -d:*)`    | Delete local tag          | Requires explicit user confirmation          |
 
 ### HTTP — mutating requests
 
-| Permission | Description | Why denied |
-| -------------------------------- | ----------------------------- | ------------------------------------ |
-| `Bash(curl -X DELETE:*)` | HTTP DELETE | Destructive external state mutation |
+| Permission                      | Description                  | Why denied                          |
+| ------------------------------- | ---------------------------- | ----------------------------------- |
+| `Bash(curl -X DELETE:*)`        | HTTP DELETE                  | Destructive external state mutation |
 | `Bash(curl --request DELETE:*)` | HTTP DELETE (alternate form) | Destructive external state mutation |
-| `Bash(curl -X POST:*)` | HTTP POST | Remote state mutation |
-| `Bash(curl --request POST:*)` | HTTP POST (alternate form) | Remote state mutation |
-| `Bash(curl -X PUT:*)` | HTTP PUT | Remote state mutation |
-| `Bash(curl --request PUT:*)` | HTTP PUT (alternate form) | Remote state mutation |
-| `Bash(curl -X PATCH:*)` | HTTP PATCH | Remote state mutation |
-| `Bash(curl --request PATCH:*)` | HTTP PATCH (alternate form) | Remote state mutation |
+| `Bash(curl -X POST:*)`          | HTTP POST                    | Remote state mutation               |
+| `Bash(curl --request POST:*)`   | HTTP POST (alternate form)   | Remote state mutation               |
+| `Bash(curl -X PUT:*)`           | HTTP PUT                     | Remote state mutation               |
+| `Bash(curl --request PUT:*)`    | HTTP PUT (alternate form)    | Remote state mutation               |
+| `Bash(curl -X PATCH:*)`         | HTTP PATCH                   | Remote state mutation               |
+| `Bash(curl --request PATCH:*)`  | HTTP PATCH (alternate form)  | Remote state mutation               |
 
 ### GitHub CLI — issue mutations
 
-| Permission | Description | Why denied |
-| ----------------------------- | ----------------------------- | ----------------------------------------------- |
-| `Bash(gh issue create:*)` | Create a new issue | Visible external action; requires approval |
-| `Bash(gh issue comment:*)` | Post a comment on an issue | Visible external action; requires approval |
-| `Bash(gh issue edit:*)` | Edit issue title/body/labels | External state mutation |
-| `Bash(gh issue close:*)` | Close an issue | Requires approval |
-| `Bash(gh issue reopen:*)` | Reopen a closed issue | Requires explicit user intent |
-| `Bash(gh issue delete:*)` | Delete an issue | Irreversible |
-| `Bash(gh issue lock:*)` | Lock issue conversation | Moderation action; requires approval |
-| `Bash(gh issue transfer:*)` | Transfer issue to another repo | Irreversible repo migration |
+| Permission                  | Description                    | Why denied                                 |
+| --------------------------- | ------------------------------ | ------------------------------------------ |
+| `Bash(gh issue create:*)`   | Create a new issue             | Visible external action; requires approval |
+| `Bash(gh issue comment:*)`  | Post a comment on an issue     | Visible external action; requires approval |
+| `Bash(gh issue edit:*)`     | Edit issue title/body/labels   | External state mutation                    |
+| `Bash(gh issue close:*)`    | Close an issue                 | Requires approval                          |
+| `Bash(gh issue reopen:*)`   | Reopen a closed issue          | Requires explicit user intent              |
+| `Bash(gh issue delete:*)`   | Delete an issue                | Irreversible                               |
+| `Bash(gh issue lock:*)`     | Lock issue conversation        | Moderation action; requires approval       |
+| `Bash(gh issue transfer:*)` | Transfer issue to another repo | Irreversible repo migration                |
 
 ### GitHub CLI — PR mutations
 
-| Permission | Description | Why denied |
-| -------------------------- | ------------------------------- | ----------------------------------------------- |
-| `Bash(gh pr create:*)` | Open a pull request | Visible external action; requires approval |
-| `Bash(gh pr comment:*)` | Post a comment on a PR | Visible external action; requires approval |
-| `Bash(gh pr edit:*)` | Edit PR title/body/labels | External state mutation |
-| `Bash(gh pr merge:*)` | Merge a pull request | Irreversible merge; requires explicit approval |
-| `Bash(gh pr close:*)` | Close a PR without merging | Requires explicit user intent |
-| `Bash(gh pr reopen:*)` | Reopen a closed PR | Requires explicit user intent |
-| `Bash(gh pr review:*)` | Submit a review | Visible external action; requires approval |
-| `Bash(gh pr draft:*)` | Convert PR to draft | Requires explicit user intent |
-| `Bash(gh pr ready:*)` | Mark draft PR as ready | Visible state change; requires approval |
+| Permission              | Description                | Why denied                                     |
+| ----------------------- | -------------------------- | ---------------------------------------------- |
+| `Bash(gh pr create:*)`  | Open a pull request        | Visible external action; requires approval     |
+| `Bash(gh pr comment:*)` | Post a comment on a PR     | Visible external action; requires approval     |
+| `Bash(gh pr edit:*)`    | Edit PR title/body/labels  | External state mutation                        |
+| `Bash(gh pr merge:*)`   | Merge a pull request       | Irreversible merge; requires explicit approval |
+| `Bash(gh pr close:*)`   | Close a PR without merging | Requires explicit user intent                  |
+| `Bash(gh pr reopen:*)`  | Reopen a closed PR         | Requires explicit user intent                  |
+| `Bash(gh pr review:*)`  | Submit a review            | Visible external action; requires approval     |
+| `Bash(gh pr draft:*)`   | Convert PR to draft        | Requires explicit user intent                  |
+| `Bash(gh pr ready:*)`   | Mark draft PR as ready     | Visible state change; requires approval        |
 
 ### GitHub CLI — release mutations
 
-| Permission | Description | Why denied |
-| ----------------------------- | --------------------------------- | ------------------------------------ |
-| `Bash(gh release create:*)` | Publish a new release | Irreversible public action |
-| `Bash(gh release edit:*)` | Edit release notes or assets | External state mutation |
-| `Bash(gh release upload:*)` | Upload assets to a release | External state mutation |
-| `Bash(gh release delete:*)` | Delete a release | Irreversible |
+| Permission                  | Description                  | Why denied                 |
+| --------------------------- | ---------------------------- | -------------------------- |
+| `Bash(gh release create:*)` | Publish a new release        | Irreversible public action |
+| `Bash(gh release edit:*)`   | Edit release notes or assets | External state mutation    |
+| `Bash(gh release upload:*)` | Upload assets to a release   | External state mutation    |
+| `Bash(gh release delete:*)` | Delete a release             | Irreversible               |
 
 ### GitHub CLI — gist mutations
 
-| Permission | Description | Why denied |
-| ------------------------- | -------------------- | ------------------------------------------ |
+| Permission               | Description       | Why denied                                 |
+| ------------------------ | ----------------- | ------------------------------------------ |
 | `Bash(gh gist create:*)` | Create a new gist | Visible external action; requires approval |
-| `Bash(gh gist edit:*)` | Edit a gist | External state mutation |
-| `Bash(gh gist delete:*)` | Delete a gist | Irreversible |
+| `Bash(gh gist edit:*)`   | Edit a gist       | External state mutation                    |
+| `Bash(gh gist delete:*)` | Delete a gist     | Irreversible                               |
 
 ### GitHub CLI — repo mutations
 
-| Permission | Description | Why denied |
-| ------------------------- | ------------------------------ | ------------------------------------------ |
-| `Bash(gh repo create:*)` | Create a new repository | Irreversible; visible external action |
-| `Bash(gh repo fork:*)` | Fork a repository | Creates external repo; requires approval |
+| Permission               | Description             | Why denied                               |
+| ------------------------ | ----------------------- | ---------------------------------------- |
+| `Bash(gh repo create:*)` | Create a new repository | Irreversible; visible external action    |
+| `Bash(gh repo fork:*)`   | Fork a repository       | Creates external repo; requires approval |
 
 ______________________________________________________________________
 

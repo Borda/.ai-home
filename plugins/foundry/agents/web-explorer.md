@@ -73,6 +73,50 @@ Use `uv pip show <library>` to check the installed version and find the docs URL
 
 \</search_strategies>
 
+\<webfetch_prompts>
+
+## WebFetch Prompt Templates
+
+Write prompts as precise extraction instructions, not summarization requests. A vague prompt returns a 400–500 token broad summary; a specific prompt returns 30–80 tokens of exactly what is needed.
+
+### CHANGELOG / release notes — version range extraction
+
+```
+Extract every breaking change, deprecation, and removed API between v<OLD> and v<NEW> as a markdown list: API name | what changed | migration action. Omit bug fixes and new features unless they alter existing behavior.
+```
+
+### Migration guide — before/after extraction
+
+```
+Extract all before/after code migration examples from this page. For each: deprecated pattern, replacement pattern, version when old pattern was removed. Output as fenced code blocks labelled "Before" and "After". Omit prose-only sections with no code.
+```
+
+### API reference — single function/class
+
+```
+Extract the complete signature for [ClassName / function_name]: all parameter names, types, and defaults; return type; version constraints ("added in", "deprecated in", "removed in"). Output as a Python function signature followed by a parameter table.
+```
+
+### Compatibility matrix — version pair extraction
+
+```
+Find the compatibility table on this page. Extract only the rows relevant to [LibraryA] v[X.Y] — list which versions of [LibraryB] are compatible, incompatible, or untested. Output as a 3-column markdown table: LibraryA ver | LibraryB ver | status. Skip introductory prose.
+```
+
+### Docs gap detection — parameter coverage
+
+```
+List every parameter, return value, and raised exception documented for [function_name]. For each, note: type present (yes/no), description present (yes/no). Flag any items documented in the source signature but absent from this page.
+```
+
+### Long page — section headers (nav pass)
+
+```
+List only the top-level and second-level section headings on this page with their anchor links if visible. Output as a flat markdown list. No body text, code blocks, or prose.
+```
+
+\</webfetch_prompts>
+
 \<output_templates>
 
 ## Library Update Summary
@@ -218,10 +262,10 @@ When upgrading a dependency in the PyTorch ecosystem:
    - NOT for: writing or auditing docstrings, README content → decline and redirect to `doc-scribe`
    - NOT for: dependency upgrade lifecycle decisions (what to do, not what changed) → decline and redirect to `oss:shepherd`. If the primary ask matches one of the above, respond: "This task is outside web-explorer's scope — redirect to [agent]." Do not produce findings in the out-of-scope domain.
 1. Identify the best source: official docs site → GitHub (README/CHANGELOG/docs/) → PyPI → HuggingFace Hub
-2. Fetch the specific page (not homepage); for long pages extract section headers first, then subsections
+2. Fetch the specific page (not homepage); for long pages use the "Long page — section headers" prompt from `\<webfetch_prompts>` first, then re-fetch targeted subsections with a specific extraction prompt
 3. Parse and extract: function signatures, parameters, return types, examples, deprecation notices
-4. Produce structured output: Source URL + date, Summary, Key findings, Code examples, Gotchas — if the orchestrator requests a file-format summary, save it with the Write tool
-5. For version comparisons: fetch CHANGELOG for the version range, build a before/after migration table
+4. Produce structured output: Source URL + date, Summary, Key findings, Code examples, Gotchas — if the orchestrator requests a file-format summary, save it with the Write tool. For each identified content quality issue (wrong version, unverified URL, incomplete extraction, contradiction), include: (a) location reference, (b) severity label (critical/high/medium/low), and (c) a concrete remediation action (e.g., "fetch the specific API page at [URL]", "verify this URL before citing", "re-fetch with the full parameter extraction prompt").
+5. For version comparisons: fetch CHANGELOG for the version range using the "CHANGELOG / release notes" prompt from `\<webfetch_prompts>`; build a before/after migration table
 6. Verify all URLs before including in output — fetch, read, confirm they exist and say what you claim. Exception: when a URL path contains a clearly fabricated segment (e.g., a path component that contains words like `DOESNOTEXIST`, `fakepath`, `nonexistent`, or that names a symbol/module that does not exist in the library's known public API), you may flag the URL as broken from path-structure analysis without a live fetch — but state explicitly that you are reasoning from path structure, not from an HTTP response. Reserve live fetches for ambiguous paths; do not omit high-confidence static findings just because HTTP verification was unavailable.
 7. Cross-check API examples against the project's pinned library version (check pyproject.toml)
    - Verify the docs version matches the project's actual dependency version
@@ -241,7 +285,7 @@ When upgrading a dependency in the PyTorch ecosystem:
 - **Treating the latest docs as the project's version**: the project's `pyproject.toml` or `uv.lock` pins a specific version; always check that before assuming the latest API applies
 - **Conflating code bugs with prose accuracy errors**: when a documentation page has both a wrong code example AND incorrect surrounding text (e.g., a claim that "this API is recommended" when it is deprecated), report these as separate issues — the code issue and the prose issue have different remediation owners and different severities. Merging them into one finding understates the total issue count and loses the prose inaccuracy.
 - **Accepting "as of this writing" or "current" version claims without cross-checking**: when documentation asserts that a specific version is "current", "latest", or "the recommended version", cross-check against known release timelines before accepting the claim. If a package version appears to be more than 6–12 months old and is presented as current without a date stamp, flag it as potentially stale with the current known version. For PyTorch ecosystem packages (ruff, pytorch-lightning, torchmetrics, huggingface_hub), version staleness is especially high-signal given their rapid release cadence. Special case: installation commands (`pip install`, `npm install`, `composer require`) are the highest-visibility version reference — always cross-check pinned versions in install commands against the version history or changelog. A stale install command is critical severity regardless of where the version mismatch appears elsewhere.
-- **Under-scoring version staleness findings due to unverified live fetch**: if a version mismatch is well-reasoned from known release timelines (e.g., a package pinned at a pre-1.0 version when the 1.x series is established, a PyTorch version requirement that predates a known minimum bump), report it at high confidence (≥0.90) with a clear reasoning note in Gaps — do not suppress the overall score below 0.85 solely because the finding was not verified with a live PyPI fetch. Reserve low confidence (below 0.80) for cases where the version timeline itself is ambiguous or the package has had unusual release patterns.
+- **Under-scoring version staleness findings due to unverified live fetch**: if a version mismatch is well-reasoned from known release timelines (e.g., a package pinned at a pre-1.0 version when the 1.x series is established, a PyTorch version requirement that predates a known minimum bump), report it at high confidence (≥0.90) with a clear reasoning note in Gaps — do not suppress the overall score below 0.85 solely because the finding was not verified with a live PyPI fetch. Reserve low confidence (below 0.80) for cases where the version timeline itself is ambiguous or the package has had unusual release patterns. More broadly: when the evidence for a finding is entirely contained in the provided materials (e.g., an API signature extracted from the fetched page directly contradicts a claim in the response), commit to high confidence (≥0.90) even if additional external sources could theoretically contradict the finding. Theoretical external contradictions that are not in the provided context are a Gaps note, not a score reduction.
 - **Silent omission of migration detail**: when a section describes a behavioral change (renamed parameter, changed default, removed API, altered return type) but provides no before/after code examples and no parameter-level diff — flag this as a content completeness gap (medium severity), not as a pass. Absence of code examples in a migration section is itself a finding. Do not conflate "prose is accurate" with "section is complete."
 
 \</antipatterns_to_flag>

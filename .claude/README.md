@@ -94,35 +94,9 @@ Two optional MCP servers are defined in `.mcp.json` at the repo root. Both are *
 
 ### openspace
 
-Connects [HKUDS/OpenSpace](https://github.com/HKUDS/OpenSpace) as a local MCP server. Exposes four tools — `execute_task`, `search_skills`, `fix_skill`, `upload_skill` — that let Claude delegate tasks to OpenSpace's skill-evolving runtime. Skills auto-improve through use; the benchmark reports ~46% fewer tokens on warm reruns.
+[HKUDS/OpenSpace](https://github.com/HKUDS/OpenSpace) is a local MCP server that exposes skill-evolving tools (`execute_task`, `search_skills`, `fix_skill`, `upload_skill`). Integrated to reduce token consumption on repeated tasks — skills auto-improve through use (~46% fewer tokens on warm reruns). Enable by adding `"openspace"` to `enabledMcpjsonServers` in `settings.local.json`.
 
-**New-machine setup:**
-
-```bash
-# 1. Install OpenSpace globally via pipx (Python ≥ 3.12 required)
-brew install pipx
-pipx install https://github.com/HKUDS/OpenSpace/archive/refs/heads/main.zip --python python3.12
-~/.local/bin/openspace-mcp --help # smoke test
-
-# 2. Update the command path in .mcp.json if your username differs:
-#    "$HOME/.local/bin/openspace-mcp"
-
-# 3. Make the server available globally (user-level config):
-cp .mcp.json ~/.claude/.mcp.json
-# The project-level .mcp.json already loads when Claude Code runs inside this repo.
-
-# 4. Enable for the current session
-# Add "openspace" to enabledMcpjsonServers in .claude/settings.local.json:
-#   "enabledMcpjsonServers": ["openspace"]
-
-# 5. Restart Claude Code — openspace tools appear in the MCP tool list
-```
-
-**Runtime data** lives at `~/.claude/openspace/` (SQLite lineage DB + execution recordings). Not version-controlled, not synced. Persists across sessions.
-
-**Conflict policy:** existing hand-crafted `SKILL.md` files in `~/.claude/skills/` are protected with `chmod 444` after setup — OpenSpace cannot overwrite them. Remove the protection with `chmod 644 ~/.claude/skills/<name>/SKILL.md` only when you intend to let OpenSpace evolve that skill.
-
-**Disable:** remove `"openspace"` from `enabledMcpjsonServers` in `settings.local.json`.
+→ Install and setup: [HKUDS/OpenSpace](https://github.com/HKUDS/OpenSpace)
 
 ### colab-mcp
 
@@ -765,6 +739,8 @@ Install the Codex plugin in Claude Code — not an MCP server, a local plugin:
 /plugin install codex@openai-codex
 /reload-plugins
 ```
+
+### Skills digestion
 
 Skills check availability at runtime: `claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'`. If the plugin is absent, each skill skips its Codex step gracefully rather than failing.
 

@@ -389,6 +389,31 @@ Check for conflicted files:
 git diff --name-only --diff-filter=U # timeout: 3000
 ```
 
+### 5a: Create per-conflict tasks
+
+For each conflicted file returned above, create a task **before touching any file**:
+
+```
+TaskCreate(
+  subject="Resolve conflict: <filepath> — PR #<number>",
+  description="Merge conflict in <filepath> from merging origin/<BASE_REF> into <HEAD_REF>. Must be completed before action-item implementation begins.",
+  activeForm="Resolving conflict: <filepath>"
+)
+```
+
+Store the returned task ID alongside each file path as `conflict_task_id`. Print the conflict task table so it is immediately visible in the task feed:
+
+```
+### Merge Conflicts — PR #<number>
+
+| File | Task | Status |
+|------|------|--------|
+| src/foo.py | #<task_id> | pending |
+| config.yaml | #<task_id> | pending |
+```
+
+> **Invariant**: every conflict task must reach `completed` (in Step 7b) before Step 8 begins. Creating them upfront — while the diff is still small — keeps each conflict scoped and independently reversible.
+
 If no conflicts → complete the merge and skip to Step 8:
 
 ```bash
@@ -494,11 +519,21 @@ Print conflict report:
 | config.yaml | Target | unrelated config change from base, PR had no opinion |
 
 **Result**: N files resolved. Merge commit created.
+
+Mark all conflict tasks completed:
+
+```
+
+for each (filepath, conflict_task_id) pair from Step 5a: TaskUpdate(task_id=\<conflict_task_id>, status="completed")
+
+```
 ```
 
 ## Step 8: Implement action items
 
 If `CODEX_AVAILABLE=false`: mark all items `⚠ skipped — codex not installed` and skip to Step 9.
+
+> **Conflict gate**: before processing any action item, verify every conflict task from Step 5a is `completed`. If any conflict task is still `pending` or `in_progress`, stop — surface the list and wait for the user to resolve before continuing. Action items applied on top of unresolved conflicts compound the diff and make the collision harder to untangle.
 
 Process `[req]` items first, then `[suggest]` items. **Each item gets its own commit.**
 

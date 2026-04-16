@@ -175,23 +175,23 @@ After running `/foundry:init link`, foundry skills are available without a prefi
 
 | Skill               | Plugin   | What It Does                                                                                                                                                           |
 | ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/audit`            | foundry  | Config audit: broken refs, inventory drift, docs freshness; `fix [high\|medium\|all]` auto-fixes by severity; `upgrade` applies docs-sourced improvements              |
-| `/manage`           | foundry  | Create, update, delete agents/skills/rules; manage `settings.json` permissions; auto type-detection and cross-ref propagation                                          |
-| `/calibrate`        | foundry  | Synthetic benchmarks measuring recall vs confidence bias                                                                                                               |
 | `/brainstorm`       | foundry  | `/brainstorm <idea>` — clarifying questions → approaches → spec → self-mentor review → approval gate; `breakdown <spec>` — ordered task table with per-task skill tags |
+| `/manage`           | foundry  | Create, update, delete agents/skills/rules; manage `settings.json` permissions; auto type-detection and cross-ref propagation                                          |
 | `/investigate`      | foundry  | Systematic diagnosis for unknown failures — env, tools, hooks, CI divergence; ranks hypotheses and hands off to the right skill                                        |
-| `/distill`          | foundry  | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                                                |
 | `/session`          | foundry  | Parking lot for diverging ideas — auto-parks unanswered questions and deferred threads; `resume` shows pending, `archive` closes, `summary` digests the session        |
-| `/oss:review`       | oss      | Tiered parallel review of GitHub PRs; `--reply` drafts welcoming contributor comments                                                                                  |
-| `/oss:analyse`      | oss      | GitHub thread analysis; `health` = repo overview + duplicate issue clustering                                                                                          |
-| `/oss:resolve`      | oss      | OSS fast-close: resolving conflicts + applying review comments via codex-plugin-cc; three source modes: `pr`, `report`, `pr + report`                                  |
-| `/oss:release`      | oss      | SemVer-disciplined release pipeline: notes, changelog with deprecation tracking, migration guides, full prepare pipeline                                               |
+| `/audit`            | foundry  | Config audit: broken refs, inventory drift, docs freshness; `fix [high\|medium\|all]` auto-fixes by severity; `upgrade` applies docs-sourced improvements              |
+| `/calibrate`        | foundry  | Synthetic benchmarks measuring recall vs confidence bias                                                                                                               |
+| `/distill`          | foundry  | Suggest new agents/skills, prune memory, consolidate lessons into rules                                                                                                |
+| `/develop:plan`     | develop  | Scope analysis and implementation planning without code changes                                                                                                        |
 | `/develop:feature`  | develop  | TDD-first feature implementation: codebase analysis, demo test, TDD loop, docs, review                                                                                 |
 | `/develop:fix`      | develop  | Reproduce-first bug fixes: regression test, minimal fix, quality stack                                                                                                 |
-| `/develop:refactor` | develop  | Test-first refactors with scope analysis                                                                                                                               |
-| `/develop:plan`     | develop  | Scope analysis and implementation planning without code changes                                                                                                        |
 | `/develop:debug`    | develop  | Systematic debugging for known test failures                                                                                                                           |
+| `/develop:refactor` | develop  | Test-first refactors with scope analysis                                                                                                                               |
 | `/develop:review`   | develop  | Six-agent parallel review of local files or current git diff; no GitHub PR needed                                                                                      |
+| `/oss:analyse`      | oss      | GitHub thread analysis; `health` = repo overview + duplicate issue clustering                                                                                          |
+| `/oss:review`       | oss      | Tiered parallel review of GitHub PRs; `--reply` drafts welcoming contributor comments                                                                                  |
+| `/oss:resolve`      | oss      | OSS fast-close: resolving conflicts + applying review comments via codex-plugin-cc; three source modes: `pr`, `report`, `pr + report`                                  |
+| `/oss:release`      | oss      | SemVer-disciplined release pipeline: notes, changelog with deprecation tracking, migration guides, full prepare pipeline                                               |
 | `/research:topic`   | research | SOTA literature research with codebase-mapped implementation plan                                                                                                      |
 | `/research:plan`    | research | Config wizard: profile-first bottleneck discovery → `program.md`                                                                                                       |
 | `/research:judge`   | research | Research-supervisor review of experimental methodology (APPROVED/NEEDS-REVISION/BLOCKED)                                                                               |
@@ -532,52 +532,33 @@ Two optional MCP servers are defined in `.mcp.json` (defined at the repo root; e
 
 → New-machine setup and full reference: [`.claude/README.md` → MCP Servers](.claude/README.md#-mcp-servers)
 
-## 🪙 Token Savings (RTK)
-
-RTK is an optional CLI proxy that compresses build, test, and git output before it reaches Claude — saving 60–99% of tokens on common operations with no change to your workflow.
-
-**Install** — see [rtk-ai/rtk](https://github.com/rtk-ai/rtk) for platform-specific instructions. Quick options:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh # Linux / macOS
-cargo install --git https://github.com/rtk-ai/rtk                              # via Cargo
-```
-
-> [!WARNING] There are two projects named `rtk` on crates.io — always install from `rtk-ai/rtk`, not `reachingforthejack/rtk` (Rust Type Kit). Verify with `rtk gain` after install.
-
-**Verify it's working:**
-
-```bash
-rtk gain           # shows actual token savings from this session
-rtk gain --history # per-command savings history
-```
-
-**How it integrates with this config:** A pre-configured `PreToolUse` hook (`.claude/hooks/rtk-rewrite.js`) transparently rewrites supported CLI calls — `git status` becomes `rtk git status` — without needing duplicate entries in `settings.json`. The hook is a no-op when RTK is not installed, so the config stays portable across machines.
-
-| Category     | Commands                               | Typical Savings |
-| ------------ | -------------------------------------- | --------------- |
-| Tests        | vitest, playwright, cargo test, pytest | 90–99%          |
-| Build        | next, tsc, lint, prettier, ruff        | 70–87%          |
-| Git / GitHub | git, gh pr, gh run, gh issue           | 26–80%          |
-| Packages     | pnpm, npm, pip                         | 70–90%          |
-| Files        | ls, grep, find, diff                   | 60–75%          |
-
-**Scope**: RTK only compresses **Bash tool output** — shell commands like `git`, `cargo`, `pytest`, etc. It does not affect Claude Code's native tools (Read, Grep, Glob, Edit, Write), which run inside Claude's own engine and are already token-efficient by design.
-
-> [!TIP] **Context reset between heavy skills**: large skills (`/audit`, `/oss:resolve`, `/oss:review`) are loaded into context on invocation and stay there for every subsequent message in that session — `/audit` alone adds ~19K tokens. Use `/clear` between heavy skill invocations or before switching topics. Unlike terminating the session, `/clear` is instant and keeps all config (CLAUDE.md, rules, hooks) intact.
-
-RTK is optional — removing it leaves all functionality intact.
-
 ## 🛠 Recommended Add-ons
 
-Optional tools that complement this config — each is independent, locally installed only, and safe to skip.
+### 🪙 Token Savings (RTK)
 
-- **[RTK](https://github.com/rtk-ai/rtk)** — 60–99% token compression on Bash output (git, pytest, build tools); no workflow changes needed
-- **[Codex plugin](https://github.com/openai/codex-plugin-cc)** — unbiased diff review, mechanical coding tasks, and Claude + Codex cross-validation
-- **[Colab-MCP](https://github.com/googlecolab/colab-mcp)** — GPU workloads from `/research:run --colab` via Google 
-  Colab
-- **[cc-Lens](https://github.com/Arindam200/cc-lens)** — local analytics dashboard; token/cost trends, tool usage, 
-  session replay; reads `~/.claude/` directly, no cloud — `npx cc-lens`
+[RTK](https://github.com/rtk-ai/rtk) is an optional CLI proxy that compresses Bash output (git, pytest, build tools) before it reaches Claude — 60–99% token savings with no workflow changes. A `PreToolUse` hook (`plugins/foundry/hooks/rtk-rewrite.js`) transparently rewrites supported commands across all Claude skills; Codex runs get the same treatment via `.codex/hooks/rtk-enforce.js`. The hook is a no-op when RTK is not installed, so the config stays portable.
+
+→ Install instructions: [rtk-ai/rtk](https://github.com/rtk-ai/rtk)
+
+### 🔌 Codex CLI plugin
+
+[openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc) connects the Codex CLI to Claude Code as a local plugin — enabling the cross-validation, mechanical delegation, and diff pre-pass described in [Claude + Codex Integration](#-claude--codex-integration).
+
+→ Install: `/plugin marketplace add openai/codex-plugin-cc` → `/plugin install codex@openai-codex` → `/reload-plugins`
+
+> [!NOTE] RTK only compresses **Bash tool output** — shell commands like `git`, `cargo`, `pytest`, etc. It does not affect Claude Code's native tools (Read, Grep, Glob, Edit, Write), which run inside Claude's own engine and are already token-efficient by design.
+
+### 🖥 cc-Lens
+
+[cc-Lens](https://github.com/Arindam200/cc-lens) is a local analytics dashboard for Claude Code — token/cost trends, tool usage breakdowns, session replay. Reads `~/.claude/` directly, no cloud, no data leaves the machine.
+
+→ Run: `npx cc-lens` — no install required
+
+### ☁️ Colab-MCP
+
+[colab-mcp](https://github.com/googlecolab/colab-mcp) connects Google Colab as a remote GPU executor. Pre-configured in `.mcp.json` (disabled by default) — used by `/research:run --colab` to offload metric-improvement iterations to a cloud GPU without a local CUDA setup. Supports hardware selection: `--colab=H100`, `--colab=L4`, `--colab=T4`, `--colab=A100`.
+
+→ Enable: add `"colab-mcp"` to `enabledMcpjsonServers` in `settings.local.json`
 
 ## 🔌 Plugin Management
 
