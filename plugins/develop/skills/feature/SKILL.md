@@ -37,8 +37,6 @@ NOT for: bug fixes (use `/develop:fix`); `.claude/` config changes (use `/manage
 
 # Feature Mode
 
-TDD-first feature development. Crystallise the API as a demo use-case test, drive implementation to pass it, then document.
-
 ## Step 1: Understand purpose and scope
 
 Gather full context before writing any code:
@@ -53,7 +51,7 @@ If a free-text description was provided: use the Grep tool (pattern `<keyword>`,
 **Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     scan-query central --top 5
 fi
@@ -306,7 +304,7 @@ Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Gua
 - [any deferred items, known limitations, or suggested next steps]
 
 ## Confidence
-**Score**: [0.N]
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
 **Gaps**: [e.g., review cycle incomplete, edge cases not fully explored]
 **Refinements**: N passes.
 ```

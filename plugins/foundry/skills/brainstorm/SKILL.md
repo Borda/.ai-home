@@ -219,7 +219,7 @@ BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
 OUTPUT_PATH=".temp/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"
 ```
 
-Spawn **self-mentor** with a tree-focused prompt (inject the pre-computed `$OUTPUT_PATH` in place of `<output-path>`):
+Spawn **foundry:self-mentor** with a tree-focused prompt (inject the pre-computed `$OUTPUT_PATH` in place of `<output-path>`):
 
 ```
 Read .plans/blueprint/<tree-file>. Audit for tree quality only (do NOT audit `.claude/` config files — scope is the brainstorm tree only):
@@ -383,9 +383,10 @@ For each blocking question: call `AskUserQuestion` — one at a time, in order. 
 
 Spec: <file path>
 
+<!-- Format: | # | Task | Invocation | — fill from the spec; one row per action item -->
 | # | Task | Invocation |
 |---|------|------------|
-| 1 | ... | `...` |
+| 1 | [first action item] | `/develop:feature "<goal>"` |
 
 ### Non-blocking open questions (resolve during implementation)
 - [list, or "None"]

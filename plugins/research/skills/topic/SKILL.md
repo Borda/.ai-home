@@ -144,7 +144,7 @@ Best method: [recommended approach / architecture]
 Key papers:  [top 2–3 papers with year]
 Gaps:        [what the research couldn't cover or needs runtime validation]
 Confidence:  [aggregate score] — [key gaps]
-→ saved to .temp/output-research-[date].md
+→ saved to .temp/output-research-[$(git branch --show-current 2>/dev/null | tr "/" "-" || echo "main")]-[date].md
 ---
 ```
 
@@ -181,7 +181,7 @@ Compact Instructions: preserve paper titles, benchmarks, code links. Discard pro
 Task tracking: call TaskUpdate(in_progress) when you start your assigned task; call TaskUpdate(completed) when done, before sending your delta message.
 ```
 
-Lead synthesizes by reading teammate file paths from their delta messages. For 3 teammates, spawn a consolidator researcher agent: "Read the research files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `.temp/output-research-$BRANCH-<date>.md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
+Lead synthesizes by reading teammate file paths from their delta messages. Pre-compute: `SPAWN_BRANCH="$(git branch --show-current 2>/dev/null | tr "/" "-" || echo "main")"` `SPAWN_DATE="$(date -u +%Y-%m-%d)"`. For 3 teammates, spawn a consolidator researcher agent: "Read the research files at [paths from deltas]. Synthesize into the Step 3 unified report structure. Write to `.temp/output-research-$SPAWN_BRANCH-$SPAWN_DATE.md`. Return ONLY: `papers=N best_method=<name> confidence=0.N file=<path>`"
 
 ## Plan Mode
 
@@ -204,7 +204,6 @@ Before spawning in Steps R2–R3, pre-compute the output path components: `YYYY=
 
 ### Step R2: Codebase analysis
 
-<!-- Pre-compute DATE and BRANCH before spawning: DATE=$(date +%Y-%m-%d); BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main') -->
 
 Spawn a **solution-architect** agent with this prompt:
 
@@ -285,7 +284,7 @@ Confidence:  [score] — [key gaps]
 - **Team Mode dependency**: `--team` mode requires `~/.claude/TEAM_PROTOCOL.md` to exist — each teammate spawn prompt includes `Read ~/.claude/TEAM_PROTOCOL.md and use AgentSpeak v2`; verify the file is present before launching team mode.
 - **Link integrity**: All URLs cited in the research report must be fetched and verified before inclusion. Use WebFetch to confirm each URL exists and says what you claim.
 - Follow-up chains:
-  - Research recommends a method for implementation → `/research plan` to produce a sequenced plan (auto-detects latest output), then `/develop:feature` for TDD-first implementation
+  - Research recommends a method for implementation → `/research:plan` to produce a sequenced plan (auto-detects latest output), then `/develop:feature` for TDD-first implementation
   - Research integrates into existing code → `/develop:refactor` first to prepare the module, then `/develop:feature`
   - Research reveals security concerns with a dependency → run `pip-audit` or `uv run pip-audit` for a Common Vulnerabilities and Exposures (CVE) scan
   - Plan approved → create `.plans/active/todo_<method>.md` with phases as task groups; start with `/develop:feature <first task from Phase 1>`

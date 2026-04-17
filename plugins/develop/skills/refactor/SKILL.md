@@ -27,8 +27,6 @@ NOT for: bug fixes (use `/develop:fix`); new features (use `/develop:feature`); 
 
 # Refactor Mode
 
-Test-first refactoring. Audit test coverage, add characterization tests if missing, then apply changes with a safety net.
-
 ## Step 1: Scope and understand
 
 Read the target code and build a mental model before touching anything.
@@ -43,7 +41,7 @@ wc -l <target>/**/*.py 2>/dev/null || wc -l <target>
 **Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     scan-query central --top 5
 fi
@@ -184,7 +182,7 @@ Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Gua
 - [any remaining items that need manual review]
 
 ## Confidence
-**Score**: [0.N]
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
 **Gaps**: [e.g., coverage tool unavailable, some tests skipped]
 **Refinements**: N passes.
 ```

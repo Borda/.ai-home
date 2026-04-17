@@ -48,6 +48,8 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 - status `deleted` if orphaned / no longer relevant
 - keep `in_progress` only if genuinely continuing
 
+**Orchestration contract**: the audit orchestrator is a thin coordinator — it issues Glob/Grep calls for inventory, spawns agents, reads JSON envelopes, and aggregates findings. It must NOT read agent/skill/rule file bodies directly. Any inline read of a non-template file is a protocol violation and will cause context overflow at scale.
+
 **Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase and mark status live so the user can see progress in real time:
 
 - Phase 1: setup + collect (Pre-flight + Steps 1–2) → mark in_progress when starting, completed when file list is ready
@@ -151,6 +153,12 @@ Record the full file list — this becomes the audit scope for Steps 3–4. Cros
 
 **Context management** — with 12+ agents and 14+ skills, accumulating full self-mentor responses in context causes overflow before aggregation. Use file-based findings to keep the main context lean.
 
+**Hard rule — no pre-reading**: Never call Read on an agent or skill file before spawning self-mentor on it. The spawned agent does the reading. The orchestrator only reads the returned JSON envelope. Pre-reading 41 KB agent/skill files into main context before spawning defeats the entire purpose of delegation and will cause context overflow at scale.
+
+**Batching rule**: For scopes with >5 files, always batch into groups of up to 10 — never spawn one agent per file at scale, as this creates N parallel agents each inflating the coordinator context with their JSON envelope. Batching is the default for any scope larger than 5 files; one-per-file spawning is only acceptable for ≤5 files.
+
+**Scope-restricted runs**: for a scoped run (e.g. `/audit skills`, `/audit agents`) targeting fewer than 5 files, spawn one batched self-mentor for ALL files in scope — not one agent per file. Read only the one relevant template file for the active scope (not all 4 template files).
+
 Set up the run directory once before spawning any agents:
 
 ```bash
@@ -159,7 +167,7 @@ mkdir -p "$RUN_DIR"                                     # timeout: 5000
 echo "Run dir: $RUN_DIR"
 ```
 
-Spawn one **self-mentor** agent per file (or batch into groups of up to 10 for efficiency). The spawn prompt for each agent must:
+Spawn **self-mentor** agents in batches of up to 10 files per agent (default) — or one batch for all files if scope ≤5 files. The spawn prompt for each agent must:
 
 1. Include the content from `.claude/skills/audit/templates/self-mentor-prompt.md`
 2. Include the disk inventory from Step 2 (agent/skill list for cross-reference validation)
@@ -197,6 +205,8 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 > | `rules`         | `checks-shared.md` (run only: 18, 12, 13)                                                                       |
 > | `communication` | `checks-shared.md` (run only: 15, 16, 12, 13)                                                                   |
 > | No scope (full) | all 4 files                                                                                                     |
+
+**Delegation for full-sweep runs**: for full-sweep runs (no scope restriction), spawn a dedicated `self-mentor` agent to execute Step 4 checks for each scope group, passing the relevant template file path and RUN_DIR. Use one agent per scope group: agents-checks (reads `checks-agents.md` + relevant `checks-shared.md` entries), skills-checks (reads `checks-skills.md` + relevant `checks-shared.md` entries), shared-checks (reads `checks-shared.md`), and setup-checks (reads `checks-setup.md` + `checks-install.md`). Each agent writes its findings to `<RUN_DIR>/system-checks-<scope>.md` and returns only a JSON envelope. The orchestrator does NOT read the template files itself in this case — it passes only the file path to the spawned agent.
 
 Run the following checks. Use native tools first (Glob, Grep, Read); Bash only for pipeline operations the native tools cannot do.
 
@@ -349,6 +359,8 @@ Choose the fix agent based on file type:
 
 - **`.claude/agents/*.md` and `.claude/skills/*/SKILL.md`** → spawn **self-mentor** — it has domain expertise in config quality and has `Write`/`Edit` tools
 - **Code files** (`.py`, `.js`, `.ts`, etc.) → spawn **sw-engineer**
+
+**Phase 4 delegation rule**: fix-phase edits that touch >3 files should be delegated to a `foundry:sw-engineer` agent rather than applied inline — pass it the list of findings and target file paths; it applies Edit calls and returns a compact status JSON.
 
 Spawn one agent per affected file, batching all findings for that file into a single subagent prompt. Issue **all spawns in a single response** for parallelism.
 

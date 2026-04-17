@@ -264,7 +264,7 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
 - Public-facing output (release notes, changelogs, migration guides) is co-authored with `shepherd` — follow its `<voice>` guidelines for human, direct tone
 - Follow-up chains:
   - Readiness check → `/release prepare <version>` runs a built-in audit first; use standalone `/release audit [version]` only when you want a readiness check without cutting the release
-  - Release includes breaking changes → `/analyse` for downstream ecosystem impact assessment
+  - Release includes breaking changes → `/oss:analyse` for downstream ecosystem impact assessment
   - Notes/changelog written → See Step 5 for the release-create gate (`gh release create` must be run by the user via project tooling)
   - `migration` content written → add to project docs and link from the CHANGELOG entry
 

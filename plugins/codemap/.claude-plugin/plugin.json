@@ -3,13 +3,14 @@
     "name": "Jirka",
     "url": "https://github.com/Borda/.ai-home"
   },
-  "description": "Codebase structural index \u2014 scan Python projects once, query the import graph for blast-radius and coupling before touching code",
+  "description": "Codebase structural index \u2014 scan Python projects once, query the import graph for blast-radius and coupling before touching code \u2014 Python projects only",
   "keywords": [
     "codebase",
     "analysis",
     "blast-radius",
     "dependency-graph",
     "python",
+    "python-only",
     "navigation"
   ],
   "license": "MIT",

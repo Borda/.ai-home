@@ -1,4 +1,4 @@
-# research — Claude Code Plugin
+# 🔬 research — Claude Code Plugin
 
 ML research plugin: two specialist agents and five slash-command skills for literature search, experiment design, methodology review, metric-driven optimization loops, and automated research sweeps — built on a profile-first, judge-gated pipeline that spends compute only on experiments worth running.
 
@@ -25,7 +25,7 @@ ML improvement is expensive and iterative. The typical failure pattern is not "w
 - **Data integrity before modeling** — data-steward validates splits, checks for leakage, and verifies completeness before scientist designs experiments; bad data produces confident wrong results
 - **Non-interactive by default** — `sweep` is designed for unattended operation; `run` checkpoints continuously so manual stops are always recoverable
 
-## ⚡ Install
+## ⚡ Quick start
 
 ```bash
 # Run from the directory that CONTAINS your Borda-AI-Home clone

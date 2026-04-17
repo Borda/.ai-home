@@ -37,8 +37,6 @@ NOT for: unknown failures without a traceback (use `/investigate`); `.claude/` c
 
 # Fix Mode
 
-Reproduce-first bug resolution. Capture the bug in a failing regression test, apply the minimal fix, then verify.
-
 ## Step 1: Understand the problem
 
 Gather all available context about the bug:
@@ -58,7 +56,7 @@ python -m pytest --tb=long <test_path >-v 2>&1 | tail -40
 **Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     scan-query central --top 5
 fi
@@ -199,7 +197,7 @@ Read `.claude/skills/_shared/quality-stack.md` and execute the Branch Safety Gua
 - [if no test runner: `rm <test_file>` — no test suite will re-execute it; it served the gate, now expendable]
 
 ## Confidence
-**Score**: [0.N]
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
 **Gaps**: [e.g., could not reproduce locally, partial traceback only, fix not runtime-tested]
 **Refinements**: N passes.
 ```

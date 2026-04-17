@@ -6,7 +6,7 @@ argument-hint: <central [--top N] | coupled [--top N] | deps <module> | rdeps <m
 
 <objective>
 
-Query the codemap structural index for import-graph analysis. `scan-query` is at `${CLAUDE_PLUGIN_ROOT}/bin/scan-query` — use this exact path.
+Query the codemap structural index for import-graph analysis. **Python projects only** — the index covers `.py` files; queries on non-Python projects will return empty or error. `scan-query` is at `${CLAUDE_PLUGIN_ROOT}/bin/scan-query` — use this exact path.
 
 Queries:
 

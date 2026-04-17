@@ -1,4 +1,4 @@
-# oss — Claude Code Plugin
+# 🌐 oss — Claude Code Plugin
 
 OSS workflow plugin for Python/ML open-source projects: two specialist agents and four slash-command skills for issue triage, parallel code review, PR resolution, and SemVer-disciplined releases.
 
@@ -24,7 +24,7 @@ Maintaining an open-source project means juggling three competing demands: revie
 - **Semantic conflict resolution** — `resolve` reads intent from both sides of a conflict; it does not pick one side mechanically
 - **SemVer is a gate, not a label** — `release` refuses to tag until the bump type is justified by the actual diff; no accidental major bumps
 
-## ⚡ Install
+## ⚡ Quick start
 
 ```bash
 # Run from the directory that CONTAINS your Borda-AI-Home clone

@@ -27,8 +27,6 @@ NOT for: writing code or tests (use the appropriate develop mode); `.claude/` co
 
 # Plan Mode
 
-Analysis-only mode that produces a structured plan without writing any code. Use this to understand scope, risks, and effort before committing to a full `/develop:feature`, `/develop:fix`, or `/develop:refactor`.
-
 ## Step 1: Classify and scope
 
 Determine the task type and affected surface.
@@ -36,7 +34,7 @@ Determine the task type and affected surface.
 **Structural context** (codemap, if installed) — soft PATH check, silently skip if `scan-query` not found:
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     scan-query central --top 5
 fi

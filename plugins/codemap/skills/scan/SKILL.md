@@ -9,7 +9,7 @@ disable-model-invocation: false
 
 <objective>
 
-Build a structural index of the Python codebase. Uses `ast.parse` to extract the import graph across all Python files, writes `.cache/scan/<project>.json`. No external dependencies required.
+**Python only** — uses `ast.parse` to extract the import graph across all `.py` files; non-Python files are not indexed. Writes `.cache/scan/<project>.json`. No external dependencies required.
 
 Agents and develop skills query this index via `scan-query` to understand module dependencies, blast radius, and coupling before editing code.
 

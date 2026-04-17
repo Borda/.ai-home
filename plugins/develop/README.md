@@ -1,4 +1,4 @@
-# develop — Claude Code Plugin
+# 🛠️ develop — Claude Code Plugin
 
 Development workflow plugin: six slash-command skills for scope planning, feature development, bug fixing, refactoring, debugging, and code review — all built on a validate-first principle that proves the problem exists before writing a single line of solution.
 
@@ -27,7 +27,7 @@ Most development mistakes happen before the first keystroke: implementing a feat
 - **No adjacent bug fixing** — if a different bug is discovered during a fix, it is documented as an observation and handled in a separate session; one fix per session prevents conflated history
 - **Quality stack is non-negotiable** — linting-expert → qa-specialist → Codex pre-pass runs on every mode completion; it cannot be skipped
 
-## ⚡ Install
+## ⚡ Quick start
 
 ```bash
 # Run from the directory that CONTAINS your Borda-AI-Home clone

@@ -61,8 +61,8 @@ Check each of the 11 items below. Produce a findings list with severity. Each fi
 | C8   | `max_iterations` in bounds (1–50)                            | medium              | Missing defaults to 20 (acceptable); >50 violates SKILL.md constants                                                                                                                                                                                              |
 | C9   | `agent_strategy` is valid (`auto`/`perf`/`code`/`ml`/`arch`) | medium              | Invalid value silently falls back to `auto`                                                                                                                                                                                                                       |
 | C10  | `compute` is valid (`local`/`colab`/`docker`)                | low                 | Invalid defaults to `local`                                                                                                                                                                                                                                       |
-| C10b | `colab_hw` valid (if present)                                | low                 | `colab_hw` absent OR is one of `H100, L4, T4, A100` — fail detail: `"colab_hw '<value>' is not in known set {H100, L4, T4, A100} — may cause GPU identity check failure in run mode"`                                                                             |
-| C11  | `## Notes` section present                                   | low                 | Notes are optional but improve ideation quality                                                                                                                                                                                                                   |
+| C11  | `colab_hw` valid (if present)                                | low                 | `colab_hw` absent OR is one of `H100, L4, T4, A100` — fail detail: `"colab_hw '<value>' is not in known set {H100, L4, T4, A100} — may cause GPU identity check failure in run mode"`                                                                             |
+| C12  | `## Notes` section present                                   | low                 | Notes are optional but improve ideation quality                                                                                                                                                                                                                   |
 
 **Severity summary**: count findings at each severity level. Any critical finding means the verdict cannot be APPROVED.
 
@@ -194,7 +194,7 @@ Evaluate top-to-bottom; **first match wins**. BLOCKED always takes precedence �
 BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
 ```
 
-**Write full report** to `.temp/output-optimize-judge-$BRANCH-$(date +%Y-%m-%d).md`:
+**Write full report** to `.temp/output-judge-$BRANCH-$(date +%Y-%m-%d).md`:
 
 ```markdown
 ## Judge Report: <program_title>
@@ -260,7 +260,7 @@ Findings:     <N> critical · <N> high · <N> medium · <N> low
 Protocol gaps: <N>
 Validation:   metric=<value> guard=pass|fail  (or "skipped — --skip-validation")
 Codex:        reviewed | skipped
-→ saved to .temp/output-optimize-judge-<branch>-<date>.md
+→ saved to .temp/output-judge-<branch>-<date>.md
 ---
 Next: /research:run <path>                         [APPROVED]
 Next: fix protocol, re-run /research:judge <path>      [NEEDS-REVISION or BLOCKED]

@@ -1,10 +1,26 @@
-# CodeMap — Claude Code Plugin
+# 🧭 CodeMap — Claude Code Plugin
 
 > **You're about to change `models.py`. Do you know which 38 other modules import it?**
 
 Scan your Python project once. Every agent, skill, and developer session answers structural questions — blast radius, coupling, dependency paths — in a single JSON call instead of 20 Glob/Grep passes.
 
 > [!TIP] Standalone — no other plugins required. Pairs with the `develop` plugin: `develop:feature`, `develop:fix`, `develop:plan`, and `develop:refactor` pick up the index automatically.
+
+> [!NOTE]
+> **Python only.** `scan-index` uses `ast.parse` — it indexes `.py` files exclusively. JavaScript, TypeScript, Go, Rust, and other languages are not supported.
+
+## 📋 Contents
+
+- [Why](#-why)
+- [Key Principles](#-key-principles)
+- [Quick start](#-quick-start)
+- [How to Use](#-how-to-use)
+- [Real-world demo](#-real-world-demo--pytorch-lightning-646-modules)
+- [Benchmark evidence](#-benchmark-evidence)
+- [Integrating codemap](#-integrating-codemap)
+- [Overview](#-overview)
+- [Plugin details](#-plugin-details)
+
 
 ## 🎯 Why
 
@@ -27,7 +43,7 @@ Every session starts the same way: the agent gropes through the codebase with Gl
 - **Fail gracefully** — files that can't be parsed are marked `degraded` with a reason; the scan never aborts
 - **JSON everywhere** — every query returns JSON; pipe directly into spawn prompts or scripts
 
-## ⚡ Install
+## ⚡ Quick start
 
 ```bash
 # Run from the directory that CONTAINS your Borda-AI-Home clone
@@ -74,6 +90,16 @@ scan-query list                     # enumerate all indexed modules
 ```
 
 All output is JSON — pipe directly into your analysis or pass to an agent.
+
+
+### Wire into your skills
+
+```bash
+/codemap:integration init    # onboard — discovers installed skills/agents, recommends and wires in injection
+/codemap:integration check   # verify — scan-query reachable, index fresh, injection present in skills
+```
+
+Run `init` once per project to wire codemap into your development skills and agents. Run `check` anytime to confirm the setup is healthy.
 
 ### With the develop plugin — automatic
 
@@ -313,42 +339,44 @@ Three plain-arm runs hit the hard 300-second timeout. Zero codemap timeouts.
 
 ## 🔌 Integrating codemap
 
-### Your development flow — before you touch anything
+The fastest path is the integration skill — it discovers your installed skills and agents, scores candidates by how much structural context helps, and wires in the correct injection block:
 
 ```bash
-# Step 1 — build the index once
-/codemap:scan
-
-# Step 2 — before changing a module, check blast radius
-scan-query rdeps mypackage.models        # 12 modules depend on this — review them first
-scan-query deps mypackage.auth           # auth imports 8 modules — changes ripple inward
-
-# Step 3 — before a refactor, find the most critical modules
-scan-query central --top 10             # most-imported = riskiest to change
-scan-query coupled --top 10            # imports-the-most = most fragile to upstream
-
-# Step 4 — before adding a dependency between two modules
-scan-query path mypackage.api mypackage.db  # already coupled? → null = safe to connect
+/codemap:integration init        # interactive onboarding: recommends candidates, asks which to wire in
+/codemap:integration check       # audit: scan-query reachable, index fresh, injection present in skills
 ```
+
+`init` builds the index if it is missing and handles first-run setup end-to-end. Run `check` after any change to confirm everything is correctly wired.
+
+### Query reference — which command to use when
+
+| Situation | Query |
+| -------------------------------------- | --------------------------------------- |
+| "What breaks if I change X?" | `rdeps X` |
+| "What does X pull in?" | `deps X` |
+| "Are A and B already coupled?" | `path A B` — `null` means not connected |
+| "What's the riskiest module to touch?" | `central --top 10` (highest rdep_count) |
+| "What's the most entangled module?" | `coupled --top 10` (highest dep_count) |
+| "List all modules in the project" | `list` |
+
+<details>
+<summary>Manual injection — adding codemap to a custom skill or agent</summary>
 
 ### Adding codemap to a custom skill
 
-Drop this soft-check block into any `SKILL.md` **before the first agent spawn**. It injects structural context when available and silently skips when codemap is not installed — your skill works either way:
+Drop this soft-check block into any `SKILL.md` **before the first agent spawn**. It injects structural context when available and silently skips when codemap is not installed:
 
 ```bash
 # Structural context (codemap, if installed) — silent skip if absent
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     scan-query central --top 5
 fi
 ```
 
-If results are returned: prepend a `## Structural Context (codemap)` block to your agent spawn prompt. The spawned agent reads blast-radius context before exploring the codebase — zero cold-start Glob/Grep.
-
-For skills that know the target module up front, also add targeted queries:
+If results are returned: prepend a `## Structural Context (codemap)` block to your agent spawn prompt. For skills that know the target module up front, also add targeted queries:
 
 ```bash
-# After deriving TARGET_MODULE from arguments
 scan-query rdeps "$TARGET_MODULE" 2>/dev/null   # what depends on it?
 scan-query deps  "$TARGET_MODULE" 2>/dev/null   # what does it import?
 ```
@@ -366,7 +394,7 @@ information that can be queried directly. If the index is absent, proceed normal
 Or inject context programmatically in a skill bash block before spawning the agent:
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 CODEMAP_CONTEXT=""
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     CODEMAP_CONTEXT=$(scan-query rdeps "$TARGET_MODULE" 2>/dev/null)
@@ -374,25 +402,17 @@ fi
 # then pass $CODEMAP_CONTEXT in the spawn prompt as "## Structural Context"
 ```
 
-### Decision guide — which query to use when
-
-| Situation                              | Query                                   |
-| -------------------------------------- | --------------------------------------- |
-| "What breaks if I change X?"           | `rdeps X`                               |
-| "What does X pull in?"                 | `deps X`                                |
-| "Are A and B already coupled?"         | `path A B` — `null` means not connected |
-| "What's the riskiest module to touch?" | `central --top 10` (highest rdep_count) |
-| "What's the most entangled module?"    | `coupled --top 10` (highest dep_count)  |
-| "List all modules in the project"      | `list`                                  |
+</details>
 
 ## 🗺️ Overview
 
-### 2 Skills
+### 3 Skills
 
-| Skill     | Trigger          | What it does                                                                  |
-| --------- | ---------------- | ----------------------------------------------------------------------------- |
-| **scan**  | `/codemap:scan`  | Runs `ast.parse` across all Python files; writes `.cache/scan/<project>.json` |
-| **query** | `/codemap:query` | Queries the index; checks staleness on every call; returns JSON               |
+| Skill           | Trigger                            | What it does                                                                  |
+| --------------- | ---------------------------------- | ----------------------------------------------------------------------------- |
+| **scan**        | `/codemap:scan`                    | Runs `ast.parse` across all Python files; writes `.cache/scan/<project>.json` |
+| **query**       | `/codemap:query`                   | Queries the index; checks staleness on every call; returns JSON               |
+| **integration** | `/codemap:integration check\|init` | Audits install health (`check`) or onboards codemap into skills/agents (`init`) |
 
 ### 5 CLI Commands
 
@@ -474,7 +494,8 @@ plugins/codemap/
 ├── README.md
 ├── skills/
 │   ├── scan/SKILL.md        ← /codemap:scan
-│   └── query/SKILL.md       ← /codemap:query
+│   ├── query/SKILL.md       ← /codemap:query
+│   └── integration/SKILL.md ← /codemap:integration check|init
 └── bin/
     ├── scan-index           ← scanner: ast.parse → JSON index with graph metrics
     └── scan-query           ← query CLI: central / coupled / deps / rdeps / path / list

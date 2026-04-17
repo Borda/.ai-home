@@ -36,7 +36,7 @@ STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run
 | ---------------- | ------------------------ | -------------------------------------------- |
 | `auto`           | heuristic                | Default — infer from metric_cmd keywords     |
 | `perf`           | `foundry:perf-optimizer` | latency, throughput, memory, GPU utilization |
-| `code`           | `sw-engineer`            | coverage, complexity, lines, coupling        |
+| `code`           | `foundry:sw-engineer`    | coverage, complexity, lines, coupling        |
 | `ml`             | `scientist`              | accuracy, loss, F1, AUC, BLEU                |
 | `arch`           | `solution-architect`     | coupling, cohesion, modularity metrics       |
 
@@ -44,7 +44,7 @@ STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run
 
 **Auto-inference keyword heuristics** (applied when `agent_strategy: auto` or omitted; checked against `## Goal` text AND metric command):
 
-- contains `pytest`, `coverage`, `complexity` → `code` → `sw-engineer`
+- contains `pytest`, `coverage`, `complexity` → `code` → `foundry:sw-engineer`
 - contains `time`, `latency`, `bench`, `throughput`, `memory` → `perf` → `foundry:perf-optimizer`
 - contains `accuracy`, `loss`, `f1`, `auc`, `train`, `val`, `eval` → `ml` → `scientist`
 - no keyword match → `perf` (default fallback)
@@ -159,7 +159,7 @@ Generate a `run-id` = `$(date +%Y%m%d-%H%M%S)`. Create the run directory:
   diary.md           ← human-readable research diary (hypothesis → outcome → decision)
 ```
 
-Convert `program_file` to absolute path before storing: use `os.path.abspath(<argument>)` or shell `realpath` — Resume Mode matches on absolute path.
+Convert `program_file` to absolute path before storing: use `realpath "$PROGRAM_FILE"` or shell `realpath` — Resume Mode matches on absolute path.
 
 Write initial `state.json` (`program_file` is the absolute path to the `.md` file, or `null` when launching from a text goal):
 
@@ -292,9 +292,9 @@ Build context for the ideation agent and write it to a file — do NOT accumulat
 
 ```bash
 # Collect signals
-git log --oneline -10 >.experiments/state/ <run-id >/context- <i >.md
-tail -10 .experiments/state/ <run-id >/experiments.jsonl >>.experiments/state/ <run-id >/context- <i >.md
-git diff --stat HEAD~5 HEAD >>.experiments/state/ <run-id >/context- <i >.md
+git log --oneline -10 >.experiments/state/${RUN_ID}/context-${I}.md
+tail -10 .experiments/state/${RUN_ID}/experiments.jsonl >>.experiments/state/${RUN_ID}/context-${I}.md
+git diff --stat HEAD~5 HEAD >>.experiments/state/${RUN_ID}/context-${I}.md
 ```
 
 Prepend a header block to `context-<i>.md` with: goal, current metric vs baseline, delta trend (last 5 kept deltas), and the iteration number. The ideation agent in Phase 2 reads this file directly — the content is never echoed back to the main context.
@@ -417,7 +417,7 @@ git commit -m "experiment(optimize/i<N>): <description>"
 
 If pre-commit hooks fail:
 
-- Delegate to `linting-expert` agent: provide the failing hook output and the modified files; ask it to fix the issues. Max 2 attempts.
+- Delegate to `foundry:linting-expert` agent: provide the failing hook output and the modified files; ask it to fix the issues. Max 2 attempts.
 - If still failing after 2 attempts: `git restore --staged .` + `git checkout -- .` to clean up, append `status: hook-blocked`, continue loop.
 
 #### Phase 5 — Verify metric
@@ -425,12 +425,12 @@ If pre-commit hooks fail:
 **If `sandbox_mode = "docker"`** (set in Step R2):
 
 ```bash
-docker run --rm --network \
-    "$(pwd):/workspace:ro" \
+docker run --rm --network "${SANDBOX_NETWORK}" \
+    -v "$(pwd):/workspace:ro" \
     -v "$(pwd)/.experiments:/workspace/.experiments:rw" \
     --tmpfs /tmp:rw,size=256m \
     python:3.11-slim \
-    sh -c '<metric_cmd>' <sandbox_network >-v
+    sh -c "$METRIC_CMD"
 ```
 
 No resource limits — the container may use all available CPU and memory. Use the Bash tool `timeout` parameter (not the `timeout` command): `timeout: <VERIFY_TIMEOUT_SEC * 1000>`.

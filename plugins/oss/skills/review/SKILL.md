@@ -88,7 +88,7 @@ Use classification to skip optional agents:
 ### Structural context (codemap, if installed)
 
 ```bash
-PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null || basename "$PWD")
+PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
     # Use file list from the gh pr diff already fetched above
     CHANGED_MODS=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null | grep '\.py$' | sed 's|^src/||;s|\.py$||;s|/|.|g' | grep -v '__init__$')  # timeout: 6000
@@ -112,7 +112,7 @@ If `ISSUE_NUMS` is non-empty, spawn one **foundry:sw-engineer** agent per issue 
 
 - Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
 - Fetch comments: `gh issue view <N> --comments`
-- Produce `/analyse`-style output: Summary, Root Cause Hypotheses table (top 3), Code Evidence for top hypothesis
+- Produce `/oss:analyse`-style output: Summary, Root Cause Hypotheses table (top 3), Code Evidence for top hypothesis
 - Write full analysis to `$RUN_DIR/issue-<N>.md` (file-handoff protocol)
 - Return compact JSON envelope only: `{"status":"done","issue":N,"root_cause":"<one-line summary>","file":"$RUN_DIR/issue-<N>.md","confidence":0.N}`
 
@@ -258,7 +258,7 @@ Read and follow the cross-validation protocol from `.claude/skills/_shared/cross
 
 Before constructing the output path, extract the current branch and date components: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` `YYYY=$(date +%Y); MM=$(date +%m); DATE=$(date +%Y-%m-%d)`
 
-Spawn a **sw-engineer** consolidator agent with this prompt:
+Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
 > "Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Read `.claude/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Apply the precision gate: only include findings with a concrete, actionable location (function, line range, or variable name). Apply the finding density rule: for modules under 100 lines, aim for ≤10 total findings. Rank findings within each section by impact (blocking > critical > high > medium > low). For `codex.md`: include its unique findings under a `### Codex Co-Review` section; deduplicate against agent findings (same file:line raised by both → keep the agent version, mark as 'also flagged by Codex'). If `issue-*.md` files exist in `$RUN_DIR`, include a `### Issue Root Cause Alignment` section placed immediately after `### [blocking] Critical`. For each linked issue: state the root cause hypothesis, whether the PR addresses it (yes / partially / no), whether the PR description diverges from the issue's stated problem, and whether the reproduction scenario is tested. Any `root cause misalignment` or `scope divergence` finding is at least HIGH severity. Parse each agent's `confidence` from its envelope; assign `codex` a fixed confidence of 0.75 (moderate — static analysis, no runtime context). Write the consolidated report to `.temp/output-review-$BRANCH-$DATE.md` using the Write tool. Return ONLY a one-line summary: `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=.temp/output-review-$BRANCH-$DATE.md`"
 
@@ -320,13 +320,8 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 3. [third]
 
 ### Review Confidence
-<!-- Replace placeholder rows with actual agent scores for this review -->
 | Agent | Score | Label | Gaps |
 |-------|-------|-------|------|
-<!-- | sw-engineer | 0.88 | high | — | -->
-<!-- | qa-specialist | 0.65 | ⚠ low | no test execution; coverage unverifiable without running suite | -->
-<!-- | perf-optimizer | 0.72 | moderate | no profiling data; estimates from static analysis only | -->
-<!-- | codex | 0.75 | moderate | static analysis only; no type inference or runtime context | -->
 
 **Aggregate**: min 0.65 / median 0.N
 [⚠ LOW CONFIDENCE: qa-specialist could not verify test execution — treat coverage findings as indicative, not conclusive]
@@ -373,11 +368,13 @@ If `REPLY_MODE=false`: skip Step 9 and end with the Confidence block now.
 
 If `REPLY_MODE` is not set, skip this step.
 
+Pre-compute the reply date: `SPAWN_DATE="$(date -u +%Y-%m-%d)"`
+
 Spawn the **shepherd** agent with:
 
 - The review output file path from Step 6
 - The PR number and contributor handle (if known from Step 1)
-- Prompt: "Read the review report at `<path>`. Write a two-part contributor reply: **Part 1 — Reply summary** (always present, always complete on its own): (a) acknowledgement + praise naming what is genuinely good — technique, structural decisions, test quality — 1–3 concrete observations, not generic; (b) thematic areas needing improvement — no counts, no itemisation, no 'see below'; name the concern areas concretely enough that the contributor knows what to look at without Part 2; (c) optional closing sentence only when Part 2 follows (e.g. 'I've left inline suggestions with specifics.'). **Part 2 — Inline suggestions** (optional; single unified table, all findings in one place — no separate prose paragraphs): `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; high → medium → low, then most confident first within tier; 1–2 sentences per row for high items; include all high/medium/low findings in one table. No column-width line-wrapping in prose. Write your full output to `.temp/output-reply-<PR#>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a one-line summary: `part1=done | part2=N_rows | → .temp/output-reply-<PR#>-<date>.md`"
+- Prompt: "Read the review report at `<path>`. Write a two-part contributor reply: **Part 1 — Reply summary** (always present, always complete on its own): (a) acknowledgement + praise naming what is genuinely good — technique, structural decisions, test quality — 1–3 concrete observations, not generic; (b) thematic areas needing improvement — no counts, no itemisation, no 'see below'; name the concern areas concretely enough that the contributor knows what to look at without Part 2; (c) optional closing sentence only when Part 2 follows (e.g. 'I've left inline suggestions with specifics.'). **Part 2 — Inline suggestions** (optional; single unified table, all findings in one place — no separate prose paragraphs): `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; high → medium → low, then most confident first within tier; 1–2 sentences per row for high items; include all high/medium/low findings in one table. No column-width line-wrapping in prose. Write your full output to `.temp/output-reply-<PR#>-$SPAWN_DATE.md` using the Write tool. Return ONLY a one-line summary: `part1=done | part2=N_rows | → .temp/output-reply-<PR#>-<date>.md`"
 
 Print compact terminal summary:
 

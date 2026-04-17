@@ -1,4 +1,4 @@
-# foundry — Claude Code Plugin
+# ⚒️ foundry — Claude Code Plugin
 
 Base plugin for Python/ML OSS development: 8 specialist agents, config-management skills, event-driven hooks, and a continuous self-improvement loop.
 
@@ -23,7 +23,7 @@ Generic Claude Code is a generalist. It will help with code, but it does not kno
 - **File-based handoff** — agents producing >500 tokens of findings write to a file and return a compact JSON envelope; the orchestrator never accumulates raw agent output in context
 - **Hooks are transparent** — `rtk-rewrite.js` compresses CLI output without modifying commands; `lint-on-save.js` runs pre-commit after every write; both are no-ops when the tools are absent
 
-## ⚡ Install
+## ⚡ Quick start
 
 ```bash
 # Run from the directory that CONTAINS your Borda-AI-Home clone

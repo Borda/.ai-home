@@ -27,8 +27,6 @@ NOT for: `.claude/` config issues (use `/audit`); general unknown failures witho
 
 # Debug Mode
 
-Systematic investigation-first debugging. Gather evidence and trace the data flow before writing any test or fix — form a confirmed root-cause hypothesis, then hand off to fix mode for the reproduce-fix-verify cycle.
-
 ## Step 1: Understand the symptom
 
 Collect all available signals before forming any hypothesis:
