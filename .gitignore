@@ -11,7 +11,6 @@
 .claude/worktrees/
 
 # Skill run artifacts and temp outputs (ephemeral, TTL-managed)
-docs/
 .cache/
 .notes/
 .plans/
@@ -20,6 +19,7 @@ docs/
 .reports/
 .temp/
 .outputs/
+docs/specs/
 
 # Agent auto-memory (machine-local, not source)
 .claude/agent-memory/

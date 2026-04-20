@@ -108,6 +108,8 @@ Use `link` to invoke foundry commands without a prefix (`/audit` instead of `/fo
 # Status: draft → blocking questions → ordered action plan with tagged invocations
 ```
 
+![Brainstorm live tree viewer — branch tree with detail panel](../../docs/assets/brainstorm-map-tree.png)
+
 ### Failure diagnosis
 
 ```bash

@@ -11,6 +11,10 @@ effort: high
 
 Turn unformed idea into branching exploration tree, then distill into spec. Idea mode = pure divergence — grow tree of directions, deepen promising branches, prune others, save result. No premature convergence. Run `breakdown` on tree when ready: asks distillation questions, writes spec section-by-section.
 
+<HARD-GATE>
+Do NOT take any implementation action — writing code, creating files, scaffolding — until the user has approved a design (spec). This applies regardless of perceived simplicity. A simple idea can have a short tree and spec, but the process is never skipped.
+</HARD-GATE>
+
 </objective>
 
 <inputs>
@@ -21,9 +25,9 @@ Examples:
 
 - `/brainstorm I want users to be able to export results as CSV`
 
-- **`--tight`** — reduced-ceremony mode: cap clarifying questions at 5 (not 10), cap tree operations at 5 (not 10), require only 1 closed branch (not 2) before saving. Good for well-scoped ideas where problem already understood.
+- **`--tight`** — reduced-ceremony mode: see per-step caps below — 5/5/1 bounds vs default 10/10/2. Good for well-scoped ideas where problem already understood.
 
-- **`--deep`** — extended-ceremony mode: cap clarifying questions at 15, cap tree operations at 15, require 3+ closed branches before saving. Good for genuinely ambiguous problems where more exploration valuable.
+- **`--deep`** — extended-ceremony mode: 15/15/3 bounds vs default 10/10/2. Good for genuinely ambiguous problems where more exploration valuable.
 
 - Default (no flag): behaviour unchanged — 10/10/2 bounds.
 
@@ -63,7 +67,40 @@ Gather project context before asking anything:
 
 When no `--type` declared, perform generic scan as before.
 
+**Existing codebase guidance**: when the project has existing code, note patterns in use (naming, architecture, data flow) — Step 3 branches should follow established patterns unless the idea explicitly requires changing them. Where existing code has problems that affect the work (e.g., a file grown too large, unclear boundaries), note them as open threads — do not propose unrelated refactoring, but flag targeted improvements that serve the current goal.
+
 Goal: understand constraints so questions targeted, not generic. If idea already exists or clearly out of scope, say so immediately and stop.
+
+**Scope check**: before asking clarifying questions, assess request size. If the idea describes multiple independent subsystems (e.g., "build a platform with chat, file storage, billing, and analytics"), flag immediately — do not spend questions refining details of an oversized scope. Help the user decompose into sub-ideas: what are the independent pieces, how do they relate, what order to tackle them? Then proceed with the first sub-idea through the normal idea mode flow.
+
+**Live viewer init**: create JSON sidecar and print launch note — do this before asking any clarifying questions:
+
+```bash
+# timeout: 3000
+mkdir -p .plans/blueprint
+SIDECAR=".plans/blueprint/brainstorm-$(date -u +%Y%m%d-%H%M%S).json"
+echo "$SIDECAR"
+```
+
+Record `$SIDECAR` path — referenced in Steps 3 and 4. Write initial JSON to that path using the Write tool:
+
+```json
+{
+  "schema_version": 1,
+  "session_status": "active",
+  "updated_at": "<current ISO timestamp>",
+  "session": { "title": "<raw $ARGUMENTS text>", "slug": "", "started_at": "<current ISO timestamp>" },
+  "tree": { "id": "root", "label": "<raw $ARGUMENTS text>", "status": "open", "core_idea": "", "tension": "", "trades_away": "", "skill_lean": "", "children": [] },
+  "ui": { "active_node_id": null, "last_error": null }
+}
+```
+
+On write failure: log `> Viewer write failed: <reason>` inline and continue.
+
+Print launch note:
+
+> **Live tree viewer**: run `python3 -m http.server 8000` from project root, then open:
+> `http://localhost:8000/plugins/foundry/skills/brainstorm/scripts/tree-viewer.html?state=<sidecar-path>`
 
 ## Step 2: Clarifying questions
 
@@ -103,6 +140,8 @@ Present **3–5 initial branches** (top-level directions). For each include:
 - **What it trades away**: what gets harder or left unsolved
 - **Skill's lean**: short honest opinion — what makes branch interesting or worth exploring, and any reservation skill has about it (e.g., "Interesting because it sidesteps the auth problem entirely, but risky if the data model isn't flexible.")
 
+**YAGNI filter**: when generating branches, actively prune speculative "we might need this later" directions — include only branches that directly address the stated problem. Flag any branch that requires features or scale not mentioned in the clarifying questions as "speculative" in its **What it trades away** line.
+
 After presenting all initial branches, write **Opening framing** paragraph (2–3 sentences) sharing skill's initial read on problem space: what it sees as core tension, which branch(es) it finds most promising and why, and one thing it's uncertain about. Not recommendation to converge — divergence still goal — but honest perspective to spark reaction.
 
 Then call `AskUserQuestion` with one letter per branch (labelled by name), plus:
@@ -122,20 +161,24 @@ After seeding, enter operations loop. Each iteration:
 2. Write **Skill's moment** — 2–3 sentences of skill's current read: which open branches look most interesting and why, what closed branches revealed about problem, and what skill would explore next if it had a vote. Make specific to current tree state (refer to actual branch names by their labels). Gives user something to react to before choosing operation.
 3. Call `AskUserQuestion` with available operations:
    - a) Deepen a branch — add sub-branches to [branch name]
-   - b) Close a branch — mark [branch name] as closed with a reason
-   - c) Merge two branches — combine [branch name] + [branch name]
-   - d) Add a new top-level branch — explore a different angle
-   - e) Reopen a closed branch — reconsider [branch name]
-   - f) Ready — save tree and proceed
+   - b) Reject a branch — mark [branch name] as closed/rejected with a reason
+   - c) Accept a branch as resolved — mark [branch name] as the chosen direction
+   - d) Merge two branches — combine [branch name] + [branch name]
+   - e) Add a new top-level branch — explore a different angle
+   - f) Reopen a rejected or resolved branch — reconsider [branch name]
+   - g) Ready — save tree and proceed
+
+4. **Write viewer state** (after any operation except Ready): overwrite `$SIDECAR` with current full tree state using the Write tool; set `ui.active_node_id` to the just-operated node's `id`; update `updated_at` to current ISO timestamp; update `session.title` to current brainstorm title. On write failure: log `> Viewer write failed: <reason>` inline and continue; on the next successful write, set `ui.last_error: "<reason>"`.
 
 **Operations**:
 
 - **Deepen**: generate 2–3 sub-branches under named branch. Sub-branches use same format as top-level branches. Ask which one(s) to focus on. After executing, write 1–2 sentences reacting to what deepening this branch opens up — what new tensions or opportunities sub-branches reveal.
-- **Close**: mark named branch as ⛔ (closed) with user's reason shown after `—`. Add one-line entry to pruning log. Ask if reason captures it correctly before proceeding. After executing, write 1–2 sentences reacting to what closing this branch reveals — what it tells us about where exploration is actually headed.
-- **Merge**: synthesise two named branches into single hybrid branch; present merged description; mark originals as 🔗 with `[merged -> <number>: <new-branch-name>]` immediately in tree summary shown after merge, and in all subsequent tree summaries. After executing, write 1–2 sentences on what merge suggests about where idea is heading — what synthesis makes clearer or harder.
-- **Add**: generate 1–2 fresh top-level branches with directions not yet represented in tree. After executing, write 1–2 sentences on why new angle matters — what gap it fills or what it challenges in existing branches.
-- **Reopen**: change ⛔ (closed) to 💭 (open) on named branch; note re-opening reason. After executing, write 1–2 sentences on what reopening this branch might change — what it puts back on table.
-- **Ready**: exit loop, proceed to Step 4.
+- **Reject**: mark named branch as ⛔ (rejected) with user's reason shown after `—`. Add one-line entry to pruning log. Ask if reason captures it correctly before proceeding. After executing, write 1–2 sentences reacting to what rejecting this branch reveals — what it tells us about where exploration is actually headed.
+- **Resolve/Accept**: mark named branch as ✅ (resolved) with a note explaining why it was chosen as the direction. Do NOT add to pruning log (it's accepted, not pruned). After executing, write 1–2 sentences on what this choice commits to — what it confirms and what it implicitly rules out.
+- **Merge (d)**: synthesise two named branches into single hybrid branch; present merged description; mark originals as 🔗 with `[merged -> <number>: <new-branch-name>]` immediately in tree summary shown after merge, and in all subsequent tree summaries. After executing, write 1–2 sentences on what merge suggests about where idea is heading — what synthesis makes clearer or harder.
+- **Add (e)**: generate 1–2 fresh top-level branches with directions not yet represented in tree. After executing, write 1–2 sentences on why new angle matters — what gap it fills or what it challenges in existing branches.
+- **Reopen (f)**: change ⛔ (rejected) or ✅ (resolved) back to 💭 (open) on named branch; note re-opening reason. After executing, write 1–2 sentences on what reopening this branch might change — what it puts back on table.
+- **Ready (g)**: exit loop, proceed to Step 4.
 
 ### Tree summary format
 
@@ -151,18 +194,19 @@ Tree: <title>
 │  │  ├─ 💭 2.1.1: <name>
 │  │  └─ ⛔ 2.1.2: <name> — <reason>
 │  └─ ⛔ 2.2: <name> — <reason>
-└─ 🔗 Branch 3: <name> [merged -> <number>: <new-branch-name>]
-Open: N · Closed: N · Merged: N
-Legend: ▶️ active focus · 💭 open · ⛔ closed · 🔗 merged
+├─ ✅ Branch 3: <name> — <reason chosen>
+└─ 🔗 Branch 4: <name> [merged -> <number>: <new-branch-name>]
+Open: N · Rejected: N · Resolved: N · Merged: N
+Legend: ▶️ active focus · 💭 open · ⛔ rejected · ✅ resolved/accepted · 🔗 merged
 ```
 
-Use `├─`, `│  ├─`, `└─` for tree rendering. Show sub-branches indented one level per depth. Sub-branches use hierarchical dot notation: branch 2 splits into 2.1, 2.2, …; those split further into 2.1.1, 2.1.2, … Prefix each branch with status emoji: ▶️ for branch currently operated on (most recently deepened, or selected as initial focus during seeding), 💭 for all other open branches, ⛔ for closed branches (show reason after `—`), 🔗 for merged branches (show merge target as `[merged -> <number>: <new-branch-name>]`). Legend line always last.
+Use `├─`, `│  ├─`, `└─` for tree rendering. Show sub-branches indented one level per depth. Sub-branches use hierarchical dot notation: branch 2 splits into 2.1, 2.2, …; those split further into 2.1.1, 2.1.2, … Prefix each branch with status emoji: ▶️ for branch currently operated on (most recently deepened, or selected as initial focus during seeding), 💭 for all other open branches, ⛔ for rejected branches (show reason after `—`), ✅ for resolved/accepted branches (show reason after `—`), 🔗 for merged branches (show merge target as `[merged -> <number>: <new-branch-name>]`). Legend line always last.
 
 ### Loop bounds
 
 - Maximum **10 operations** (5 in `--tight` mode, 15 in `--deep` mode) (round = one operation)
 - After limit: show tree state, call `AskUserQuestion` with: a) Save tree as-is ★ recommended / b) Do 2 more operations then save
-- **Gate**: do not proceed to Step 4 until user selects "Ready" or max reached with at least 2 closed branches (1 in `--tight`, 3 in `--deep`); if fewer than required closed branches exist, prompt: "The tree has few closed branches — consider closing 1–2 that are clearly not the right direction before saving."
+- **Gate**: do not proceed to Step 4 until user selects "Ready" or max reached with at least 2 rejected branches (1 in `--tight`, 3 in `--deep`); resolved/accepted branches do not count toward this minimum (they are the goal, not waste); if fewer than required rejected branches exist, prompt: "The tree has few rejected branches — consider rejecting 1–2 that are clearly not the right direction before saving."
 
 ## Step 4: Save tree
 
@@ -182,7 +226,7 @@ Assemble tree state and write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` using W
 
 [For each branch in the tree, using this structure:]
 
-### Branch N: <name> [open | closed — <reason> | merged into <name>]
+### Branch N: <name> [open | rejected — <reason> | resolved — <reason> | merged into <name>]
 
 **Core idea**: ...
 **Tension it resolves**: ...
@@ -190,7 +234,7 @@ Assemble tree state and write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` using W
 
 [Sub-branches nested as H4 headings if present:]
 
-#### N.1: <sub-branch name> [open | closed — <reason>]
+#### N.1: <sub-branch name> [open | rejected — <reason> | resolved — <reason>]
 
 **Core idea**: ...
 
@@ -198,9 +242,14 @@ Assemble tree state and write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` using W
 
 ## Pruning log
 
-- Branch N closed: <reason>
-- Sub-branch N.1 closed: <reason>
-[One bullet per closed or merged branch, in the order they were closed.]
+- Branch N rejected: <reason>
+- Sub-branch N.1 rejected: <reason>
+[One bullet per rejected or merged branch (NOT resolved/accepted), in the order they were closed.]
+
+## Resolved branches
+
+- Branch N accepted: <reason/decision note>
+[One bullet per ✅ resolved branch.]
 
 ## Open threads
 
@@ -208,6 +257,8 @@ Assemble tree state and write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` using W
 ```
 
 **Gate**: do not proceed to Step 5 until file written and path confirmed.
+
+**Sidecar finalise**: using the Write tool, write the full current JSON content (same as `$SIDECAR`) with `session_status: "complete"` to `.plans/blueprint/<final-slug>.json` (same slug as the `.md` file, `.json` extension). Then also overwrite `$SIDECAR` with `session_status: "complete"`. Do NOT move or rename `$SIDECAR` — open browser tabs keep polling the original timestamp-slug path.
 
 ## Step 5: Tree review
 
@@ -232,7 +283,7 @@ Write your full findings to <output-path> using the Write tool.
 Return ONLY a compact JSON envelope: {"status":"done","findings":N,"file":"<path>","confidence":0.N,"summary":"<one-line>"}
 ```
 
-**Passive health monitoring**: Agent tool is synchronous — Claude awaits self-mentor's response natively. If self-mentor does not return within 15 min, surface any partial output already written to `.temp/` with ⏱ marker and continue to Step 6 with incomplete review noted.
+**Passive health monitoring**: Agent tool is synchronous — Claude awaits self-mentor's response natively. If foundry:self-mentor does not return within 15 min, surface any partial output already written to `.temp/` with ⏱ marker and continue to Step 6 with incomplete review noted.
 
 > Note: synchronous Agent calls do not support mid-call extensions per CLAUDE.md §8 — simplified monitoring is intentional for synchronous spawns.
 
@@ -251,6 +302,8 @@ Show tree file path and compact tree summary (same format as Step 3). Then call 
 **Gate**: do not exit until user approves. On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles — after 3 (b) responses with no convergence, surface unresolved concerns to user and stop.)
 
 On approval, suggest: `/brainstorm breakdown .plans/blueprint/<file>` to distill tree into spec.
+
+> The tree file is a durable record of exploration. Share it with teammates or use it as context for future `/brainstorm` sessions on related ideas.
 
 ## Mode: Breakdown
 
@@ -275,7 +328,7 @@ Ask up to **5 distillation questions**, one at a time via `AskUserQuestion`, to 
 
 Start with these (adapt based on tree content):
 
-1. "Which open branch best captures the core direction you want to pursue?" — list each open branch as lettered option
+1. "Which open branch best captures the core direction you want to pursue?" — list each open branch as lettered option. Note: if the tree was saved and this branch does not already have ✅ status in the file, it should be updated to `resolved — chosen in distillation` in the tree file; do not re-save the file here — the spec file written in D3 will reflect the accepted direction.
 2. "Should any of the remaining open branches be combined with the chosen direction, or are they separate concerns?"
 3. "What is the single most important success criterion for this idea?"
 4–5. Ask additional questions based on gaps in open threads section or unresolved tensions between branches
@@ -410,13 +463,15 @@ End with `## Confidence` block per CLAUDE.md output standards.
 
 - **No code at any point** — skill produces tree documents and specs only; implementation out of scope
 - **`disable-model-invocation: true`** — skill is conversational; parent model drives all steps turn by turn
-- **self-mentor scope in Step 5** — spawn prompt must constrain scope to tree quality explicitly; do not let it audit `.claude/` config files
+- **foundry:self-mentor scope in Step 5** — spawn prompt must constrain scope to tree quality explicitly; do not let it audit `.claude/` config files
 - **.plans/blueprint/ directory** — created if absent; filenames use `YYYY-MM-DD-<kebab-slug>.md` format; tree files use base slug; spec files append `-spec` to slug to avoid collision
 - **Status field**: tree documents use `Status: tree`; spec documents use `Status: draft`; breakdown auto-detects which path to take
 - **Breakdown heading convention**: distillation mode uses D-prefix steps (D1–D4); action plan mode uses B-prefix steps (B1–B3)
-- **Exploration notes in spec**: Section 6 derived from tree's Pruning log — intentional context for future readers; do not remove in self-mentor review
+- **Exploration notes in spec**: Section 6 derived from tree's Pruning log — intentional context for future readers; do not remove in foundry:self-mentor review
 - **Interaction budget**: idea mode — worst case: 13 (`--tight`) / 23 (default) / 33 (`--deep`) questions + operations + 3 approval cycles; breakdown distillation — max 5 questions + 6 section drafts ≈ 11; typical sessions use ~8–15 total AskUserQuestion calls across both
 - **Flag modes**: `--tight` / `--deep` scale question and operation caps (5/15 vs default 10); `--type` enables type-aware scan and question framing in Steps 1–2; flags apply to idea mode only, ignored in breakdown
 - **Follow-up**: after spec approval in distillation mode → if targeting `.claude/` config: `/manage update <name> <spec-file>`; for application or mixed changes: `/brainstorm breakdown .plans/blueprint/<spec-file>` for action plan
+- **Rejected vs resolved distinction**: ⛔ marks branches dismissed as wrong direction; ✅ marks the branch explicitly chosen as the direction. Resolved branches do not count toward the minimum-rejected-branches gate — they are the goal. Pruning log captures rejected only; resolved branches go in a separate "Resolved branches" section.
+- **Confidence block**: idea mode is a conversational session and produces a file (not an inline report) — the Confidence block requirement from CLAUDE.md output standards applies to analysis responses only; omitted by design for Steps 1–6. The foundry:self-mentor spawn in Step 5 returns its own Confidence block, surfaced in the review but not re-emitted to the user.
 
 </notes>
