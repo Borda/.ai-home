@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scan-query — query the codemap structural index.
 
-Commands:
+Commands (module-level):
   deps <module>           What does this module import?
   rdeps <module>          What imports this module?
   central [--top N]       Most-imported modules (highest blast radius)
@@ -10,6 +10,12 @@ Commands:
   symbol <name>           Get source of a symbol by name (function/class/method)
   symbols <module>        List all symbols in a module
   find-symbol <pattern>   Regex search across all symbol names
+
+Commands (function-level — requires v3 index with call graph):
+  fn-deps <qname>         What does a function call?
+  fn-rdeps <qname>        What calls a function?
+  fn-central [--top N]    Most-called functions globally
+  fn-blast <qname>        Transitive reverse-call blast radius
 
 All output is JSON. Staleness is checked on every invocation — warns to
 stderr if Python files were committed after the index was built.
@@ -23,6 +29,10 @@ Usage:
     scan-query symbol authenticate
     scan-query symbols mypackage.auth
     scan-query find-symbol '^Auth.*Handler$'
+    scan-query fn-deps 'mypackage.auth::validate_token'
+    scan-query fn-rdeps 'mypackage.db::fetch_user'
+    scan-query fn-central --top 5
+    scan-query fn-blast 'mypackage.auth::validate_token'
 """
 
 from __future__ import annotations
@@ -51,6 +61,7 @@ class Symbol(TypedDict):
 
 
 def _git_root() -> Path | None:
+    """Return the git repository root, or None if not inside a git repo."""
     try:
         root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"], text=True, stderr=subprocess.DEVNULL
@@ -91,6 +102,11 @@ def find_index() -> Path:
 
 
 def load_index(path: Path) -> dict:
+    """Load and return the JSON index from path; exit with a clear error if missing.
+
+    Args:
+        path: filesystem path to the index JSON file.
+    """
     if not path.exists():
         _exit_error(f"Index not found at {path}. Run /codemap:scan first.")
     with path.open() as f:
@@ -102,8 +118,33 @@ def load_index(path: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _get_current_file_shas() -> dict[str, str]:
+    """Return {relative_path: blob_sha} for all tracked .py files, or {} if unavailable."""
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", "-s", "--", "*.py"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        shas: dict[str, str] = {}
+        for line in output.strip().splitlines():
+            if not line:
+                continue
+            tab_idx = line.index("\t")
+            path = line[tab_idx + 1 :]
+            sha = line.split()[1]
+            shas[path] = sha
+        return shas
+    except Exception:
+        return {}
+
+
 def check_staleness(scanned_at: str) -> bool:
-    """Return True if any Python code file changed after scanned_at."""
+    """Return True if any Python code file changed after scanned_at (timestamp fallback).
+
+    Args:
+        scanned_at: ISO timestamp string from the index's ``scanned_at`` field.
+    """
     try:
         result = subprocess.run(
             [
@@ -132,6 +173,29 @@ def check_staleness(scanned_at: str) -> bool:
 
 
 def warn_if_stale(index: dict) -> None:
+    """Print a staleness warning to stderr if indexed files differ from the current working tree.
+
+    Args:
+        index: parsed codemap index dict containing ``file_shas`` or ``scanned_at``.
+    """
+    stored_shas = index.get("file_shas")
+    if stored_shas:
+        # v3 index: precise SHA-based comparison
+        current_shas = _get_current_file_shas()
+        if current_shas:
+            changed = [p for p in current_shas if stored_shas.get(p) != current_shas[p]]
+            added = [p for p in current_shas if p not in stored_shas]
+            deleted = [p for p in stored_shas if p not in current_shas]
+            stale_files = changed + added + deleted
+            if stale_files:
+                n = len(stale_files)
+                print(
+                    f"⚠ codemap index stale — {n} file(s) changed since last scan."
+                    " Run /codemap:scan --incremental to update.",
+                    file=sys.stderr,
+                )
+            return
+    # v2 index fallback: timestamp-based check
     scanned_at = index.get("scanned_at", "")
     if scanned_at and check_staleness(scanned_at):
         print(
@@ -146,12 +210,73 @@ def warn_if_stale(index: dict) -> None:
 
 
 def build_module_map(index: dict) -> dict[str, dict]:
+    """Return a name-keyed dict of all module entries in the index.
+
+    Args:
+        index: parsed codemap index dict.
+    """
     return {m["name"]: m for m in index.get("modules", [])}
 
 
+def build_symbol_map(index: dict) -> dict[str, tuple[dict, dict]]:
+    """Flat lookup: ``full_qname -> (module_entry, symbol_dict)``.
+
+    ``full_qname`` is ``module_name::symbol_qualified_name``.
+    Degraded modules are skipped.
+
+    Args:
+        index: parsed codemap index dict.
+    """
+    result: dict[str, tuple[dict, dict]] = {}
+    for m in index.get("modules", []):
+        if m.get("status") == "degraded":
+            continue
+        for sym in m.get("symbols", []):
+            qname = f"{m['name']}::{sym['qualified_name']}"
+            result[qname] = (m, sym)
+    return result
+
+
+def build_reverse_call_graph(index: dict) -> dict[str, list[str]]:
+    """Reverse call map: ``callee_full_qname -> [caller_full_qname, ...]``.
+
+    Only edges with ``resolution`` of ``"import"`` or ``"local"`` are
+    included (unresolved / external calls are excluded).
+
+    Args:
+        index: parsed codemap index dict with call graph data.
+    """
+    rev: dict[str, list[str]] = {}
+    for m in index.get("modules", []):
+        if m.get("status") == "degraded":
+            continue
+        for sym in m.get("symbols", []):
+            caller_qname = f"{m['name']}::{sym['qualified_name']}"
+            for edge in sym.get("calls", []):
+                if edge.get("resolution") in ("import", "local"):
+                    target = edge["target"]
+                    rev.setdefault(target, []).append(caller_qname)
+    return rev
+
+
 def _exit_error(message: str) -> None:
+    """Print a JSON error object to stdout and exit with code 1.
+
+    Args:
+        message: human-readable error description.
+    """
     print(json.dumps({"error": message}))
     sys.exit(1)
+
+
+def _require_call_graph(index: dict) -> None:
+    """Exit with a clear error if the index lacks call graph data (v2 index).
+
+    Args:
+        index: parsed codemap index dict to check for v3 call graph support.
+    """
+    if index.get("scan_version", "2") < "3":
+        _exit_error("Index is v2 — call graph not available. Re-run /codemap:scan to upgrade.")
 
 
 def _current_git_sha() -> str | None:
@@ -168,10 +293,15 @@ def _coverage(index: dict) -> dict:
     Embeds a machine-readable completeness guarantee and a staleness signal
     so agents know whether the index matches the current codebase state.
     When git is present, compares the SHA recorded at scan time against HEAD.
+
+    Args:
+        index: parsed codemap index dict.
     """
     modules = index.get("modules", [])
     total = sum(1 for m in modules if m.get("status") == "ok")
     degraded = sum(1 for m in modules if m.get("status") == "degraded")
+    total_syms = sum(len(m.get("symbols", [])) for m in modules if m.get("status") == "ok")
+    has_call_graph = index.get("scan_version", "2") >= "3"
 
     scan_sha: str | None = index.get("git_sha")
     current_sha = _current_git_sha()
@@ -198,7 +328,9 @@ def _coverage(index: dict) -> dict:
 
     return {
         "total_modules": total,
+        "total_symbols": total_syms,
         "degraded": degraded,
+        "has_call_graph": has_call_graph,
         "exhaustive": not stale,
         "stale": stale,
         **sha_info,
@@ -212,6 +344,12 @@ def _coverage(index: dict) -> dict:
 
 
 def cmd_deps(index: dict, module: str) -> None:
+    """Print direct imports of a module as JSON.
+
+    Args:
+        index: parsed codemap index dict.
+        module: dotted module name to look up.
+    """
     modules = build_module_map(index)
     entry = modules.get(module)
     if entry is None:
@@ -228,11 +366,23 @@ def cmd_deps(index: dict, module: str) -> None:
 
 
 def cmd_rdeps(index: dict, module: str) -> None:
+    """Print all modules that import a given module as JSON.
+
+    Args:
+        index: parsed codemap index dict.
+        module: dotted module name whose reverse dependencies are queried.
+    """
     result = sorted(m["name"] for m in index.get("modules", []) if module in m.get("direct_imports", []))
     print(json.dumps({"module": module, "imported_by": result, "index": _coverage(index)}))
 
 
 def cmd_central(index: dict, top: int) -> None:
+    """Print the top N most-imported modules ranked by reverse-dependency count.
+
+    Args:
+        index: parsed codemap index dict.
+        top: number of top-ranked modules to return.
+    """
     candidates = [m for m in index.get("modules", []) if m.get("status") != "degraded"]
     ranked = sorted(candidates, key=lambda m: m.get("rdep_count", 0), reverse=True)[:top]
     print(
@@ -248,6 +398,12 @@ def cmd_central(index: dict, top: int) -> None:
 
 
 def cmd_coupled(index: dict, top: int) -> None:
+    """Print the top N most-coupled modules ranked by direct import count.
+
+    Args:
+        index: parsed codemap index dict.
+        top: number of top-ranked modules to return.
+    """
     candidates = [m for m in index.get("modules", []) if m.get("status") != "degraded"]
     ranked = sorted(candidates, key=lambda m: m.get("dep_count", 0), reverse=True)[:top]
     print(
@@ -263,6 +419,13 @@ def cmd_coupled(index: dict, top: int) -> None:
 
 
 def cmd_path(index: dict, frm: str, to: str) -> None:
+    """Print the shortest import path between two modules via BFS.
+
+    Args:
+        index: parsed codemap index dict.
+        frm: source module name.
+        to: target module name.
+    """
     modules = build_module_map(index)
     if frm not in modules:
         _exit_error(f"Module '{frm}' not in index.")
@@ -288,6 +451,11 @@ def cmd_path(index: dict, frm: str, to: str) -> None:
 
 
 def cmd_list(index: dict) -> None:
+    """Print all indexed modules with their paths and status.
+
+    Args:
+        index: parsed codemap index dict.
+    """
     modules = [
         {"name": m["name"], "path": m.get("path", ""), "status": m.get("status", "ok")}
         for m in index.get("modules", [])
@@ -296,7 +464,14 @@ def cmd_list(index: dict) -> None:
 
 
 def _read_lines(index: dict, module_entry: dict, start_line: int, end_line: int) -> str:
-    """Read lines start_line..end_line (1-based, inclusive) from the module's source file."""
+    """Read lines start_line..end_line (1-based, inclusive) from the module's source file.
+
+    Args:
+        index: parsed codemap index dict (used to resolve git root).
+        module_entry: single module dict from the index containing a ``path`` key.
+        start_line: first line to read (1-based, inclusive).
+        end_line: last line to read (1-based, inclusive).
+    """
     git_root = _git_root()
     if git_root is None:
         git_root = Path.cwd()
@@ -308,7 +483,12 @@ def _read_lines(index: dict, module_entry: dict, start_line: int, end_line: int)
 
 
 def cmd_symbol(index: dict, name: str) -> None:
-    """Find a symbol by name (exact match, then qualified_name substring) and return its source."""
+    """Find a symbol by name (exact match, then qualified_name substring) and return its source.
+
+    Args:
+        index: parsed codemap index dict.
+        name: symbol name or qualified name to search for.
+    """
     matches: list[tuple[dict, Symbol]] = []
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
@@ -349,7 +529,12 @@ def cmd_symbol(index: dict, name: str) -> None:
 
 
 def cmd_symbols(index: dict, module: str) -> None:
-    """List all symbols in a module (no file I/O — index only)."""
+    """List all symbols in a module (no file I/O -- index only).
+
+    Args:
+        index: parsed codemap index dict.
+        module: dotted module name whose symbols are listed.
+    """
     modules = build_module_map(index)
     entry = modules.get(module)
     if entry is None:
@@ -378,7 +563,12 @@ def cmd_symbols(index: dict, module: str) -> None:
 
 
 def cmd_find_symbol(index: dict, pattern: str) -> None:
-    """Regex search across all symbol qualified_names in the index."""
+    """Regex search across all symbol qualified_names in the index.
+
+    Args:
+        index: parsed codemap index dict.
+        pattern: Python regex pattern matched against each symbol's qualified name.
+    """
     try:
         rx = re.compile(pattern, re.IGNORECASE)
     except re.error as exc:
@@ -405,11 +595,145 @@ def cmd_find_symbol(index: dict, pattern: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Function-level commands (require v3 index with call graph)
+# ---------------------------------------------------------------------------
+
+
+def cmd_fn_deps(index: dict, qname: str) -> None:
+    """What does function *qname* call? Lists forward call edges.
+
+    Args:
+        index: parsed codemap index dict (must be v3 with call graph).
+        qname: fully qualified symbol name (``module::symbol``).
+    """
+    _require_call_graph(index)
+    sym_map = build_symbol_map(index)
+    if qname not in sym_map:
+        _exit_error(f"Symbol '{qname}' not found. Use 'find-symbol <pattern>' to search.")
+    _module_entry, sym = sym_map[qname]
+    calls = [
+        {"target": edge["target"], "resolution": edge.get("resolution", "")}
+        for edge in sym.get("calls", [])
+        if edge.get("resolution") in ("import", "local")
+    ]
+    print(json.dumps({"qname": qname, "calls": calls, "count": len(calls), "index": _coverage(index)}))
+
+
+def cmd_fn_rdeps(index: dict, qname: str) -> None:
+    """What calls function *qname*? Lists reverse call edges.
+
+    Args:
+        index: parsed codemap index dict (must be v3 with call graph).
+        qname: fully qualified symbol name (``module::symbol``).
+    """
+    _require_call_graph(index)
+    sym_map = build_symbol_map(index)
+    if qname not in sym_map:
+        _exit_error(f"Symbol '{qname}' not found. Use 'find-symbol <pattern>' to search.")
+    rev_graph = build_reverse_call_graph(index)
+    callers = []
+    for caller_qname in sorted(rev_graph.get(qname, [])):
+        entry = sym_map.get(caller_qname)
+        m_entry = entry[0] if entry else {}
+        callers.append(
+            {
+                "caller": caller_qname,
+                "module": m_entry.get("name", ""),
+                "path": m_entry.get("path", ""),
+            }
+        )
+    print(json.dumps({"qname": qname, "called_by": callers, "count": len(callers), "index": _coverage(index)}))
+
+
+def cmd_fn_central(index: dict, top: int) -> None:
+    """Most-called functions globally (by incoming call-edge count).
+
+    Args:
+        index: parsed codemap index dict (must be v3 with call graph).
+        top: number of top-ranked functions to return.
+    """
+    _require_call_graph(index)
+    sym_map = build_symbol_map(index)
+    # Count how many times each target appears across all forward call edges
+    counts: dict[str, int] = {}
+    for m in index.get("modules", []):
+        if m.get("status") == "degraded":
+            continue
+        for sym in m.get("symbols", []):
+            for edge in sym.get("calls", []):
+                if edge.get("resolution") in ("import", "local"):
+                    target = edge["target"]
+                    counts[target] = counts.get(target, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:top]
+    result = []
+    for qname, call_count in ranked:
+        entry = sym_map.get(qname)
+        m_entry = entry[0] if entry else {}
+        result.append(
+            {
+                "qname": qname,
+                "call_count": call_count,
+                "module": m_entry.get("name", ""),
+                "path": m_entry.get("path", ""),
+            }
+        )
+    print(json.dumps({"fn_central": result, "index": _coverage(index)}))
+
+
+def cmd_fn_blast(index: dict, qname: str) -> None:
+    """Transitive reverse-call BFS from *qname* -- everything that calls X, directly or transitively.
+
+    Args:
+        index: parsed codemap index dict (must be v3 with call graph).
+        qname: fully qualified symbol name (``module::symbol``) to trace callers from.
+    """
+    _require_call_graph(index)
+    sym_map = build_symbol_map(index)
+    if qname not in sym_map:
+        _exit_error(f"Symbol '{qname}' not found. Use 'find-symbol <pattern>' to search.")
+    rev_graph = build_reverse_call_graph(index)
+
+    # BFS
+    visited: set[str] = {qname}
+    queue: deque[tuple[str, int]] = deque([(qname, 0)])
+    result = []
+    while queue:
+        node, depth = queue.popleft()
+        for caller in rev_graph.get(node, []):
+            if caller not in visited:
+                visited.add(caller)
+                entry = sym_map.get(caller)
+                m_entry = entry[0] if entry else {}
+                result.append(
+                    {
+                        "caller": caller,
+                        "depth": depth + 1,
+                        "module": m_entry.get("name", ""),
+                        "path": m_entry.get("path", ""),
+                    }
+                )
+                queue.append((caller, depth + 1))
+
+    result.sort(key=lambda x: (x["depth"], x["caller"]))
+    print(
+        json.dumps(
+            {
+                "qname": qname,
+                "blast_radius": result,
+                "total_callers": len(result),
+                "index": _coverage(index),
+            }
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
 def main() -> None:
+    """Parse CLI arguments, load the index, and dispatch to the appropriate command."""
     parser = argparse.ArgumentParser(
         description="Query the codemap structural index.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -443,6 +767,19 @@ def main() -> None:
     p_find = sub.add_parser("find-symbol", help="Regex search across all symbol names.")
     p_find.add_argument("pattern", help="Python regex pattern, e.g. 'auth' or '^My.*Handler$'")
 
+    # Function-level commands (require v3 index with call graph)
+    p_fn_deps = sub.add_parser("fn-deps", help="What does a function call? (requires v3 index)")
+    p_fn_deps.add_argument("qname", help="Full qname: module::symbol, e.g. 'mypackage.auth::validate_token'")
+
+    p_fn_rdeps = sub.add_parser("fn-rdeps", help="What calls a function? (requires v3 index)")
+    p_fn_rdeps.add_argument("qname", help="Full qname: module::symbol")
+
+    p_fn_central = sub.add_parser("fn-central", help="Most-called functions globally (requires v3 index)")
+    p_fn_central.add_argument("--top", type=int, default=10, metavar="N")
+
+    p_fn_blast = sub.add_parser("fn-blast", help="Transitive reverse-call blast radius (requires v3 index)")
+    p_fn_blast.add_argument("qname", help="Full qname: module::symbol")
+
     parser.add_argument("--index", metavar="PATH", help="Explicit path to the index JSON (auto-discovered if omitted).")
 
     args = parser.parse_args()
@@ -469,6 +806,14 @@ def main() -> None:
         cmd_symbols(index, args.module)
     elif args.command == "find-symbol":
         cmd_find_symbol(index, args.pattern)
+    elif args.command == "fn-deps":
+        cmd_fn_deps(index, args.qname)
+    elif args.command == "fn-rdeps":
+        cmd_fn_rdeps(index, args.qname)
+    elif args.command == "fn-central":
+        cmd_fn_central(index, args.top)
+    elif args.command == "fn-blast":
+        cmd_fn_blast(index, args.qname)
 
 
 if __name__ == "__main__":

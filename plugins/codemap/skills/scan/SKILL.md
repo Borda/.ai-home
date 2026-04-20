@@ -1,7 +1,7 @@
 ---
 name: scan
 description: Scan the Python codebase and build a structural JSON index (import graph + blast-radius metrics).
-argument-hint: [--root <path>]
+argument-hint: [--root <path>] [--incremental]
 effort: medium
 allowed-tools: Bash
 ---
@@ -23,15 +23,15 @@ NOT for: querying existing index (use `/codemap:query`).
 ## Step 1: Run the scanner
 
 ```bash
+${CLAUDE_PLUGIN_ROOT}/bin/scan-index  # add --root <path> if provided
 # timeout: 360000
-${CLAUDE_PLUGIN_ROOT}/bin/scan-index
 ```
 
-If `--root` passed as argument, forward it:
+If `--incremental` passed: re-parse only files changed since last scan (git SHA comparison), then recompute global metrics. Falls back to full scan when no v3 index exists.
 
 ```bash
-# timeout: 360000
-${CLAUDE_PLUGIN_ROOT}/bin/scan-index --root <path>
+# timeout: 60000
+${CLAUDE_PLUGIN_ROOT}/bin/scan-index --incremental
 ```
 
 Scanner writes to `.cache/scan/<project>.json` and prints summary line:
@@ -56,8 +56,11 @@ ok = [m for m in d['modules'] if m.get('status') == 'ok']
 deg = [m for m in d['modules'] if m.get('status') == 'degraded']
 top = sorted(ok, key=lambda m: m.get('rdep_count', 0), reverse=True)[:5]
 total_syms = sum(len(m.get('symbols', [])) for m in ok)
+total_calls = sum(len(s.get('calls', [])) for m in ok for s in m.get('symbols', []))
 print(f\"Modules: {len(ok)} indexed, {len(deg)} degraded\")
 print(f\"Symbols: {total_syms} (functions, classes, methods)\")
+if total_calls:
+    print(f\"Calls:   {total_calls} resolved call edges (v3 index)\")
 print(f\"Most central (by rdep_count):\")
 for m in top:
     print(f\"  {m.get('rdep_count', 0):>3}  {m['name']}\")
@@ -76,6 +79,12 @@ Index ready. Query it with:
   /codemap:query coupled --top 10
   /codemap:query symbol <function_name>
   /codemap:query find-symbol <pattern>
+
+  # Call graph (v3 index):
+  /codemap:query fn-deps <module::function>
+  /codemap:query fn-rdeps <module::function>
+  /codemap:query fn-central --top 10
+  /codemap:query fn-blast <module::function>
 ```
 
 </workflow>

@@ -135,7 +135,8 @@ printf "${GRN}✓${NC} %s SKILL.md file(s) have the injection block:\n" "$COUNT"
 echo "$FILES" | while read -r f; do
     [ -n "$f" ] && printf "  • %s\n" "${f#$CACHE/}"
 done
-for exp in "develop/*/skills/fix" "develop/*/skills/feature" "develop/*/skills/refactor" "develop/*/skills/plan" "develop/*/skills/review" "oss/*/skills/review"; do
+# keep this list in sync with develop and oss plugin skill directories
+for exp in "develop/*/skills/fix" "develop/*/skills/feature" "develop/*/skills/refactor" "develop/*/skills/plan" "develop/*/skills/review" "develop/*/skills/debug" "oss/*/skills/review"; do
     echo "$FILES" | grep -q "$exp" \
         || printf "  ${YEL}⚠${NC} missing injection in: %s/SKILL.md\n" "$exp"
 done
@@ -228,7 +229,7 @@ Codemap injection candidates for: $PROJ
   a)      develop:refactor     MEDIUM  restructures code; reads module deps for target
   b)      oss:ci-guardian      MEDIUM  diagnoses failures; reads code structure for context
   —       foundry:doc-scribe   LOW     writes docstrings; skip
-  —       develop:feature      SKIP    already integrated; skip
+  —       oss:release          SKIP    release artifact; no code traversal
 ```
 
 Use `AskUserQuestion` to ask (unless `APPROVE_ALL=true`, then auto-select all HIGH+MEDIUM):
@@ -269,6 +270,35 @@ scan-query deps  "$TARGET_MODULE" 2>/dev/null  # timeout: 5000
 
 Report each edit: `✓ injected: <plugin>/<skill-or-agent> at line N`
 
+### I5a — Offer git post-commit hook
+
+Use `AskUserQuestion` to present option (unless `APPROVE_ALL=true`, then auto-select a):
+
+```
+Install post-commit git hook for automatic incremental rebuild?
+
+a) Install ★ — runs scan-index --incremental in background after every commit; index stays current with zero developer action
+b) Skip — I'll run /codemap:scan or /codemap:scan --incremental manually
+```
+
+### I5b — Write hook file
+
+If **a** (or auto-approved): write `.git/hooks/post-commit`. Idempotent — check for `# codemap: incremental` marker before writing:
+
+- Marker absent and file exists: append the block
+- File does not exist: create with `#!/bin/sh` header, make executable with `chmod +x`
+
+Hook content to write or append:
+
+```bash
+# codemap: incremental index rebuild — do not remove this line
+if command -v scan-index >/dev/null 2>&1; then
+    scan-index --incremental 2>/dev/null &
+fi
+```
+
+Report: `✓ post-commit hook installed: .git/hooks/post-commit` or `✓ already installed` if marker was already present.
+
 ### I6 — Summary report
 
 Print:
@@ -286,6 +316,8 @@ Already integrated (no change):
 Skipped:
   • foundry:doc-scribe — LOW value
   • oss:release — SKIP
+
+Post-commit hook: installed / skipped
 
 Next: run /codemap:integration check to verify all injection blocks are wired correctly.
 ```

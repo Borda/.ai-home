@@ -6,7 +6,7 @@ Scan your Python project once. Every agent, skill, and developer session answers
 
 > [!TIP] Standalone — no other plugins required. Pairs with the `develop` plugin: `develop:feature`, `develop:fix`, `develop:plan`, and `develop:refactor` pick up the index automatically.
 
-> [!NOTE] **Python only.** `scan-index` uses `ast.parse` — it indexes `.py` files exclusively. JavaScript, TypeScript, Go, Rust, and other languages are not supported.
+> [!NOTE] **Python first.** `scan-index` uses `ast.parse` to index `.py` files. Support for additional languages (TypeScript, Go, Rust) is planned — Python is the only language indexed today. Non-Python files are not scanned and will not appear in any query result.
 
 ## 📋 Contents
 
@@ -355,6 +355,10 @@ The fastest path is the integration skill — it discovers your installed skills
 | "What's the riskiest module to touch?" | `central --top 10` (highest rdep_count) |
 | "What's the most entangled module?"    | `coupled --top 10` (highest dep_count)  |
 | "List all modules in the project"      | `list`                                  |
+| "What does function F call?"           | `fn-deps module::F` (v3 index)          |
+| "What calls function F?"               | `fn-rdeps module::F` (v3 index)         |
+| "Most-called functions?"               | `fn-central --top 10` (v3 index)        |
+| "Transitive callers of F?"             | `fn-blast module::F` (v3 index)         |
 
 <details>
 <summary>Manual injection — adding codemap to a custom skill or agent</summary>
@@ -413,14 +417,18 @@ fi
 
 ### CLI Commands
 
-| Command             | Question it answers                                           |
-| ------------------- | ------------------------------------------------------------- |
-| `central [--top N]` | Which modules are imported by the most others? (blast radius) |
-| `coupled [--top N]` | Which modules import the most others? (coupling)              |
-| `deps <module>`     | What does this module import?                                 |
-| `rdeps <module>`    | What imports this module?                                     |
-| `path <from> <to>`  | What is the shortest import chain between two modules?        |
-| `list`              | Enumerate all indexed modules                                 |
+| Command                | Question it answers                                            |
+| ---------------------- | -------------------------------------------------------------- |
+| `central [--top N]`    | Which modules are imported by the most others? (blast radius)  |
+| `coupled [--top N]`    | Which modules import the most others? (coupling)               |
+| `deps <module>`        | What does this module import?                                  |
+| `rdeps <module>`       | What imports this module?                                      |
+| `path <from> <to>`     | What is the shortest import chain between two modules?         |
+| `list`                 | Enumerate all indexed modules                                  |
+| `fn-deps <qname>`      | What does this function call? (call graph — v3 index)          |
+| `fn-rdeps <qname>`     | What functions call this one? (call graph — v3 index)          |
+| `fn-central [--top N]` | Most-called functions globally (call graph — v3 index)         |
+| `fn-blast <qname>`     | Transitive reverse-call BFS with depth (call graph — v3 index) |
 
 Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <pattern>`) returns only the target function or class source instead of the full file — ~94% token reduction. See `/codemap:query` for details.
 
@@ -428,23 +436,47 @@ Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <patt
 
 ```json
 {
-  "scan_version": "2",
+  "scan_version": "3",
   "scanned_at": "2026-04-15T12:00:00+00:00",
   "project": "mypackage",
   "src_layout": true,
+  "file_shas": {
+    "src/mypackage/auth.py": "a1b2c3d4"
+  },
   "modules": [
     {
       "name": "mypackage.auth",
       "path": "src/mypackage/auth.py",
       "loc": 234,
       "rdep_count": 8,
+      "rcall_count": 12,
       "dep_count": 5,
       "direct_imports": [
         "mypackage.models",
         "mypackage.config"
       ],
       "is_entry_point": false,
-      "status": "ok"
+      "has_star_imports": false,
+      "status": "ok",
+      "symbols": [
+        {
+          "name": "validate_token",
+          "qualified_name": "validate_token",
+          "type": "function",
+          "start_line": 15,
+          "end_line": 42,
+          "calls": [
+            {
+              "target": "mypackage.db::fetch_user",
+              "resolution": "import"
+            },
+            {
+              "target": "mypackage.auth::_check_cache",
+              "resolution": "local"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "mypackage.generated.proto",
@@ -456,18 +488,61 @@ Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <patt
 }
 ```
 
-`rdep_count` — how many project modules import this one (blast radius proxy). `dep_count` — how many modules this one imports (coupling proxy).
+`rdep_count` — how many project modules import this one (blast radius proxy). `dep_count` — how many modules this one imports (coupling proxy). `rcall_count` — how many functions across the project call any function in this module (function-level blast radius proxy, v3). `file_shas` — git blob SHAs per file used for incremental rebuild.
 
 ### Staleness detection
 
-`scan-query` checks on every call:
+`scan-query` checks on every call. For v3 indexes (with `file_shas`):
+
+```bash
+git ls-files -s -- '*.py'   # compare blob SHAs against stored file_shas
+```
+
+Reports exactly which N files are stale and suggests `--incremental`. For v2 indexes, falls back to:
 
 ```bash
 git log --since=<scanned_at> --name-only --pretty="" -- '*.py' \
     ':!docs/' ':!*.md' ':!.github/' ':!**/*.yml'
 ```
 
-If any Python code file changed after the index was built, a warning is printed to stderr and results are returned — the agent decides whether to re-scan.
+In both cases, a warning is printed to stderr and results are returned — the agent decides whether to re-scan.
+
+## ⚡ Function-level call graph (v3)
+
+Build once — query who calls what down to individual function level.
+
+```bash
+scan-query fn-deps mypackage.auth::validate_token    # what does validate_token call?
+scan-query fn-rdeps mypackage.db::fetch_user         # who calls fetch_user?
+scan-query fn-central --top 10                       # most-called functions across project
+scan-query fn-blast mypackage.db::fetch_user         # transitive callers, BFS with depth
+```
+
+`fn-blast` answers: "If I change `fetch_user`, which functions are transitively affected?" — finer than module-level `rdeps`.
+
+Use `module::function` format for qualified names (e.g. `mypackage.auth::AuthMiddleware.process`). Resolution: `import` edges are cross-module calls with confirmed import scope; `local` edges are same-file calls; `self` edges are `self.method()` calls where the class is known but target class type is not inferred. Requires a v3 index from `/codemap:scan`.
+
+## 🔄 Incremental rebuild
+
+After the first full scan, keep the index fresh without re-scanning everything:
+
+```bash
+/codemap:scan --incremental      # re-parse only changed files (git SHA comparison)
+```
+
+**Performance**: ~75ms for 5 changed files vs ~25s full scan on a 646-module project. Falls back to full scan when no v3 index exists.
+
+**Automatic with git hook** — run `/codemap:integration init` and choose the post-commit hook option. After every `git commit`, `scan-index --incremental` runs in the background:
+
+```bash
+# .git/hooks/post-commit (installed by /codemap:integration init)
+# codemap: incremental index rebuild — do not remove this line
+if command -v scan-index >/dev/null 2>&1; then
+    scan-index --incremental 2>/dev/null &
+fi
+```
+
+Index stays current with zero developer action.
 
 ## 📦 Plugin details
 

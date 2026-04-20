@@ -1,14 +1,14 @@
 ---
 name: query
-description: Query the codemap structural index — central, coupled, deps, rdeps, import path between modules, or symbol-level source extraction.
-argument-hint: <central [--top N] | coupled [--top N] | deps <module> | rdeps <module> | path <from> <to> | symbol <name> | symbols <module> | find-symbol <pattern> | list>
+description: Query the codemap structural index — central, coupled, deps, rdeps, import path, symbol-level source extraction, and function-level call graph (fn-deps, fn-rdeps, fn-central, fn-blast).
+argument-hint: <central [--top N] | coupled [--top N] | deps <module> | rdeps <module> | path <from> <to> | symbol <name> | symbols <module> | find-symbol <pattern> | list | fn-deps <qname> | fn-rdeps <qname> | fn-central [--top N] | fn-blast <qname>>
 allowed-tools: Read, Bash
 effort: low
 ---
 
 <objective>
 
-Query codemap structural index for import-graph analysis and symbol-level source extraction. **Python projects only** — index covers `.py` files; queries on non-Python projects return empty or error. `scan-query` on PATH (installed by the codemap plugin).
+Query codemap structural index for import-graph analysis, symbol-level source extraction, and function-level call graph traversal. **Python projects only** — index covers `.py` files; queries on non-Python projects return empty or error. `scan-query` on PATH (installed by the codemap plugin).
 
 **Module-level queries** (import graph):
 - `central [--top N]` — most-imported modules (highest blast radius, default top 10)
@@ -21,6 +21,14 @@ Query codemap structural index for import-graph analysis and symbol-level source
 - `symbol <name>` — get source of a function/class/method by name
 - `symbols <module>` — list all symbols in a module (no file I/O)
 - `find-symbol <pattern>` — regex search across all symbol names in index
+
+**Function-level call graph queries** (v3 index — requires `/codemap:scan` with call graph):
+- `fn-deps <qname>` — what does this function/method call? (outgoing edges)
+- `fn-rdeps <qname>` — what functions call this one? (incoming edges)
+- `fn-central [--top N]` — most-called functions globally (default top 10)
+- `fn-blast <qname>` — transitive reverse-call BFS with depth levels
+
+Use `module::function` format for qname, e.g. `mypackage.auth::validate_token`. Requires v3 index — if index is v2, commands return a clear upgrade prompt.
 
 NOT for: building or rebuilding index (use `/codemap:scan`).
 
@@ -50,18 +58,14 @@ Replace `<QUERY_ARGS>`:
 | list all symbols in a module | `symbols <module>` |
 | find symbols matching regex | `find-symbol <pattern>` |
 | list all indexed modules | `list` |
+| what function X calls (outgoing) | `fn-deps module::function` |
+| what calls function X (incoming) | `fn-rdeps module::function` |
+| most-called functions globally | `fn-central --top 10` |
+| transitive callers of function X | `fn-blast module::function` |
 
 `scan-query` on PATH, locates index via git root — no setup. Missing index prints clear error.
 
-**Symbol lookup examples:**
-```bash
-scan-query symbol authenticate
-scan-query symbol MyClass.save
-scan-query symbols mypackage.auth
-scan-query find-symbol "^handle_"
-```
-
-Symbol names accept: bare name (`authenticate`), qualified name (`MyClass.authenticate`), or case-insensitive substring fallback. Index must be current — re-run `/codemap:scan` if stale warning appears.
+Symbol names accept: bare name (`authenticate`), qualified name (`MyClass.authenticate`), or case-insensitive substring fallback. Function qnames use `module::function` format (e.g. `mypackage.auth::validate_token`). Index must be current — re-run `/codemap:scan` if stale warning appears.
 
 ## Step 2: Format and return
 
@@ -89,6 +93,12 @@ myapp.views (src/myapp/views.py)
 myapp.middleware (src/myapp/middleware.py)
 ```
 NOT: `myapp.views (src/myapp/views.py) myapp.middleware (src/myapp/middleware.py)`
+
+`fn-deps` / `fn-rdeps`: list as `module::function (resolution)`, one per line — never space-separated.
+
+`fn-central`: list as `count  module::function`, one per line.
+
+`fn-blast`: list as `depth  module::function`, one per line, sorted by depth then name.
 
 `{"error": "..."}`: surface error, suggest re-running `/codemap:scan`.
 

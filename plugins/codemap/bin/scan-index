@@ -2,36 +2,84 @@
 """scan-index — build the codemap structural index.
 
 Scans all Python files in the project using ast.parse (import graph)
-and computes structural metrics (rdep_count, dep_count).
+and computes structural metrics (rdep_count, dep_count, rcall_count).
+Extracts per-symbol call-graph edges with import-based resolution.
 Writes .cache/scan/<project>.json.
 
 Usage:
     scan-index
     scan-index --root /path/to/project
+    scan-index --incremental          # re-parse only changed files (requires v3 index)
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import builtins
+from dataclasses import dataclass
 import json
 import re
 import subprocess
 import sys
+from enum import Enum
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict
 
 
-class Symbol(TypedDict):
+class Resolution(str, Enum):
+    """Resolution kind for a call edge. Inherits str so json.dump serialises values as plain strings."""
+
+    IMPORT = "import"
+    LOCAL = "local"
+    SELF = "self"
+    BUILTIN = "builtin"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True)
+class CallEdge:
+    """Single outgoing call edge from a function or method.
+
+    Dataclass (not TypedDict): named construction and attribute access; converted to dict
+    by as_dict() at the _parse_file boundary before JSON serialisation.
+    """
+
+    target: str  # "pkg.db::fetch_user" (module::symbol) or raw chain if unresolved
+    resolution: Resolution
+
+    def as_dict(self) -> dict:
+        """Serialise to a plain dict for JSON output."""
+        return {"target": self.target, "resolution": self.resolution}
+
+
+@dataclass(frozen=True)
+class Symbol:
+    """Extracted symbol (class, function, or method) with call edges.
+
+    Dataclass (not TypedDict): see CallEdge note above.
+    """
+
     name: str
     qualified_name: str
     type: str  # "class" | "function" | "method"
     start_line: int
     end_line: int
+    calls: list[CallEdge]
+
+    def as_dict(self) -> dict:
+        """Serialise to a plain dict (including nested CallEdge list) for JSON output."""
+        return {
+            "name": self.name,
+            "qualified_name": self.qualified_name,
+            "type": self.type,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "calls": [c.as_dict() for c in self.calls],
+        }
 
 
-SCAN_VERSION = "2"
+SCAN_VERSION = "3"
 
 SKIP_DIRS = {
     ".git",
@@ -49,8 +97,11 @@ SKIP_DIRS = {
     "htmlcov",
 }
 
+BUILTINS = frozenset(dir(builtins))
+
 
 def find_root() -> Path:
+    """Return the git repository root, or cwd if not inside a git repo."""
     try:
         root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"], text=True, stderr=subprocess.DEVNULL
@@ -61,7 +112,11 @@ def find_root() -> Path:
 
 
 def get_git_sha(root: Path) -> str | None:
-    """Return the current HEAD commit SHA, or None if git is unavailable."""
+    """Return the current HEAD commit SHA, or None if git is unavailable.
+
+    Args:
+        root: project root path used as cwd for the git command.
+    """
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, cwd=str(root)
@@ -70,40 +125,85 @@ def get_git_sha(root: Path) -> str | None:
         return None
 
 
-def detect_src_root(root: Path) -> Path:
-    """Return the effective Python source root.
+def _git_file_hashes(root: Path) -> dict[str, str]:
+    """Return git blob SHAs for all tracked .py files via ``git ls-files -s``.
 
-    Resolution order:
-    1. pyproject.toml / setup.cfg  [tool.setuptools.packages.find] where = [...]
-    2. __init__.py chain — find directories that ARE packages whose parent is NOT;
-       their common parent is the source root (works for src-layout and flat layout)
-    3. src/ heuristic — fallback for repos without __init__.py-based packages
+    Args:
+        root: repository root used as cwd.
     """
-    # ── Strategy 1: explicit package config ──────────────────────────────
+    output = subprocess.check_output(
+        ["git", "ls-files", "-s", "--", "*.py"], text=True, cwd=str(root), stderr=subprocess.DEVNULL
+    )
+    hashes: dict[str, str] = {}
+    for line in output.strip().splitlines():
+        if not line:
+            continue
+        tab_idx = line.index("\t")
+        hashes[line[tab_idx + 1 :]] = line.split()[1]
+    return hashes
+
+
+def _md5_file_hashes(root: Path) -> dict[str, str]:
+    """Return MD5 digests for all .py files found under root (non-git fallback).
+
+    Args:
+        root: directory to search recursively for .py files.
+    """
+    import hashlib
+
+    hashes: dict[str, str] = {}
+    for py_file in root.rglob("*.py"):
+        try:
+            hashes[str(py_file.relative_to(root))] = hashlib.md5(py_file.read_bytes()).hexdigest()
+        except OSError:
+            pass
+    return hashes
+
+
+def get_file_hashes(root: Path) -> dict[str, str]:
+    """Git blob SHAs for tracked .py files; falls back to MD5 for non-git projects.
+
+    Args:
+        root: project root path.
+    """
+    try:
+        return _git_file_hashes(root)
+    except Exception:
+        return _md5_file_hashes(root)
+
+
+# ── detect_src_root helpers ─────────────────────────────────────────────────────
+
+
+def _detect_src_root_from_config(root: Path) -> Path | None:
+    """Strategy 1: read explicit package location from pyproject.toml / setup.cfg.
+
+    Args:
+        root: project root to search for config files.
+    """
     for config in (root / "pyproject.toml", root / "setup.cfg"):
         if not config.exists():
             continue
-        text = config.read_text(errors="replace")
-        # [tool.setuptools.packages.find] where = ["src"]  or  where = ["lib"]
-        m = re.search(r"where\s*=\s*\[([^\]]+)\]", text)
-        if m:
-            # take the first quoted entry
-            entries = re.findall(r'["\']([^"\']+)["\']', m.group(1))
-            for entry in entries:
-                candidate = root / entry
-                if candidate.is_dir():
-                    return candidate
+        m = re.search(r"where\s*=\s*\[([^\]]+)\]", config.read_text(errors="replace"))
+        if not m:
+            continue
+        for entry in re.findall(r'["\']([^"\']+)["\']', m.group(1)):
+            candidate = root / entry
+            if candidate.is_dir():
+                return candidate
+    return None
 
-    # ── Strategy 2: __init__.py chain ────────────────────────────────────
-    # A "top-level package directory" is one that:
-    #   - contains __init__.py
-    #   - whose parent does NOT contain __init__.py
-    #   - whose parent is within root (not root itself when flat-layout)
+
+def _detect_src_root_from_init(root: Path) -> Path | None:
+    """Strategy 2: find top-level package directories via __init__.py chain.
+
+    Args:
+        root: project root to search for __init__.py files.
+    """
     source_roots: set[Path] = set()
     for init in sorted(root.rglob("__init__.py")):
         pkg_dir = init.parent
         parent = pkg_dir.parent
-        # skip if parent is outside root or if parent itself is a package
         if not str(parent).startswith(str(root)):
             continue
         if (parent / "__init__.py").exists():
@@ -113,80 +213,362 @@ def detect_src_root(root: Path) -> Path:
     if len(source_roots) == 1:
         return source_roots.pop()
     if len(source_roots) > 1:
-        # Multiple candidates: prefer the one named "src" or deepest common ancestor
         for candidate in source_roots:
             if candidate.name == "src":
                 return candidate
-        # Return the one with the longest path (most specific)
         return max(source_roots, key=lambda p: len(p.parts))
+    return None
 
-    # ── Strategy 3: src/ heuristic ───────────────────────────────────────
+
+def detect_src_root(root: Path) -> Path:
+    """Return the effective Python source root.
+
+    Resolution order:
+    1. pyproject.toml / setup.cfg  [tool.setuptools.packages.find] where = [...]
+    2. __init__.py chain — find directories that ARE packages whose parent is NOT
+    3. src/ heuristic — fallback for repos without __init__.py-based packages
+
+    Args:
+        root: project root to inspect.
+    """
+    result = _detect_src_root_from_config(root)
+    if result is not None:
+        return result
+    result = _detect_src_root_from_init(root)
+    if result is not None:
+        return result
+    # Strategy 3: src/ heuristic
     src_dir = root / "src"
     if src_dir.is_dir() and not (src_dir / "__init__.py").exists():
         return src_dir
-
     return root
 
 
-def extract_imports(source: str, filename: str) -> list[str]:
-    """Extract direct import module names using ast."""
-    tree = ast.parse(source, filename=filename)
+def extract_imports(tree: ast.Module) -> list[str]:
+    """Extract direct import module names from a pre-parsed AST.
+
+    Args:
+        tree: parsed AST of the module.
+    """
     imports: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 imports.add(alias.name)
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                imports.add(node.module)
+            continue
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module)
     return sorted(imports)
 
 
-def extract_symbols(source: str, filename: str) -> list[Symbol]:
-    """Extract top-level classes, functions, and class methods with line ranges."""
-    try:
-        tree = ast.parse(source, filename=filename)
-    except SyntaxError:
-        return []
+# ── build_import_scope helpers ──────────────────────────────────────────────────
+
+
+def _process_ast_import(node: ast.Import, name_map: dict[str, str], module_map: dict[str, str]) -> None:
+    """Populate name_map and module_map from an ``import ...`` statement.
+
+    Args:
+        node: the Import AST node to process.
+        name_map: mapping from local name to fully-qualified name (mutated in-place).
+        module_map: mapping from first component to full module path (mutated in-place).
+    """
+    for alias in node.names:
+        if alias.asname:
+            name_map[alias.asname] = alias.name
+            continue
+        first = alias.name.split(".")[0]
+        name_map[first] = first
+        if "." in alias.name:
+            module_map[first] = alias.name
+
+
+def _resolve_import_from_base(node: ast.ImportFrom, package: str) -> str:
+    """Resolve the fully-qualified base module for a ``from ... import`` statement.
+
+    Args:
+        node: the ImportFrom AST node to resolve.
+        package: dotted package name of the current module (used for relative imports).
+    """
+    base = node.module or ""
+    if not (node.level and node.level > 0):
+        return base
+    parts = package.split(".") if package else []
+    up = node.level - 1
+    anchor = ".".join(parts[: len(parts) - up]) if up < len(parts) else ""
+    if anchor and base:
+        return f"{anchor}.{base}"
+    return anchor or base
+
+
+def _process_ast_import_from(
+    node: ast.ImportFrom,
+    package: str,
+    name_map: dict[str, str],
+    star_imports: list[str],
+) -> None:
+    """Populate name_map and star_imports from a ``from ... import ...`` statement.
+
+    Args:
+        node: the ImportFrom AST node to process.
+        package: dotted package name of the current module (used for relative imports).
+        name_map: mapping from local name to fully-qualified name (mutated in-place).
+        star_imports: list of modules imported via ``*`` (mutated in-place).
+    """
+    if not node.names:
+        return
+    base = _resolve_import_from_base(node, package)
+    if len(node.names) == 1 and node.names[0].name == "*":
+        if base:
+            star_imports.append(base)
+        return
+    for alias in node.names:
+        name_map[alias.asname or alias.name] = f"{base}.{alias.name}" if base else alias.name
+
+
+def build_import_scope(tree: ast.Module, module_name: str) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """Build the import scope for a module.
+
+    Args:
+        tree: parsed AST of the module.
+        module_name: fully-qualified dotted name of the module being analysed.
+
+    Returns:
+        name_map: direct name -> fully qualified name
+        module_map: first component -> full module path (for ``import pkg.db`` style)
+        star_imports: list of modules imported via ``from X import *``
+    """
+    name_map: dict[str, str] = {}
+    module_map: dict[str, str] = {}
+    star_imports: list[str] = []
+    package = module_name.rsplit(".", 1)[0] if "." in module_name else ""
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            _process_ast_import(node, name_map, module_map)
+        elif isinstance(node, ast.ImportFrom):
+            _process_ast_import_from(node, package, name_map, star_imports)
+
+    return name_map, module_map, star_imports
+
+
+def resolve_call_chain(func_node: ast.expr) -> str | None:
+    """Reconstruct a dotted name from an ast.Call.func node.
+
+    Returns None for unresolvable expressions (subscripts, call-on-call, etc.).
+
+    Args:
+        func_node: the ``func`` attribute of an ast.Call node.
+    """
+    if isinstance(func_node, ast.Name):
+        return func_node.id
+    if isinstance(func_node, ast.Attribute):
+        base = resolve_call_chain(func_node.value)
+        return f"{base}.{func_node.attr}" if base else None
+    return None
+
+
+def resolve_call(
+    chain: str,
+    name_map: dict[str, str],
+    module_map: dict[str, str],
+    local_names: set[str],
+    current_class: str,
+    current_module: str,
+) -> CallEdge:
+    """Resolve a call chain to a CallEdge with target and resolution kind.
+
+    Resolution order:
+    1. Exact match in name_map -> "import"
+    2. Prefix match in module_map -> "import"
+    3. First component in local_names -> "local"
+    4. Starts with "self." or current_class prefix -> "self"
+    5. First component in BUILTINS -> "builtin"
+    6. Everything else -> "unresolved"
+
+    Args:
+        chain: dotted call chain string (e.g. ``"pkg.db.fetch_user"``).
+        name_map: local-name -> fully-qualified-name from build_import_scope.
+        module_map: first-component -> full module path from build_import_scope.
+        local_names: top-level function/class names defined in the current file.
+        current_class: name of the enclosing class, or empty string.
+        current_module: dotted module name of the file being analysed.
+    """
+    first_component = chain.split(".")[0]
+
+    # 1. Exact match in name_map (handles `from pkg.db import fetch_user; fetch_user()`)
+    if chain in name_map:
+        fqn = name_map[chain]
+        if "." in fqn:
+            mod, sym = fqn.rsplit(".", 1)
+            return CallEdge(target=f"{mod}::{sym}", resolution=Resolution.IMPORT)
+        return CallEdge(target=f"::{fqn}", resolution=Resolution.IMPORT)
+
+    # Also handle dotted chains where the first component is in name_map
+    if first_component in name_map and first_component != chain:
+        fqn_base = name_map[first_component]
+        rest = chain[len(first_component) + 1 :]
+        mod, sym = f"{fqn_base}.{rest}".rsplit(".", 1)
+        return CallEdge(target=f"{mod}::{sym}", resolution=Resolution.IMPORT)
+
+    # 2. Prefix match in module_map (handles `import pkg.db; pkg.db.fetch_user()`)
+    if first_component in module_map:
+        full_module = module_map[first_component]
+        rest = chain[len(first_component) + 1 :] if len(chain) > len(first_component) else ""
+        full_chain = f"{full_module}.{rest}" if rest else full_module
+        if "." in full_chain:
+            mod, sym = full_chain.rsplit(".", 1)
+            return CallEdge(target=f"{mod}::{sym}", resolution=Resolution.IMPORT)
+        return CallEdge(target=f"::{full_chain}", resolution=Resolution.IMPORT)
+
+    # 3. Local names (functions/classes defined in the same file)
+    if first_component in local_names:
+        return CallEdge(target=f"{current_module}::{chain}", resolution=Resolution.LOCAL)
+
+    # 4. Self / class reference
+    if chain.startswith("self."):
+        return CallEdge(target=chain, resolution=Resolution.SELF)
+    if current_class and chain.startswith(f"{current_class}."):
+        return CallEdge(target=chain, resolution=Resolution.SELF)
+
+    # 5. Builtins
+    if first_component in BUILTINS:
+        return CallEdge(target=chain, resolution=Resolution.BUILTIN)
+
+    # 6. Unresolved
+    return CallEdge(target=chain, resolution=Resolution.UNRESOLVED)
+
+
+# ── extract_symbols helpers ─────────────────────────────────────────────────────
+
+
+def _walk_calls(
+    ast_node: ast.AST,
+    name_map: dict[str, str],
+    module_map: dict[str, str],
+    local_names: set[str],
+    current_class: str,
+    module_name: str,
+) -> list[CallEdge]:
+    """Walk an AST node and return all non-builtin call edges.
+
+    Args:
+        ast_node: root node to walk (function body, decorator, class statement, etc.).
+        name_map: local-name -> fully-qualified-name from build_import_scope.
+        module_map: first-component -> full module path from build_import_scope.
+        local_names: top-level names defined in the current file.
+        current_class: enclosing class name for self-resolution, or empty string.
+        module_name: dotted module name of the file being analysed.
+    """
+    calls: list[CallEdge] = []
+    for child in ast.walk(ast_node):
+        if not isinstance(child, ast.Call):
+            continue
+        chain = resolve_call_chain(child.func)
+        if not chain:
+            continue
+        edge = resolve_call(chain, name_map, module_map, local_names, current_class, module_name)
+        if edge.resolution != Resolution.BUILTIN:
+            calls.append(edge)
+    return calls
+
+
+def _extract_class_symbol(
+    node: ast.ClassDef,
+    name_map: dict[str, str],
+    module_map: dict[str, str],
+    local_names: set[str],
+    module_name: str,
+) -> list[Symbol]:
+    """Return the class Symbol plus one Symbol per method from a ClassDef node.
+
+    Args:
+        node: the ClassDef AST node to extract symbols from.
+        name_map: local-name -> fully-qualified-name from build_import_scope.
+        module_map: first-component -> full module path from build_import_scope.
+        local_names: top-level names defined in the current file.
+        module_name: dotted module name of the file being analysed.
+    """
+    class_calls: list[CallEdge] = []
+    for decorator in node.decorator_list:
+        class_calls.extend(_walk_calls(decorator, name_map, module_map, local_names, node.name, module_name))
+    for child in node.body:
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            class_calls.extend(_walk_calls(child, name_map, module_map, local_names, node.name, module_name))
+
+    symbols: list[Symbol] = [
+        Symbol(
+            name=node.name,
+            qualified_name=node.name,
+            type="class",
+            start_line=node.lineno,
+            end_line=node.end_lineno,
+            calls=class_calls,
+        )
+    ]
+    for child in node.body:
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        method_calls = _walk_calls(child, name_map, module_map, local_names, node.name, module_name)
+        symbols.append(
+            Symbol(
+                name=child.name,
+                qualified_name=f"{node.name}.{child.name}",
+                type="method",
+                start_line=child.lineno,
+                end_line=child.end_lineno,
+                calls=method_calls,
+            )
+        )
+    return symbols
+
+
+def extract_symbols(
+    tree: ast.Module,
+    module_name: str = "",
+    name_map: dict[str, str] | None = None,
+    module_map: dict[str, str] | None = None,
+) -> list[Symbol]:
+    """Extract top-level classes, functions, and class methods with line ranges and call edges.
+
+    Args:
+        tree: parsed AST of the module.
+        module_name: dotted module name used for local-resolution targets.
+        name_map: pre-built import name map; computed fresh if omitted.
+        module_map: pre-built module map; computed fresh if omitted.
+    """
+    nm = name_map or {}
+    mm = module_map or {}
+    local_names: set[str] = {
+        node.name for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
     symbols: list[Symbol] = []
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
+            symbols.extend(_extract_class_symbol(node, nm, mm, local_names, module_name))
+            continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            func_calls = _walk_calls(node, nm, mm, local_names, "", module_name)
             symbols.append(
-                {
-                    "name": node.name,
-                    "qualified_name": node.name,
-                    "type": "class",
-                    "start_line": node.lineno,
-                    "end_line": node.end_lineno,
-                }
-            )
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    symbols.append(
-                        {
-                            "name": child.name,
-                            "qualified_name": f"{node.name}.{child.name}",
-                            "type": "method",
-                            "start_line": child.lineno,
-                            "end_line": child.end_lineno,
-                        }
-                    )
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            symbols.append(
-                {
-                    "name": node.name,
-                    "qualified_name": node.name,
-                    "type": "function",
-                    "start_line": node.lineno,
-                    "end_line": node.end_lineno,
-                }
+                Symbol(
+                    name=node.name,
+                    qualified_name=node.name,
+                    type="function",
+                    start_line=node.lineno,
+                    end_line=node.end_lineno,
+                    calls=func_calls,
+                )
             )
     return symbols
 
 
 def path_to_module(filepath: Path, src_root: Path) -> str:
-    """Convert a file path to a dotted module name relative to src_root."""
+    """Convert a file path to a dotted module name relative to src_root.
+
+    Args:
+        filepath: absolute path to the .py file.
+        src_root: source root to make the path relative to.
+    """
     rel = filepath.relative_to(src_root)
     parts = list(rel.with_suffix("").parts)
     if parts and parts[-1] == "__init__":
@@ -195,66 +577,69 @@ def path_to_module(filepath: Path, src_root: Path) -> str:
 
 
 def count_loc(source: str) -> int:
+    """Count non-blank lines in source.
+
+    Args:
+        source: raw source text of a Python file.
+    """
     return sum(1 for line in source.splitlines() if line.strip())
 
 
 def has_main_guard(source: str) -> bool:
+    """Return True if source contains an ``if __name__ == '__main__'`` guard.
+
+    Args:
+        source: raw source text of a Python file.
+    """
     return bool(re.search(r'if\s+__name__\s*==\s*[\'"]__main__[\'"]', source))
 
 
-def scan(root: Path) -> dict:
-    src_root = detect_src_root(root)
-    modules = []
+def _parse_file(filepath: Path, root: Path, src_root: Path) -> dict:
+    """Parse a single .py file and return its module entry dict (ok or degraded).
 
-    python_files = sorted(root.rglob("*.py"))
-    for filepath in python_files:
-        rel = filepath.relative_to(root)
-        if any(part in SKIP_DIRS for part in rel.parts):
-            continue
+    Args:
+        filepath: absolute path to the .py file to parse.
+        root: project root used to compute relative paths.
+        src_root: source root used to derive the dotted module name.
+    """
+    rel_path = filepath.relative_to(root)
+    try:
+        name = path_to_module(filepath, src_root)
+    except ValueError:
+        name = path_to_module(filepath, root)
 
-        rel_path = rel
+    try:
+        source = filepath.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=str(filepath))
+        imports = extract_imports(tree)
         try:
-            name = path_to_module(filepath, src_root)
-        except ValueError:
-            # File is outside src_root (e.g. tests/ in a src-layout project)
-            name = path_to_module(filepath, root)
+            nm, mm, star_imports = build_import_scope(tree, name)
+        except Exception:
+            nm, mm, star_imports = {}, {}, []
+        symbols = extract_symbols(tree, name, nm, mm)
+        return {
+            "name": name,
+            "path": str(rel_path),
+            "loc": count_loc(source),
+            "dep_count": len(imports),
+            "direct_imports": imports,
+            "symbols": [s.as_dict() for s in symbols],
+            "is_entry_point": has_main_guard(source),
+            "has_star_imports": bool(star_imports),
+            "status": "ok",
+        }
+    except SyntaxError as exc:
+        return {"name": name, "path": str(rel_path), "status": "degraded", "reason": f"SyntaxError: {exc}"}
+    except Exception as exc:
+        return {"name": name, "path": str(rel_path), "status": "degraded", "reason": str(exc)}
 
-        try:
-            source = filepath.read_text(encoding="utf-8", errors="replace")
-            imports = extract_imports(source, str(filepath))
-            symbols = extract_symbols(source, str(filepath))
-            modules.append(
-                {
-                    "name": name,
-                    "path": str(rel_path),
-                    "loc": count_loc(source),
-                    "dep_count": len(imports),
-                    "direct_imports": imports,
-                    "symbols": symbols,
-                    "is_entry_point": has_main_guard(source),
-                    "status": "ok",
-                }
-            )
-        except SyntaxError as exc:
-            modules.append(
-                {
-                    "name": name,
-                    "path": str(rel_path),
-                    "status": "degraded",
-                    "reason": f"SyntaxError: {exc}",
-                }
-            )
-        except Exception as exc:
-            modules.append(
-                {
-                    "name": name,
-                    "path": str(rel_path),
-                    "status": "degraded",
-                    "reason": str(exc),
-                }
-            )
 
-    # Compute rdep_count post-scan from the full import graph
+def _recompute_metrics(modules: list[dict]) -> None:
+    """Recompute rdep_count and rcall_count in-place from the current module list.
+
+    Args:
+        modules: list of module entry dicts (mutated in-place).
+    """
     rdep_counts: dict[str, int] = {}
     for m in modules:
         for imp in m.get("direct_imports", []):
@@ -263,31 +648,134 @@ def scan(root: Path) -> dict:
         if m.get("status") == "ok":
             m["rdep_count"] = rdep_counts.get(m["name"], 0)
 
-    git_sha = get_git_sha(root)
+    rcall_counts: dict[str, int] = {}
+    for m in modules:
+        for sym in m.get("symbols", []):
+            for edge in sym.get("calls", []):
+                if edge["resolution"] != "import":
+                    continue
+                target_module = edge["target"].split("::")[0]
+                rcall_counts[target_module] = rcall_counts.get(target_module, 0) + 1
+    for m in modules:
+        if m.get("status") == "ok":
+            m["rcall_count"] = rcall_counts.get(m["name"], 0)
+
+
+def scan(root: Path) -> dict:
+    """Run a full scan of all .py files under root and return the index dict.
+
+    Args:
+        root: project root to scan.
+    """
+    src_root = detect_src_root(root)
+    modules = []
+
+    for filepath in sorted(root.rglob("*.py")):
+        rel = filepath.relative_to(root)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        modules.append(_parse_file(filepath, root, src_root))
+
+    _recompute_metrics(modules)
+
     return {
-        "scan_version": "2",
+        "scan_version": SCAN_VERSION,
         "scanned_at": datetime.now(timezone.utc).isoformat(),
-        "git_sha": git_sha,
+        "git_sha": get_git_sha(root),
         "project": root.name,
         "src_layout": src_root != root,
+        "file_shas": get_file_hashes(root),
         "modules": modules,
     }
 
 
+def incremental_scan(root: Path, old_index: dict) -> dict:
+    """Re-parse only files whose hash changed since the last scan.
+
+    Args:
+        root: project root path.
+        old_index: previously written index dict loaded from disk.
+    """
+    src_root = detect_src_root(root)
+    current_shas = get_file_hashes(root)
+    stored_shas: dict[str, str] = old_index.get("file_shas", {})
+
+    changed = {p for p in current_shas if stored_shas.get(p) != current_shas[p]}
+    deleted = {p for p in stored_shas if p not in current_shas}
+
+    if not changed and not deleted:
+        print("[codemap] Index already up to date.", file=sys.stderr)
+        return old_index
+
+    modules_by_path: dict[str, dict] = {m["path"]: m for m in old_index.get("modules", [])}
+
+    for path in sorted(deleted):
+        modules_by_path.pop(path, None)
+        print(f"[codemap]   - removed {path}", file=sys.stderr)
+
+    for rel_path_str in sorted(changed):
+        filepath = root / rel_path_str
+        if not filepath.exists():
+            modules_by_path.pop(rel_path_str, None)
+            continue
+        entry = _parse_file(filepath, root, src_root)
+        action = "updated" if rel_path_str in stored_shas else "added"
+        modules_by_path[entry["path"]] = entry
+        print(f"[codemap]   {action} {rel_path_str}", file=sys.stderr)
+
+    modules = list(modules_by_path.values())
+    _recompute_metrics(modules)
+
+    return {
+        **old_index,
+        "scan_version": SCAN_VERSION,
+        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "git_sha": get_git_sha(root),
+        "file_shas": current_shas,
+        "modules": modules,
+    }
+
+
+def _build_index(args: argparse.Namespace, root: Path, out_path: Path) -> dict:
+    """Dispatch to incremental or full scan based on args and existing index state.
+
+    Args:
+        args: parsed CLI arguments (uses ``args.incremental``).
+        root: project root path.
+        out_path: path to the existing index file (may not exist yet).
+    """
+    if args.incremental and out_path.exists():
+        with out_path.open() as f:
+            old_index = json.load(f)
+        if old_index.get("scan_version", "2") >= "3" and old_index.get("file_shas"):
+            print(f"[codemap] Incremental scan {root} ...", file=sys.stderr)
+            return incremental_scan(root, old_index)
+        print("[codemap] v2 index found — falling back to full scan ...", file=sys.stderr)
+        return scan(root)
+    if args.incremental:
+        print("[codemap] No existing index found — running full scan ...", file=sys.stderr)
+    print(f"[codemap] Scanning {root} ...", file=sys.stderr)
+    return scan(root)
+
+
 def main() -> None:
+    """Parse CLI arguments and run the scan."""
     parser = argparse.ArgumentParser(description="Build the codemap structural index.")
     parser.add_argument("--root", type=Path, default=None, help="Project root (default: git root or cwd)")
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Re-parse only files changed since last scan (requires an existing v3 index).",
+    )
     args = parser.parse_args()
 
     try:
         root = args.root or find_root()
-        project = root.name
         out_dir = root / ".cache" / "scan"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{project}.json"
+        out_path = out_dir / f"{root.name}.json"
 
-        print(f"[codemap] Scanning {root} ...", file=sys.stderr)
-        index = scan(root)
+        index = _build_index(args, root, out_path)
 
         ok = sum(1 for m in index["modules"] if m.get("status") == "ok")
         degraded = sum(1 for m in index["modules"] if m.get("status") == "degraded")
