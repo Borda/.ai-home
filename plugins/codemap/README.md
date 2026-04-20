@@ -364,10 +364,10 @@ The fastest path is the integration skill — it discovers your installed skills
 Drop this soft-check block into any `SKILL.md` **before the first agent spawn**. It injects structural context when available and silently skips when codemap is not installed:
 
 ```bash
-# Structural context (codemap, if installed) — silent skip if absent
+# Structural context (codemap — Python projects only, silent skip if absent)
 PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
-    scan-query central --top 5
+    scan-query central --top 5  # timeout: 5000
 fi
 ```
 
@@ -411,7 +411,7 @@ fi
 | **query**       | `/codemap:query`                   | Queries the index; checks staleness on every call; returns JSON                 |
 | **integration** | `/codemap:integration check\|init` | Audits install health (`check`) or onboards codemap into skills/agents (`init`) |
 
-### 5 CLI Commands
+### CLI Commands
 
 | Command             | Question it answers                                           |
 | ------------------- | ------------------------------------------------------------- |
@@ -421,6 +421,8 @@ fi
 | `rdeps <module>`    | What imports this module?                                     |
 | `path <from> <to>`  | What is the shortest import chain between two modules?        |
 | `list`              | Enumerate all indexed modules                                 |
+
+Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <pattern>`) returns only the target function or class source instead of the full file — ~94% token reduction. See `/codemap:query` for details.
 
 ### Index schema (`.cache/scan/<project>.json`)
 

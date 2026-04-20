@@ -8,9 +8,11 @@ allowed-tools: Bash
 
 <objective>
 
-**Python only** — uses `ast.parse` to extract import graph across all `.py` files; non-Python files not indexed. Writes `.cache/scan/<project>.json`. No external deps required.
+**Python only** — uses `ast.parse` to extract import graph and symbol metadata across all `.py` files; non-Python files not indexed. Writes `.cache/scan/<project>.json`. No external deps required.
 
-Agents and develop skills query index via `scan-query` to understand module dependencies, blast radius, coupling before editing code.
+Index captures per module: import graph, blast-radius metrics, and **symbol list** (classes, functions, methods with line ranges). Symbol data enables `scan-query symbol` / `find-symbol` to return just the target function source instead of full file reads.
+
+Agents and develop skills query index via `scan-query` to understand module dependencies, blast radius, coupling, and individual symbol source before editing code.
 
 NOT for: querying existing index (use `/codemap:query`).
 
@@ -53,7 +55,9 @@ with open('.cache/scan/\$(basename \$(git rev-parse --show-toplevel)).json') as 
 ok = [m for m in d['modules'] if m.get('status') == 'ok']
 deg = [m for m in d['modules'] if m.get('status') == 'degraded']
 top = sorted(ok, key=lambda m: m.get('rdep_count', 0), reverse=True)[:5]
+total_syms = sum(len(m.get('symbols', [])) for m in ok)
 print(f\"Modules: {len(ok)} indexed, {len(deg)} degraded\")
+print(f\"Symbols: {total_syms} (functions, classes, methods)\")
 print(f\"Most central (by rdep_count):\")
 for m in top:
     print(f\"  {m.get('rdep_count', 0):>3}  {m['name']}\")
@@ -70,6 +74,8 @@ Index ready. Query it with:
   /codemap:query deps <module>
   /codemap:query rdeps <module>
   /codemap:query coupled --top 10
+  /codemap:query symbol <function_name>
+  /codemap:query find-symbol <pattern>
 ```
 
 </workflow>

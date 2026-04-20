@@ -10,6 +10,8 @@ Usage:
     scan-index --root /path/to/project
 """
 
+from __future__ import annotations
+
 import argparse
 import ast
 import json
@@ -18,6 +20,16 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
+
+
+class Symbol(TypedDict):
+    name: str
+    qualified_name: str
+    type: str  # "class" | "function" | "method"
+    start_line: int
+    end_line: int
+
 
 SCAN_VERSION = "2"
 
@@ -73,12 +85,10 @@ def detect_src_root(root: Path) -> Path:
             continue
         text = config.read_text(errors="replace")
         # [tool.setuptools.packages.find] where = ["src"]  or  where = ["lib"]
-        import re as _re
-
-        m = _re.search(r"where\s*=\s*\[([^\]]+)\]", text)
+        m = re.search(r"where\s*=\s*\[([^\]]+)\]", text)
         if m:
             # take the first quoted entry
-            entries = _re.findall(r'["\']([^"\']+)["\']', m.group(1))
+            entries = re.findall(r'["\']([^"\']+)["\']', m.group(1))
             for entry in entries:
                 candidate = root / entry
                 if candidate.is_dir():
@@ -132,6 +142,49 @@ def extract_imports(source: str, filename: str) -> list[str]:
     return sorted(imports)
 
 
+def extract_symbols(source: str, filename: str) -> list[Symbol]:
+    """Extract top-level classes, functions, and class methods with line ranges."""
+    try:
+        tree = ast.parse(source, filename=filename)
+    except SyntaxError:
+        return []
+
+    symbols: list[Symbol] = []
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            symbols.append(
+                {
+                    "name": node.name,
+                    "qualified_name": node.name,
+                    "type": "class",
+                    "start_line": node.lineno,
+                    "end_line": node.end_lineno,
+                }
+            )
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    symbols.append(
+                        {
+                            "name": child.name,
+                            "qualified_name": f"{node.name}.{child.name}",
+                            "type": "method",
+                            "start_line": child.lineno,
+                            "end_line": child.end_lineno,
+                        }
+                    )
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            symbols.append(
+                {
+                    "name": node.name,
+                    "qualified_name": node.name,
+                    "type": "function",
+                    "start_line": node.lineno,
+                    "end_line": node.end_lineno,
+                }
+            )
+    return symbols
+
+
 def path_to_module(filepath: Path, src_root: Path) -> str:
     """Convert a file path to a dotted module name relative to src_root."""
     rel = filepath.relative_to(src_root)
@@ -169,6 +222,7 @@ def scan(root: Path) -> dict:
         try:
             source = filepath.read_text(encoding="utf-8", errors="replace")
             imports = extract_imports(source, str(filepath))
+            symbols = extract_symbols(source, str(filepath))
             modules.append(
                 {
                     "name": name,
@@ -176,6 +230,7 @@ def scan(root: Path) -> dict:
                     "loc": count_loc(source),
                     "dep_count": len(imports),
                     "direct_imports": imports,
+                    "symbols": symbols,
                     "is_entry_point": has_main_guard(source),
                     "status": "ok",
                 }

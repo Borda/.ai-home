@@ -7,6 +7,9 @@ Commands:
   central [--top N]       Most-imported modules (highest blast radius)
   coupled [--top N]       Modules with the most imports (highest coupling)
   path <from> <to>        Shortest import path between two modules
+  symbol <name>           Get source of a symbol by name (function/class/method)
+  symbols <module>        List all symbols in a module
+  find-symbol <pattern>   Regex search across all symbol names
 
 All output is JSON. Staleness is checked on every invocation — warns to
 stderr if Python files were committed after the index was built.
@@ -17,14 +20,29 @@ Usage:
     scan-query deps mypackage.auth
     scan-query rdeps mypackage.models
     scan-query path mypackage.api mypackage.db
+    scan-query symbol authenticate
+    scan-query symbols mypackage.auth
+    scan-query find-symbol '^Auth.*Handler$'
 """
+
+from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections import deque
 from pathlib import Path
+from typing import TypedDict
+
+
+class Symbol(TypedDict):
+    name: str
+    qualified_name: str
+    type: str  # "class" | "function" | "method"
+    start_line: int
+    end_line: int
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +295,115 @@ def cmd_list(index: dict) -> None:
     print(json.dumps({"modules": modules}))
 
 
+def _read_lines(index: dict, module_entry: dict, start_line: int, end_line: int) -> str:
+    """Read lines start_line..end_line (1-based, inclusive) from the module's source file."""
+    git_root = _git_root()
+    if git_root is None:
+        git_root = Path.cwd()
+    file_path = git_root / module_entry["path"]
+    if not file_path.exists():
+        return ""
+    lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(lines[start_line - 1 : end_line])
+
+
+def cmd_symbol(index: dict, name: str) -> None:
+    """Find a symbol by name (exact match, then qualified_name substring) and return its source."""
+    matches: list[tuple[dict, Symbol]] = []
+    for m in index.get("modules", []):
+        if m.get("status") == "degraded":
+            continue
+        for sym in m.get("symbols", []):
+            if sym["name"] == name or sym["qualified_name"] == name:
+                matches.append((m, sym))
+
+    if not matches:
+        # Fallback: case-insensitive substring on qualified_name
+        name_lower = name.lower()
+        for m in index.get("modules", []):
+            if m.get("status") == "degraded":
+                continue
+            for sym in m.get("symbols", []):
+                if name_lower in sym["qualified_name"].lower():
+                    matches.append((m, sym))
+
+    if not matches:
+        _exit_error(f"Symbol '{name}' not found. Try /codemap:query find-symbol <pattern> to search.")
+
+    results = []
+    for m, sym in matches:
+        source = _read_lines(index, m, sym["start_line"], sym["end_line"])
+        results.append(
+            {
+                "name": sym["name"],
+                "qualified_name": sym["qualified_name"],
+                "type": sym["type"],
+                "module": m["name"],
+                "path": m.get("path", ""),
+                "start_line": sym["start_line"],
+                "end_line": sym["end_line"],
+                "source": source,
+            }
+        )
+    print(json.dumps({"symbols": results, "count": len(results), "index": _coverage(index)}))
+
+
+def cmd_symbols(index: dict, module: str) -> None:
+    """List all symbols in a module (no file I/O — index only)."""
+    modules = build_module_map(index)
+    entry = modules.get(module)
+    if entry is None:
+        _exit_error(f"Module '{module}' not in index.")
+    syms: list[Symbol] = entry.get("symbols", [])
+    print(
+        json.dumps(
+            {
+                "module": module,
+                "path": entry.get("path", ""),
+                "symbols": [
+                    {
+                        "name": s["name"],
+                        "qualified_name": s["qualified_name"],
+                        "type": s["type"],
+                        "start_line": s["start_line"],
+                        "end_line": s["end_line"],
+                    }
+                    for s in syms
+                ],
+                "count": len(syms),
+                "index": _coverage(index),
+            }
+        )
+    )
+
+
+def cmd_find_symbol(index: dict, pattern: str) -> None:
+    """Regex search across all symbol qualified_names in the index."""
+    try:
+        rx = re.compile(pattern, re.IGNORECASE)
+    except re.error as exc:
+        _exit_error(f"Invalid regex '{pattern}': {exc}")
+
+    results = []
+    for m in index.get("modules", []):
+        if m.get("status") == "degraded":
+            continue
+        for sym in m.get("symbols", []):
+            if rx.search(sym["qualified_name"]):
+                results.append(
+                    {
+                        "name": sym["name"],
+                        "qualified_name": sym["qualified_name"],
+                        "type": sym["type"],
+                        "module": m["name"],
+                        "path": m.get("path", ""),
+                        "start_line": sym["start_line"],
+                        "end_line": sym["end_line"],
+                    }
+                )
+    print(json.dumps({"pattern": pattern, "matches": results, "count": len(results), "index": _coverage(index)}))
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -307,6 +434,15 @@ def main() -> None:
 
     sub.add_parser("list", help="List all indexed modules.")
 
+    p_symbol = sub.add_parser("symbol", help="Get source of a symbol by name (function/class/method).")
+    p_symbol.add_argument("name", help="Symbol name, e.g. 'authenticate' or 'MyClass.method'")
+
+    p_symbols = sub.add_parser("symbols", help="List all symbols in a module.")
+    p_symbols.add_argument("module", help="Dotted module name, e.g. 'mypackage.auth'")
+
+    p_find = sub.add_parser("find-symbol", help="Regex search across all symbol names.")
+    p_find.add_argument("pattern", help="Python regex pattern, e.g. 'auth' or '^My.*Handler$'")
+
     parser.add_argument("--index", metavar="PATH", help="Explicit path to the index JSON (auto-discovered if omitted).")
 
     args = parser.parse_args()
@@ -327,6 +463,12 @@ def main() -> None:
         cmd_path(index, args.frm, args.to)
     elif args.command == "list":
         cmd_list(index)
+    elif args.command == "symbol":
+        cmd_symbol(index, args.name)
+    elif args.command == "symbols":
+        cmd_symbols(index, args.module)
+    elif args.command == "find-symbol":
+        cmd_find_symbol(index, args.pattern)
 
 
 if __name__ == "__main__":

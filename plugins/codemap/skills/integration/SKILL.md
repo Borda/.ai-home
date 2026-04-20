@@ -207,7 +207,7 @@ For each candidate skill/agent, classify by value tier using `<objective>` text 
 
 | Tier | Signal | Recommendation |
 | --- | --- | --- |
-| **High** | `allowed-tools` includes `Edit` or `Write`; `<objective>` mentions spawning `sw-engineer` or `qa-specialist`; performs code changes | "Strongly recommend — agent starts with blast-radius context" |
+| **High** | `allowed-tools` includes `Edit` or `Write`; `<objective>` mentions spawning `foundry:sw-engineer` or `foundry:qa-specialist`; performs code changes | "Strongly recommend — agent starts with blast-radius context" |
 | **Medium** | analysis or planning skills; spawns read-only agents; multi-file review without edits | "Moderate value — centrality context speeds structural decisions" |
 | **Low** | documentation, release, communication; no code traversal | "Low value — structural context unlikely to help" |
 | **Skip** | config-only, single-file, non-Python purpose (e.g. shell, YAML, JS) | "Skip — not applicable for Python import graphs" |
@@ -225,10 +225,10 @@ Codemap injection candidates for: $PROJ
   ──────────────────────────────────────────────────────────────────
   ✓       develop:fix          HIGH    spawns sw-engineer — already integrated
   ✓       develop:feature      HIGH    spawns sw-engineer — already integrated
-  a)      research:plan        MEDIUM  plans experiments; reads code structure
-  b)      foundry:calibrate    MEDIUM  benchmarks agent recall against config files (meta-skill, not code-editing)
+  a)      develop:refactor     MEDIUM  restructures code; reads module deps for target
+  b)      oss:ci-guardian      MEDIUM  diagnoses failures; reads code structure for context
   —       foundry:doc-scribe   LOW     writes docstrings; skip
-  —       oss:release          SKIP    release/comms; skip
+  —       develop:feature      SKIP    already integrated; skip
 ```
 
 Use `AskUserQuestion` to ask (unless `APPROVE_ALL=true`, then auto-select all HIGH+MEDIUM):
