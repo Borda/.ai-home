@@ -78,3 +78,4 @@ Modes evaluated for calibration but deferred — significant barriers. `/audit` 
 - `/research:run` — sustained iteration loop with live metric commands and git state
 - `/research:run --resume` — continuation of run; same barriers as run
 - `/research:sweep` — same barriers as `/research:run` — sustained iteration loop requiring live metrics and git state; not calibratable synthetically
+- `/foundry:init` — system-state-dependent — installs symlinks and merges settings; ground truth not constructable

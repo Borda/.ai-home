@@ -486,6 +486,7 @@ Or if limit hit:
 
 (Omit the fix convergence line for report-only runs — only shown when a fix level was passed.)
 
+```
 ### Fixes Applied
 
 | File | Change |
@@ -551,4 +552,3 @@ Read and execute `plugins/foundry/skills/audit/modes/upgrade.md`.
   - Audit Check 22 found stale domain table entry → remove it from `calibrate/modes/skills.md`
 
 </notes>
-```

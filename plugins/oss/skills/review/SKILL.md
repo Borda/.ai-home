@@ -171,7 +171,7 @@ After Codex writes `$RUN_DIR/codex.md`, extract seed list (≤10 items, `[{"loc"
 
 ## Step 3: Spawn sub-agents in parallel
 
-**File-based handoff**: read `.claude/skills/_shared/file-handoff-protocol.md` (not found → skip). Run dir from Step 2 (`$RUN_DIR`).
+**File-based handoff**: read `.claude/skills/_shared/file-handoff-protocol.md`. File absent → warn the user: "foundry:init required: `.claude/skills/_shared/file-handoff-protocol.md` not found; install foundry plugin and run `foundry:init` to activate file-handoff protocol." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
 
 <!-- Note: $RUN_DIR must be pre-expanded before inserting into spawn prompts — replace with the literal path string computed in Step 2 setup. -->
 
@@ -268,7 +268,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANG
 
 ## Step 5: Cross-validate critical/blocking findings
 
-Read and follow `.claude/skills/_shared/cross-validation-protocol.md`. Not present → skip Step 5.
+Read and follow `.claude/skills/_shared/cross-validation-protocol.md`. File absent → warn the user: "foundry:init required: `.claude/skills/_shared/cross-validation-protocol.md` not found; install foundry plugin and run `foundry:init` to activate cross-validation. Skipping Step 5." Then skip Step 5.
 
 **Skill-specific**: same agent type that raised finding = verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer critical finding).
 
@@ -278,7 +278,21 @@ Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | t
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
-> "Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Read `plugins/oss/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Apply the precision gate: only include findings with a concrete, actionable location (function, line range, or variable name). Apply the finding density rule: for modules under 100 lines, aim for ≤10 total findings. Rank findings within each section by impact (blocking > critical > high > medium > low). For `codex.md`: include its unique findings under a `### Codex Co-Review` section; deduplicate against agent findings (same file:line raised by both → keep the agent version, mark as 'also flagged by Codex'). If `issue-*.md` files exist in `$RUN_DIR`, include a `### Issue Root Cause Alignment` section placed immediately after `### [blocking] Critical`. For each linked issue: state the root cause hypothesis, whether the PR addresses it (yes / partially / no), whether the PR description diverges from the issue's stated problem, and whether the reproduction scenario is tested. Any `root cause misalignment` or `scope divergence` finding is at least HIGH severity. Parse each agent's `confidence` from its envelope; assign `codex` a fixed confidence of 0.75 (moderate — static analysis, no runtime context). Write the consolidated report to `.temp/output-review-$BRANCH-$DATE.md` using the Write tool. Return ONLY a one-liner summary: `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=.temp/output-review-$BRANCH-$DATE.md`"
+> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Read `plugins/oss/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps).
+>
+> **Filtering rules:**
+> - Precision gate: only include findings with a concrete, actionable location (function, line range, or variable name).
+> - Finding density: for modules under 100 lines, aim for ≤10 total findings.
+> - Ranking: within each section, order by impact (blocking > critical > high > medium > low).
+> - Codex deduplication: include `codex.md` unique findings under `### Codex Co-Review`; same file:line raised by both agent and Codex → keep agent version, mark as 'also flagged by Codex'.
+>
+> **Issue alignment (when `issue-*.md` files exist in `$RUN_DIR`):** Include a `### Issue Root Cause Alignment` section placed immediately after `### [blocking] Critical`. For each linked issue: state the root cause hypothesis, whether the PR addresses it (yes / partially / no), whether the PR description diverges from the issue's stated problem, and whether the reproduction scenario is tested. Any `root cause misalignment` or `scope divergence` finding is at least HIGH severity.
+>
+> **Confidence parsing:** Parse each agent's `confidence` from its JSON envelope. Assign `codex` a fixed confidence of 0.75 (moderate — static analysis, no runtime context).
+>
+> **Write to:** `.temp/output-review-$BRANCH-$DATE.md` using the Write tool.
+>
+> **Return ONLY** a one-liner summary: `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=.temp/output-review-$BRANCH-$DATE.md`
 
 Main context receives only the one-liner verdict. Proceed with that summary for terminal output.
 
@@ -347,9 +361,9 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 
 After parsing confidence: agent < 0.7 → prepend **⚠ LOW CONFIDENCE** to findings section, state gap explicitly. Never drop uncertain findings.
 
-<!-- Extended Fields live in .claude/skills/_shared/terminal-summaries.md — if that file is absent, omit the extended fields block -->
+<!-- Extended Fields live in .claude/skills/_shared/terminal-summaries.md -->
 
-Read `.claude/skills/_shared/terminal-summaries.md` — use **PR Summary** template with **Extended Fields (review only)**. Replace `[entity-line]` with `Review — [target]`, `[skill-specific path]` with `.temp/output-review-$BRANCH-$DATE.md`. Terminal block structure: opening `---` on own line, entity line next (never `---Review...`), `→ saved to .temp/output-review-$BRANCH-$DATE.md` after `Confidence:`, closing `---` after `→ saved to`. Print to terminal.
+Read `.claude/skills/_shared/terminal-summaries.md`. File absent → warn the user: "foundry:init required: `.claude/skills/_shared/terminal-summaries.md` not found; install foundry plugin and run `foundry:init` to activate terminal summary templates. Printing plain terminal output instead." Then print a plain summary without the template. When file is present — use **PR Summary** template with **Extended Fields (review only)**. Replace `[entity-line]` with `Review — [target]`, `[skill-specific path]` with `.temp/output-review-$BRANCH-$DATE.md`. Terminal block structure: opening `---` on own line, entity line next (never `---Review...`), `→ saved to .temp/output-review-$BRANCH-$DATE.md` after `Confidence:`, closing `---` after `→ saved to`. Print to terminal.
 
 After printing, also prepend compact block to report file top via Edit — line 1, followed by blank line, then `## Code Review: [target]`.
 
@@ -368,7 +382,7 @@ After consolidating, identify tasks Codex can implement — not style violations
 - Architectural issues, logic errors, security vulnerabilities, or behavioural changes
 - Any task where you cannot write a precise description without guessing
 
-Read `.claude/skills/_shared/codex-delegation.md`, apply criteria (not found → skip Step 7 delegation).
+Read `.claude/skills/_shared/codex-delegation.md`. File absent → warn the user: "foundry:init required: `.claude/skills/_shared/codex-delegation.md` not found; install foundry plugin and run `foundry:init` to activate Codex delegation criteria. Skipping Step 7 delegation." Then skip Step 7.
 
 Example prompt: `"Add a test for StreamReader.read_chunk() in tests/test_reader.py — the method should raise ValueError when called after close(), currently no test covers this path."`
 

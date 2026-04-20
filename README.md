@@ -27,7 +27,9 @@ Managing AI coding workflows for Python/ML OSS is complex — you need domain-aw
 - ML training and inference codebases needing GPU profiling and data pipeline validation
 - Multi-contributor projects with CI/CD, pre-commit hooks, and automated releases
 
-> [!NOTE] **What this adds over vanilla Claude Code:** With defaults, Claude reviews code as a generalist. With this config, it reviews as 6 specialists in parallel, with a Codex pre-pass for unbiased coverage, file-based handoff to prevent context flooding, automatic lint-on-save, and token compression via RTK — all orchestrated by slash commands that chain into complete workflows.
+> [!NOTE]
+>
+> **What this adds over vanilla Claude Code:** With defaults, Claude reviews code as a generalist. With this config, it reviews as 6 specialists in parallel, with a Codex pre-pass for unbiased coverage, file-based handoff to prevent context flooding, automatic lint-on-save, and token compression via RTK — all orchestrated by slash commands that chain into complete workflows.
 
 ## 💡 Design Principles
 
@@ -57,7 +59,9 @@ claude plugin install develop@borda-ai-rig   # development: feature, fix, refact
 claude plugin install research@borda-ai-rig  # ML research: topic, plan, judge, run, sweep
 ```
 
-> [!NOTE] **Safe to install alongside any existing Claude Code setup.** Plugins live in a private cache (`~/.claude/plugins/cache/<plugin>/`) under their own namespace. Your existing `~/.claude/agents/`, `~/.claude/skills/`, and `settings.json` are never modified or overwritten — custom agents and skills you have created remain fully independent. See the [Claude Code plugin reference](https://code.claude.com/docs/en/plugins-reference) for details.
+> [!NOTE]
+>
+> **Safe to install alongside any existing Claude Code setup.** Plugins live in a private cache (`~/.claude/plugins/cache/<plugin>/`) under their own namespace. Your existing `~/.claude/agents/`, `~/.claude/skills/`, and `settings.json` are never modified or overwritten — custom agents and skills you have created remain fully independent. See the [Claude Code plugin reference](https://code.claude.com/docs/en/plugins-reference) for details.
 
 **4. One-time settings merge** — run inside Claude Code:
 
@@ -67,7 +71,9 @@ claude plugin install research@borda-ai-rig  # ML research: topic, plan, judge, 
 
 `link` symlinks foundry agents and skills into `~/.claude/` so you can type `/audit`, `/manage`, `/brainstorm`, etc. without a `foundry:` prefix. OSS, develop, and research skills always use their plugin prefix (`/oss:review`, `/develop:fix`, `/research:run`). Safe to re-run.
 
-> [!IMPORTANT] **Codex CLI** — optional companion; the plugins install Claude Code agents and skills only:
+> [!IMPORTANT]
+>
+> **Codex CLI** — optional companion; the plugins install Claude Code agents and skills only:
 >
 > ```bash
 > npm install -g @openai/codex
@@ -545,7 +551,9 @@ Two optional MCP servers are defined in `.mcp.json` (defined at the repo root; e
 
 → Install: `/plugin marketplace add openai/codex-plugin-cc` → `/plugin install codex@openai-codex` → `/reload-plugins`
 
-> [!NOTE] RTK only compresses **Bash tool output** — shell commands like `git`, `cargo`, `pytest`, etc. It does not affect Claude Code's native tools (Read, Grep, Glob, Edit, Write), which run inside Claude's own engine and are already token-efficient by design.
+> [!NOTE]
+>
+> RTK only compresses **Bash tool output** — shell commands like `git`, `cargo`, `pytest`, etc. It does not affect Claude Code's native tools (Read, Grep, Glob, Edit, Write), which run inside Claude's own engine and are already token-efficient by design.
 
 ### cc-Lens
 

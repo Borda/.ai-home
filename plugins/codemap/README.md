@@ -4,9 +4,13 @@
 
 Scan your Python project once. Every agent, skill, and developer session answers structural questions — blast radius, coupling, dependency paths — in a single JSON call instead of 20 Glob/Grep passes.
 
-> [!TIP] Standalone — no other plugins required. Pairs with the `develop` plugin: `develop:feature`, `develop:fix`, `develop:plan`, and `develop:refactor` pick up the index automatically.
+> [!TIP]
+>
+> Standalone — no other plugins required. Pairs with the `develop` plugin: `develop:feature`, `develop:fix`, `develop:plan`, and `develop:refactor` pick up the index automatically.
 
-> [!NOTE] **Python first.** `scan-index` uses `ast.parse` to index `.py` files. Support for additional languages (TypeScript, Go, Rust) is planned — Python is the only language indexed today. Non-Python files are not scanned and will not appear in any query result.
+> [!NOTE]
+>
+> **Python first.** `scan-index` uses `ast.parse` to index `.py` files. Support for additional languages (TypeScript, Go, Rust) is planned — Python is the only language indexed today. Non-Python files are not scanned and will not appear in any query result.
 
 ## 📋 Contents
 

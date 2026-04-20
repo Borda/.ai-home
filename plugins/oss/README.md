@@ -2,7 +2,9 @@
 
 OSS workflow plugin for Python/ML open-source projects: two specialist agents and four slash-command skills for issue triage, parallel code review, PR resolution, and SemVer-disciplined releases.
 
-> [!NOTE] Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
+> [!NOTE]
+>
+> Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
 
 ## 🎯 Why
 
@@ -44,7 +46,9 @@ claude plugin install research@borda-ai-rig
 
 </details>
 
-> [!NOTE] Skills are always invoked with the `oss:` prefix: `/oss:analyse`, `/oss:review`, `/oss:resolve`, `/oss:release`.
+> [!NOTE]
+>
+> Skills are always invoked with the `oss:` prefix: `/oss:analyse`, `/oss:review`, `/oss:resolve`, `/oss:release`.
 
 ## 🔁 How to Use
 
@@ -62,7 +66,9 @@ claude plugin install research@borda-ai-rig
 /oss:review 55 --reply              # review + draft contributor-facing comment
 ```
 
-> [!NOTE] `/oss:review` requires a GitHub PR number. To review local files or the current git diff without a PR, use `/develop:review` from the develop plugin.
+> [!NOTE]
+>
+> `/oss:review` requires a GitHub PR number. To review local files or the current git diff without a PR, use `/develop:review` from the develop plugin.
 
 ### Apply findings after review
 
@@ -127,7 +133,9 @@ Tier 2: 6 parallel agents — sw-engineer, qa-specialist, perf-optimizer,
 → shepherd writes --reply output (if --reply flag present)
 ```
 
-> [!TIP] Tier 2 only runs when Tier 1 does not surface a blocking issue on its own. The full pipeline completes in under 10 minutes on typical PRs.
+> [!TIP]
+>
+> Tier 2 only runs when Tier 1 does not surface a blocking issue on its own. The full pipeline completes in under 10 minutes on typical PRs.
 
 ### Three-Source Resolution
 

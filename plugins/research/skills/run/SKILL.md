@@ -258,6 +258,10 @@ Then proceed to R5.
 
 ### Step R5: Iteration loop
 
+```bash
+touch /tmp/claude-commit-authorized  # timeout: 3000
+```
+
 **`--team` mode**: If `--team` active, Read `${CLAUDE_SKILL_DIR}/modes/team.md` and execute Phases A–D in place of standard iteration loop below.
 
 For each iteration `i` from 1 to `max_iterations`:
@@ -546,6 +550,10 @@ TaskUpdate R5 subject: `R5: Iter N/max — last: <status>, best: <best_metric>`
 - **Early stop**: if `target` set, stop when metric crosses it. Mark `state.json` `status: goal-achieved`.
 - **Context compaction** (every SUMMARY_INTERVAL): write full iteration summary to `.experiments/state/<run-id>/progress-<i>.md`, discard verbose per-iteration details from working memory. Retain only: current metric, iteration count, JSONL path, `best_commit`. Full history recoverable from `experiments.jsonl` and `ideation-<i>.md`.
 
+```bash
+rm -f /tmp/claude-commit-authorized  # timeout: 3000
+```
+
 ### Step R6: Results report
 
 Pre-compute branch before writing: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
@@ -598,7 +606,7 @@ Update `state.json`: `status = completed`.
 
 ### Step R7: Codex delegation (optional)
 
-Inspect applied changes (`git diff <baseline_commit>...<best_commit> --stat`), identify tasks Codex can complete (comments on non-obvious changes, docstrings for modified functions, test coverage). Read `.claude/skills/_shared/codex-delegation.md` (if not found, skip) and apply criteria.
+Inspect applied changes (`git diff <baseline_commit>...<best_commit> --stat`), identify tasks Codex can complete (comments on non-obvious changes, docstrings for modified functions, test coverage). Read `.claude/skills/_shared/codex-delegation.md` and apply criteria. **Prerequisite**: this file is installed by `foundry:init` from `plugins/foundry/skills/_shared/codex-delegation.md` — if not found, stop and warn: `⚠ .claude/skills/_shared/codex-delegation.md not found. Run /foundry:init to install it, then retry R7.`
 
 ______________________________________________________________________
 

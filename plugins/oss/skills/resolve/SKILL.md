@@ -534,6 +534,12 @@ for each (filepath, conflict_task_id) pair from Step 5a: TaskUpdate(task_id=\<co
 
 ## Step 8: Implement action items
 
+Authorize commits for this workflow:
+
+```bash
+touch /tmp/claude-commit-authorized  # timeout: 3000
+```
+
 If `CODEX_AVAILABLE=false`: mark all items `⚠ skipped — codex not installed`, skip to Step 9.
 
 > **Conflict gate**: verify all Step 5a conflict tasks `completed` before any action item. Still `pending`/`in_progress` → stop, surface list, wait. Items on unresolved conflicts compound diff.
@@ -632,6 +638,12 @@ EOF
 
 - Blocking issues from `foundry:qa-specialist` → fix (via Codex or inline edit), re-run qa-specialist once to confirm; issues after one pass → surface in report, continue (no infinite loop)
 - Warnings (non-blocking) → record in report; do not block push
+
+Revoke commit authorization:
+
+```bash
+rm -f /tmp/claude-commit-authorized  # timeout: 3000
+```
 
 ## Step 10: Push
 

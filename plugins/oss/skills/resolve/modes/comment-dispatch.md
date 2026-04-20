@@ -31,6 +31,10 @@ and stop.
 ### 12a: Dispatch
 
 ```bash
+touch /tmp/claude-commit-authorized  # timeout: 3000
+```
+
+```bash
 Agent(subagent_type="codex:codex-rescue", prompt="Apply this review comment to the codebase. If the change is already present, or the comment has no actionable code change, make no changes and briefly explain why. Comment: $ARGUMENTS")
 ```
 
@@ -96,6 +100,12 @@ lint: auto-fix violations after resolve cycle
 Co-authored-by: Claude Code <noreply@anthropic.com>
 EOF
 )"  # timeout: 3000
+```
+
+Revoke commit authorization:
+
+```bash
+rm -f /tmp/claude-commit-authorized  # timeout: 3000
 ```
 
 - `foundry:qa-specialist` reports blocking issues → fix inline, re-run once; surface unresolved issues in report

@@ -75,7 +75,7 @@ Use Read to check `.claude/settings.json` and `~/.claude/settings.json` — look
 
 **Logs** (when symptom involves skill run, background agent, or hook):
 
-Use Grep with pattern `ERROR|WARN|failed|not found|exit` across `.claude/logs/`, `/tmp/`, or relevant `_<skill>/` run dirs. Read last 50 lines of any relevant log file.
+Use Grep with pattern `ERROR|WARN|failed|not found|exit` across `.claude/logs/`, `/tmp/`, or relevant `.reports/<skill>/` run dirs. Read last 50 lines of any relevant log file.
 
 Capture all output before Step 3.
 

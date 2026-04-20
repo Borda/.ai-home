@@ -136,7 +136,7 @@ echo "$FILES" | while read -r f; do
     [ -n "$f" ] && printf "  • %s\n" "${f#$CACHE/}"
 done
 # keep this list in sync with develop and oss plugin skill directories
-for exp in "develop/*/skills/fix" "develop/*/skills/feature" "develop/*/skills/refactor" "develop/*/skills/plan" "develop/*/skills/review" "develop/*/skills/debug" "oss/*/skills/review"; do
+for exp in "develop/*/skills/fix" "develop/*/skills/feature" "develop/*/skills/refactor" "develop/*/skills/plan" "develop/*/skills/review" "develop/*/skills/debug" "oss/*/skills/review" "oss/*/skills/resolve" "oss/*/skills/analyse"; do
     echo "$FILES" | grep -q "$exp" \
         || printf "  ${YEL}⚠${NC} missing injection in: %s/SKILL.md\n" "$exp"
 done

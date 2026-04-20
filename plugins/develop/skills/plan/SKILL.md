@@ -202,4 +202,16 @@ Wait for user input before printing `-> /develop ...`.
 
 No quality stack, no Codex pre-pass, no review loop. Exit after printing summary.
 
+End the plan document with:
+
+```
+## Confidence
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
+**Gaps**:
+- [specific limitation or unverified assumption]
+
+**Refinements**: N passes.
+- Pass 1: [what was addressed]
+```
+
 </workflow>

@@ -156,8 +156,6 @@ Call TaskList (or use TaskCreate/TaskUpdate context) to get tasks with status `c
 
 ### Step 2: Collect parked items
 
-Derive MEMORY_DIR using canonical snippet from `<constants>`, then list parked files:
-
 Derive MEMORY_DIR using canonical snippet from `<constants>`. Use Glob tool with pattern `session-open-*.md` in MEMORY_DIR to list candidates. Read each matched file with Read tool for `name` and `description`.
 
 ### Step 3: Collect recent git commits

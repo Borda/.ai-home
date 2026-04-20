@@ -2,7 +2,9 @@
 
 ML research plugin: two specialist agents and five slash-command skills for literature search, experiment design, methodology review, metric-driven optimization loops, and automated research sweeps — built on a profile-first, judge-gated pipeline that spends compute only on experiments worth running.
 
-> [!NOTE] Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
+> [!NOTE]
+>
+> Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
 
 ## 🎯 Why
 
@@ -45,7 +47,9 @@ claude plugin install research@borda-ai-rig
 
 </details>
 
-> [!NOTE] Skills are always invoked with the `research:` prefix: `/research:topic`, `/research:plan`, `/research:judge`, `/research:run`, `/research:sweep`.
+> [!NOTE]
+>
+> Skills are always invoked with the `research:` prefix: `/research:topic`, `/research:plan`, `/research:judge`, `/research:run`, `/research:sweep`.
 
 ## 🔁 How to Use
 
@@ -135,7 +139,9 @@ use data-steward to verify train/val split integrity and check for data leakage
 
 ### Orchestration Flows
 
-> [!NOTE] These flows document the skill implementations. If any divergence exists between this section and the skill files, the skill files are authoritative.
+> [!NOTE]
+>
+> These flows document the skill implementations. If any divergence exists between this section and the skill files, the skill files are authoritative.
 
 <details>
 <summary><strong>`/research:topic`</strong> — evidence-first research</summary>
@@ -201,11 +207,15 @@ No user prompts; designed for unattended operation
 
 `--team` available on `topic`, `run`, and `sweep`. Spawns multiple scientist instances on competing hypotheses or method families simultaneously. Results are compared and the best-performing approach is selected.
 
-> [!NOTE] Use `--team` for genuinely ambiguous optimizations where the best direction is unknown. Expect higher token cost proportional to the number of parallel branches.
+> [!NOTE]
+>
+> Use `--team` for genuinely ambiguous optimizations where the best direction is unknown. Expect higher token cost proportional to the number of parallel branches.
 
 ### Colab Integration (GPU)
 
-> [!NOTE] `--colab` routes `run` iterations to Google Colab via the `colab-mcp` server. Opt-in: add `"colab-mcp"` to `enabledMcpjsonServers` in `settings.local.json`, then restart Claude Code.
+> [!NOTE]
+>
+> `--colab` routes `run` iterations to Google Colab via the `colab-mcp` server. Opt-in: add `"colab-mcp"` to `enabledMcpjsonServers` in `settings.local.json`, then restart Claude Code.
 
 ## Dependencies
 

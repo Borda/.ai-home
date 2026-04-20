@@ -24,6 +24,10 @@ Analyze how Claude Code is being used in this project and surface concrete impro
 
 </inputs>
 
+<constants>
+MEMORY_DIR=".claude/agent-memory"
+</constants>
+
 <workflow>
 
 ## Step 1: Inventory existing agents and skills
@@ -31,8 +35,6 @@ Analyze how Claude Code is being used in this project and surface concrete impro
 Use the Glob tool to enumerate agents (pattern `agents/*.md`, path `.claude/`) and skills (pattern `skills/*/SKILL.md`, path `.claude/`).
 
 For each agent/skill found, extract: name, description, tools, purpose.
-
-If OpenSpace is installed, also check for any synthesized skill patterns (`~/.claude/openspace/skills.db`) that could be consolidated with the new rule — the presence of that file signals OpenSpace is active; store the result conceptually (active vs not) for use in Step 2.
 
 ## Step 2: Analyze work patterns
 
@@ -58,21 +60,9 @@ git log --name-only --pretty="" -30 | sort | uniq -c | sort -rn | head -20
 git log --oneline -100 | awk '{print $2}' | sort | uniq -c | sort -rn | head -15
 ```
 
-Then use the Read tool on `.plans/active/todo.md` and `.notes/lessons.md` (if they exist) for task history and conversation hints.
+Then use the Glob tool (pattern `todo_*.md`, path `.plans/active/`) to list active task files; read each with the Read tool. Also read `.notes/lessons.md` (if it exists) for task history and conversation hints.
 
 If `$ARGUMENTS` was provided, use it as additional context for the pattern analysis.
-
-### OpenSpace evolution drift (if active)
-
-If the Step 1 check showed OpenSpace active, run:
-
-```bash
-# timeout: 5000
-HOME_SKILLS="$HOME/.claude/skills/"
-diff -rq "$HOME_SKILLS" .claude/skills/ 2>/dev/null | grep "^Files" | sed "s|Files ${HOME_SKILLS}||;s|\.claude/skills/||" | head -20
-```
-
-Each line names a skill file that differs between the home dir (where OpenSpace writes evolved versions) and the project dir (source of truth). Collect these as "graduated candidates" for the Step 5 report. If no differences, note "No drift — project and home skills are in sync."
 
 ### Frequency Heuristics
 
@@ -344,6 +334,5 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
   - Suggestion to enhance existing → edit the agent/skill directly, then `/foundry:init`
   - `lessons` proposals applied → `/foundry:init` to propagate; `/audit rules` to verify new rule files are structurally sound
 
-- **OpenSpace integration**: when OpenSpace MCP is active (`~/.claude/openspace/skills.db` exists), distill detects evolved skill variants by diffing `~/.claude/skills/` against `.claude/skills/`. Graduation = manual `cp -r ~/.claude/skills/<name> .claude/skills/<name>` + git commit; discard evolved variants that don't meet quality bar.
 
 </notes>

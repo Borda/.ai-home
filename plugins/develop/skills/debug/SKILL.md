@@ -153,8 +153,11 @@ Root Cause: <one sentence>
 File(s): <suspect files>
 Evidence: <key signals>
 → Handed off to /develop:fix from Step 2
-```
 
-End with `## Confidence` block per `CLAUDE.md` Output Standards. Score reflects certainty in identified root cause: 0.9+ if confirmed via test reproduction, lower if hypothesis only. List any unverified alternative hypotheses in Gaps.
+## Confidence
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
+**Gaps**: [e.g., unverified alternative hypotheses, hypothesis only — not confirmed via test reproduction]
+**Refinements**: N passes.
+```
 
 </workflow>

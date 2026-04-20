@@ -110,7 +110,7 @@ For `create`, check only the relevant type's path.
 
 ```bash
 # Check permission existence (for add perm / remove perm)
-python3 -c "import json,sys; d=json.load(open('.claude/settings.json')); sys.exit(0 if '<rule>' in d['permissions']['allow'] else 1)" 2>/dev/null
+python3 -c "import json,sys; d=json.load(open('.claude/settings.json')); sys.exit(0 if '<rule>' in d['permissions']['allow'] else 1)" 2>/dev/null  # timeout: 15000
 ```
 
 **Update second-argument discrimination** — apply after type resolved:
@@ -154,7 +154,7 @@ Extract names inline from Glob results — strip `.claude/agents/` prefix and `.
 
 1. Fetch latest Claude Code agent frontmatter schema:
 
-   - Spawn **foundry:web-explorer** to fetch `https://code.claude.com/docs/en/sub-agents` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`" <!-- URL spot-checked 2026-04-05 — resolves -->
+   - Spawn **foundry:web-explorer** to fetch `https://code.claude.com/docs/en/sub-agents` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`" <!-- URL verified -->
 
      <!--
      Health monitoring (CLAUDE.md §8): create checkpoint after spawn:
@@ -196,7 +196,7 @@ Return ONLY: {"status":"done","file":".claude/agents/<name>.md","lines":N,"confi
 
 1. Fetch latest Claude Code skill frontmatter schema:
 
-   - Spawn **foundry:web-explorer** to fetch `https://code.claude.com/docs/en/skills` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-skill-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-skill-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`" <!-- URL spot-checked 2026-04-05 — resolves -->
+   - Spawn **foundry:web-explorer** to fetch `https://code.claude.com/docs/en/skills` with instruction: "Write your full findings (schema fields, new fields, deprecated fields) to `/tmp/manage-skill-schema-$(date +%s).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"/tmp/manage-skill-schema-<ts>.md\",\"fields\":N,\"new\":N,\"deprecated\":N,\"confidence\":0.N,\"summary\":\"N fields, N new, N deprecated\"}`" <!-- URL verified -->
 
      <!--
      Health monitoring (CLAUDE.md §8): create checkpoint after spawn:
@@ -413,7 +413,7 @@ Adds rule to both `settings.json` and `permissions-guide.md` atomically.
 <!-- Note: python3 is excluded from auto-allow list by design — user will see an approval prompt for this command. -->
 
 ```bash
-python3 -c "  # timeout: 5000
+python3 -c "  # timeout: 15000
 import json
 with open('.claude/settings.json') as f:
     d = json.load(f)
@@ -435,7 +435,7 @@ Use Edit tool to insert row: find last table row in target section and insert af
 4. Verify both files updated:
 
 ```bash
-python3 -c "import json; d=json.load(open('.claude/settings.json')); print('OK' if '<rule>' in d['permissions']['allow'] else 'MISSING')" # timeout: 5000
+python3 -c "import json; d=json.load(open('.claude/settings.json')); print('OK' if '<rule>' in d['permissions']['allow'] else 'MISSING')"  # timeout: 15000
 grep -F '`<rule>`' .claude/permissions-guide.md
 ```
 
@@ -446,7 +446,7 @@ Removes rule from both `settings.json` and `permissions-guide.md` atomically.
 1. Update `settings.json` — parse, filter, write back:
 
 ```bash
-python3 -c "  # timeout: 5000
+python3 -c "  # timeout: 15000
 import json
 with open('.claude/settings.json') as f:
     d = json.load(f)
@@ -462,7 +462,7 @@ with open('.claude/settings.json', 'w') as f:
 3. Verify both files clean:
 
 ```bash
-python3 -c "import json; d=json.load(open('.claude/settings.json')); print('OK' if '<rule>' not in d['permissions']['allow'] else 'STILL PRESENT')" # timeout: 5000
+python3 -c "import json; d=json.load(open('.claude/settings.json')); print('OK' if '<rule>' not in d['permissions']['allow'] else 'STILL PRESENT')"  # timeout: 15000
 grep -cF '`<rule>`' .claude/permissions-guide.md && echo "STILL IN GUIDE" || echo "OK"
 ```
 

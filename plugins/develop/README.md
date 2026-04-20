@@ -2,7 +2,9 @@
 
 Development workflow plugin: six slash-command skills for scope planning, feature development, bug fixing, refactoring, debugging, and code review — all built on a validate-first principle that proves the problem exists before writing a single line of solution.
 
-> [!NOTE] Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
+> [!NOTE]
+>
+> Works standalone — foundry is not required. Without it, agent dispatches fall back to `general-purpose` with role descriptions (lower quality). Installing foundry unlocks specialized agents (`foundry:sw-engineer`, `foundry:qa-specialist`, etc.) and is strongly recommended for production use.
 
 ## 🎯 Why
 
@@ -17,7 +19,9 @@ Most development mistakes happen before the first keystroke: implementing a feat
 - **Debug mode** investigates before proposing — reads logs, traces call paths, ranks hypotheses by evidence; no blind guesses
 - **Review mode** runs six specialist agents across architecture, tests, performance, docs, lint, and security — against local files or the current git diff; no GitHub PR required
 
-> [!IMPORTANT] Every code-changing mode (feature, fix, refactor) closes with the same quality stack: `linting-expert` → `qa-specialist` → Codex pre-pass. `/develop:review` is the quality gate itself — use it to review the current diff before committing.
+> [!IMPORTANT]
+>
+> Every code-changing mode (feature, fix, refactor) closes with the same quality stack: `linting-expert` → `qa-specialist` → Codex pre-pass. `/develop:review` is the quality gate itself — use it to review the current diff before committing.
 
 ## 💡 Key Principles
 
@@ -47,7 +51,9 @@ claude plugin install research@borda-ai-rig
 
 </details>
 
-> [!NOTE] Skills are always invoked with the `develop:` prefix: `/develop:plan`, `/develop:feature`, `/develop:fix`, `/develop:refactor`, `/develop:debug`, `/develop:review`.
+> [!NOTE]
+>
+> Skills are always invoked with the `develop:` prefix: `/develop:plan`, `/develop:feature`, `/develop:fix`, `/develop:refactor`, `/develop:debug`, `/develop:review`.
 
 ## 🔁 How to Use
 
@@ -98,7 +104,9 @@ claude plugin install research@borda-ai-rig
 /develop:fix "memory leak in batch inference" --team
 ```
 
-> [!NOTE] `--team` spawns multiple `sw-engineer` + `qa-specialist` instances exploring the implementation space in parallel. Expect ~7× the token cost of plan mode; use for genuinely complex or ambiguous tasks.
+> [!NOTE]
+>
+> `--team` spawns multiple `sw-engineer` + `qa-specialist` instances exploring the implementation space in parallel. Expect ~7× the token cost of plan mode; use for genuinely complex or ambiguous tasks.
 
 ## 🗺️ Overview
 
@@ -115,7 +123,9 @@ claude plugin install research@borda-ai-rig
 
 ### Orchestration Flows
 
-> [!NOTE] These flows document the skill implementations. If any divergence exists between this section and the skill files, the skill files are authoritative.
+> [!NOTE]
+>
+> These flows document the skill implementations. If any divergence exists between this section and the skill files, the skill files are authoritative.
 
 <details>
 <summary><strong>`/develop:plan`</strong> — scope before commit</summary>

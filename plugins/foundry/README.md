@@ -2,7 +2,9 @@
 
 Base plugin for Python/ML OSS development: 8 specialist agents, config-management skills, event-driven hooks, and a continuous self-improvement loop.
 
-> [!TIP] For OSS workflows, install the `oss` plugin (`/oss:review`, `/oss:release`, …). For development workflows, install the `develop` plugin (`/develop:feature`, `/develop:fix`, …). For ML research, install the `research` plugin (`/research:run`, `/research:topic`, …).
+> [!TIP]
+>
+> For OSS workflows, install the `oss` plugin (`/oss:review`, `/oss:release`, …). For development workflows, install the `develop` plugin (`/develop:feature`, `/develop:fix`, …). For ML research, install the `research` plugin (`/research:run`, `/research:topic`, …).
 
 ## 🎯 Why
 
@@ -90,7 +92,9 @@ Use `link` to invoke foundry commands without a prefix (`/audit` instead of `/fo
 /calibrate all fast apply # benchmark + apply improvement proposals
 ```
 
-> [!NOTE] Thresholds: routing accuracy ≥90%, hard-problem accuracy ≥80%.
+> [!NOTE]
+>
+> Thresholds: routing accuracy ≥90%, hard-problem accuracy ≥80%.
 
 ### Brainstorm → spec → action plan
 
@@ -181,7 +185,9 @@ cd Borda-AI-Rig && git pull
 claude plugin install foundry@borda-ai-rig
 ```
 
-> [!IMPORTANT] Re-run `/foundry:init link` after upgrading — symlinks point to the versioned cache path and go stale after reinstall.
+> [!IMPORTANT]
+>
+> Re-run `/foundry:init link` after upgrading — symlinks point to the versioned cache path and go stale after reinstall.
 
 ### Uninstall
 
@@ -189,7 +195,9 @@ claude plugin install foundry@borda-ai-rig
 claude plugin uninstall foundry
 ```
 
-> [!NOTE] Settings merged by `/foundry:init` (`statusLine`, `permissions.allow` entries) remain in `~/.claude/settings.json` — remove manually if desired. Symlinks from `/foundry:init link` in `~/.claude/agents/` and `~/.claude/skills/` also persist after uninstall.
+> [!NOTE]
+>
+> Settings merged by `/foundry:init` (`statusLine`, `permissions.allow` entries) remain in `~/.claude/settings.json` — remove manually if desired. Symlinks from `/foundry:init link` in `~/.claude/agents/` and `~/.claude/skills/` also persist after uninstall.
 
 ### Structure
 
