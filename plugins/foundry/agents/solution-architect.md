@@ -1,5 +1,5 @@
 ---
-name: solution-architect
+name: foundry-solution-architect
 description: System design specialist for ADRs, API surface design, interface specs, migration plans, component diagrams, and hypothesis architectural feasibility assessment. Use for evaluating architectural trade-offs, designing public API contracts, planning deprecation strategies, and filtering AI-generated hypotheses against codebase constraints — reads code and produces specs only. NOT for writing implementation code (use foundry:sw-engineer), NOT for release management (use oss:shepherd).
 tools: Read, Write, Edit, Glob, Grep, Bash, TaskCreate, TaskUpdate
 model: opusplan

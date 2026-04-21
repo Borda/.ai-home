@@ -1,5 +1,5 @@
 ---
-name: perf-optimizer
+name: foundry-perf-optimizer
 description: Performance engineer for profiling and optimizing CPU, GPU, memory, and I/O bottlenecks. Use for profiling Python/ML workloads, identifying DataLoader bottlenecks, applying mixed precision, vectorizing loops, and tuning PyTorch throughput. Profile-first — always measures before changing. NOT for general code refactoring (use foundry:sw-engineer), NOT for architectural redesign (use foundry:solution-architect).
 tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate
 maxTurns: 60

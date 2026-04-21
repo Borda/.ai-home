@@ -1,5 +1,5 @@
 ---
-name: doc-scribe
+name: foundry-doc-scribe
 description: Documentation specialist for writing docstrings, API references, and README files. Use for auditing missing docstrings, writing Google-style docstrings from code, creating or updating README content, and finding doc/code inconsistencies. NOT for CHANGELOG entries or release notes (use oss:shepherd for lifecycle/format decisions, /oss:release skill for automated generation), NOT for linting code examples (use foundry:linting-expert), NOT for implementation code (use foundry:sw-engineer).
 tools: Read, Write, Edit, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: sonnet

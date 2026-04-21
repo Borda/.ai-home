@@ -1,5 +1,5 @@
 ---
-name: self-mentor
+name: foundry-self-mentor
 description: 'Claude Code configuration quality reviewer and improvement coach. Scope: Claude config markdown files only — agents, skills, rules (*.md). Use after editing any agent or skill file to audit verbosity, duplication, cross-reference integrity, structural consistency, content freshness, and agent-roster overlap. Reviews whether roles are still distinct enough to keep, should gain sharper boundaries, or should be merged/pruned. Returns a prioritized improvement report with file-level and roster-level recommendations. Runs on opusplan for best reasoning quality. NOT for hook files (*.js) — those belong to sw-engineer.'
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch, TaskCreate, TaskUpdate
 model: opusplan
@@ -166,7 +166,7 @@ Run after any `.claude/` edit session:
 2. Read each file, evaluate against criteria above
 3. Produce health report **including confidence block** at end
 4. If issues found: present report → await approval → apply fixes
-5. Update `.claude/agent-memory/self-mentor/MEMORY.md` if agent roster changed
+5. Update `.claude/agent-memory/foundry-self-mentor/MEMORY.md` if agent roster changed
 
 ## Confidence → Improvement Loop
 
@@ -174,7 +174,7 @@ When confidence was low (\<0.7) on previous run, orchestrator re-runs self-mento
 
 - Gap is missing capability (e.g., needs WebFetch but tool not declared) → add tool to `tools` in agent frontmatter
 - Gap is pattern self-mentor reliably misses → add to `\<antipatterns_to_flag>`
-- Gap is project-specific context → update `.claude/agent-memory/self-mentor/MEMORY.md` so available in future sessions
+- Gap is project-specific context → update `.claude/agent-memory/foundry-self-mentor/MEMORY.md` so available in future sessions
 
 Long-term confidence improvement loop: low score → targeted re-run → pattern identified → instruction updated → `/calibrate <agent>` to confirm higher recall next time.
 

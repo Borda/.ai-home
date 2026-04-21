@@ -1,5 +1,5 @@
 ---
-name: qa-specialist
+name: foundry-qa-specialist
 description: QA specialist for writing, reviewing, and fixing tests. Use for writing new pytest tests, analyzing test coverage gaps, building edge-case matrices, fixing failing tests, and integration test design. Writes deterministic, parametrized, behavior-focused tests. NOT for linting, type checking, or annotation fixes (use foundry:linting-expert), NOT for production implementation (use foundry:sw-engineer).
 tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate
 maxTurns: 50
