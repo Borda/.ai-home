@@ -12,8 +12,7 @@ Scan your Python project once. Every agent, skill, and developer session answers
 >
 > **Python first.** `scan-index` uses `ast.parse` to index `.py` files. Support for additional languages (TypeScript, Go, Rust) is planned — Python is the only language indexed today. Non-Python files are not scanned and will not appear in any query result.
 
-<details>
-<summary><strong>📋 Contents</strong></summary>
+## 📋 Contents
 
 - [Why](#-why)
 - [Key Principles](#-key-principles)
@@ -24,8 +23,6 @@ Scan your Python project once. Every agent, skill, and developer session answers
 - [Integrating codemap](#-integrating-codemap)
 - [Overview](#-overview)
 - [Plugin details](#-plugin-details)
-
-</details>
 
 ## 🎯 Why
 
@@ -92,6 +89,8 @@ scan-query central --top 5          # which modules have the widest blast radius
 scan-query coupled --top 5          # which modules are most entangled?
 scan-query path mypackage.api mypackage.db  # are api and db coupled?
 scan-query list                     # enumerate all indexed modules
+scan-query symbol MyClass.method    # get function source (~94% token reduction)
+scan-query find-symbol "validate.*" # regex search across all symbols
 ```
 
 All output is JSON — pipe directly into your analysis or pass to an agent.
@@ -298,7 +297,7 @@ ______________________________________________________________________
 
 Controlled benchmark on **pytorch-lightning** (646 modules) — 8 tasks × 3 model tiers × 2 arms = 48 runs. Tasks cover all four developer workflows: fix, feature, refactor, review.
 
-> Source: `benchmarks/results/code-2026-04-17-5.md` · Savings = median `1 − (codemap / plain)` · positive = codemap needs less
+> Source: `benchmarks/results/agentic-2026-04-17-5.md` · Savings = median `1 − (codemap / plain)` · positive = codemap needs less
 
 ### Efficiency savings
 
@@ -354,18 +353,22 @@ The fastest path is the integration skill — it discovers your installed skills
 
 ### Query reference — which command to use when
 
-| Situation                              | Query                                   |
-| -------------------------------------- | --------------------------------------- |
-| "What breaks if I change X?"           | `rdeps X`                               |
-| "What does X pull in?"                 | `deps X`                                |
-| "Are A and B already coupled?"         | `path A B` — `null` means not connected |
-| "What's the riskiest module to touch?" | `central --top 10` (highest rdep_count) |
-| "What's the most entangled module?"    | `coupled --top 10` (highest dep_count)  |
-| "List all modules in the project"      | `list`                                  |
-| "What does function F call?"           | `fn-deps module::F` (v3 index)          |
-| "What calls function F?"               | `fn-rdeps module::F` (v3 index)         |
-| "Most-called functions?"               | `fn-central --top 10` (v3 index)        |
-| "Transitive callers of F?"             | `fn-blast module::F` (v3 index)         |
+| Situation                              | Query                                         |
+| -------------------------------------- | --------------------------------------------- |
+| "What breaks if I change X?"           | `rdeps X`                                     |
+| "What does X pull in?"                 | `deps X`                                      |
+| "Are A and B already coupled?"         | `path A B` — `null` means not connected       |
+| "What's the riskiest module to touch?" | `central --top 10` (highest rdep_count)       |
+| "What's the most entangled module?"    | `coupled --top 10` (highest internal imports) |
+| "List all modules in the project"      | `list`                                        |
+| "What does function F call?"           | `fn-deps module::F` (v3 index)                |
+| "What calls function F?"               | `fn-rdeps module::F` (v3 index)               |
+| "Most-called functions?"               | `fn-central --top 10` (v3 index)              |
+| "Transitive callers of F?"             | `fn-blast module::F` (v3 index)               |
+| "Get source of a function/class?"      | `symbol MyClass.method`                       |
+| "Find symbols matching a pattern?"     | `find-symbol "validate.*"`                    |
+| "List all symbols in module X?"        | `symbols X`                                   |
+| "Exclude tests from blast-radius?"     | `central --exclude-tests --top 10`            |
 
 <details>
 <summary>Manual injection — adding codemap to a custom skill or agent</summary>
@@ -424,26 +427,27 @@ fi
 
 ### CLI Commands
 
-| Command                | Question it answers                                            |
-| ---------------------- | -------------------------------------------------------------- |
-| `central [--top N]`    | Which modules are imported by the most others? (blast radius)  |
-| `coupled [--top N]`    | Which modules import the most others? (coupling)               |
-| `deps <module>`        | What does this module import?                                  |
-| `rdeps <module>`       | What imports this module?                                      |
-| `path <from> <to>`     | What is the shortest import chain between two modules?         |
-| `list`                 | Enumerate all indexed modules                                  |
-| `fn-deps <qname>`      | What does this function call? (call graph — v3 index)          |
-| `fn-rdeps <qname>`     | What functions call this one? (call graph — v3 index)          |
-| `fn-central [--top N]` | Most-called functions globally (call graph — v3 index)         |
-| `fn-blast <qname>`     | Transitive reverse-call BFS with depth (call graph — v3 index) |
-
-Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <pattern>`) returns only the target function or class source instead of the full file — ~94% token reduction. See `/codemap:query` for details.
+| Command                                   | Question it answers                                             |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `central [--top N]`                       | Which modules are imported by the most others? (blast radius)   |
+| `coupled [--top N]`                       | Which modules import the most others? (coupling)                |
+| `deps <module>`                           | What does this module import?                                   |
+| `rdeps <module>`                          | What imports this module?                                       |
+| `path <from> <to>`                        | What is the shortest import chain between two modules?          |
+| `list`                                    | Enumerate all indexed modules                                   |
+| `fn-deps <qname>`                         | What does this function call? (call graph — v3 index)           |
+| `fn-rdeps <qname>`                        | What functions call this one? (call graph — v3 index)           |
+| `fn-central [--top N]`                    | Most-called functions globally (call graph — v3 index)          |
+| `fn-blast <qname>`                        | Transitive reverse-call BFS with depth (call graph — v3 index)  |
+| `symbol <name> [--exclude-tests]`         | Get function/class/method source by name (~94% token reduction) |
+| `symbols <module>`                        | List all symbols in a module (no file I/O)                      |
+| `find-symbol <pattern> [--exclude-tests]` | Regex search across all symbol names in index                   |
 
 ### Index schema (`.cache/scan/<project>.json`)
 
 ```json
 {
-  "scan_version": "3",
+  "scan_version": 3,
   "scanned_at": "2026-04-15T12:00:00+00:00",
   "project": "mypackage",
   "src_layout": true,
@@ -464,6 +468,7 @@ Symbol-level extraction (`symbol <name>`, `symbols <module>`, `find-symbol <patt
       ],
       "is_entry_point": false,
       "has_star_imports": false,
+      "is_test": false,
       "status": "ok",
       "symbols": [
         {
@@ -527,7 +532,7 @@ scan-query fn-blast mypackage.db::fetch_user         # transitive callers, BFS w
 
 `fn-blast` answers: "If I change `fetch_user`, which functions are transitively affected?" — finer than module-level `rdeps`.
 
-Use `module::function` format for qualified names (e.g. `mypackage.auth::AuthMiddleware.process`). Resolution: `import` edges are cross-module calls with confirmed import scope; `local` edges are same-file calls; `self` edges are `self.method()` calls where the class is known but target class type is not inferred. Requires a v3 index from `/codemap:scan`.
+Use `module::function` format for qualified names (e.g. `mypackage.auth::AuthMiddleware.process`). Resolution: `import` edges are cross-module calls with confirmed import scope; `local` edges are same-file calls; `self` edges are `self.method()` calls where the class is known but target class type is not inferred; `star` edges are calls to names from star imports where the source module could not be determined. Requires a v3 index from `/codemap:scan`.
 
 ## 🔄 Incremental rebuild
 

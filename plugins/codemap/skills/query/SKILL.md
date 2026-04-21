@@ -2,7 +2,7 @@
 name: query
 description: Query the codemap structural index — central, coupled, deps, rdeps, import path, symbol-level source extraction, and function-level call graph (fn-deps, fn-rdeps, fn-central, fn-blast).
 argument-hint: <central [--top N] | coupled [--top N] | deps <module> | rdeps <module> | path <from> <to> | symbol <name> | symbols <module> | find-symbol <pattern> | list | fn-deps <qname> | fn-rdeps <qname> | fn-central [--top N] | fn-blast <qname>>
-allowed-tools: Read, Bash
+allowed-tools: Bash
 effort: low
 ---
 
@@ -49,19 +49,19 @@ Replace `<QUERY_ARGS>`:
 
 | Goal | Command |
 | --- | --- |
-| what imports X (reverse deps) | `rdeps <module>` |
-| what X imports (direct deps) | `deps <module>` |
-| most-imported modules | `central --top 10` |
-| most-coupled modules | `coupled --top 10` |
-| path between A and B | `path <from> <to>` |
-| get source of a function/class/method | `symbol <name>` |
-| list all symbols in a module | `symbols <module>` |
-| find symbols matching regex | `find-symbol <pattern>` |
-| list all indexed modules | `list` |
-| what function X calls (outgoing) | `fn-deps module::function` |
-| what calls function X (incoming) | `fn-rdeps module::function` |
-| most-called functions globally | `fn-central --top 10` |
-| transitive callers of function X | `fn-blast module::function` |
+| reverse deps | `rdeps <module>` |
+| forward deps | `deps <module>` |
+| central modules | `central --top 10` |
+| coupling rank | `coupled --top 10` |
+| import path | `path <from> <to>` |
+| symbol source | `symbol <name>` |
+| module symbols | `symbols <module>` |
+| symbol search | `find-symbol <pattern>` |
+| list modules | `list` |
+| outgoing calls | `fn-deps module::function` |
+| incoming calls | `fn-rdeps module::function` |
+| most-called functions | `fn-central --top 10` |
+| transitive callers | `fn-blast module::function` |
 
 `scan-query` on PATH, locates index via git root — no setup. Missing index prints clear error.
 
@@ -85,16 +85,15 @@ NOT: `myapp.api myapp.middleware myapp.tests.test_auth`
 
 `symbols`: list as `type name (lines start–end)`, one per line.
 
-`find-symbol`: list matches as `module:qualified_name (type)`, one per line — never space-separated on a single line.
+`find-symbol`: list matches as `module:qualified_name (type)`, one per line.
 
 `list`: list all modules as `module (path)`, one per line.
 ```
 myapp.views (src/myapp/views.py)
 myapp.middleware (src/myapp/middleware.py)
 ```
-NOT: `myapp.views (src/myapp/views.py) myapp.middleware (src/myapp/middleware.py)`
 
-`fn-deps` / `fn-rdeps`: list as `module::function (resolution)`, one per line — never space-separated.
+`fn-deps` / `fn-rdeps`: list as `module::function (resolution)`, one per line.
 
 `fn-central`: list as `count  module::function`, one per line.
 

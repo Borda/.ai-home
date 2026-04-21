@@ -36,7 +36,7 @@ One JSON obj per line. Two-pass write by separate agents:
 | Field | Type | Description |
 | --- | --- | --- |
 | `feasible` | `bool` | `true` if the codebase supports the change with reasonable effort |
-| `blocker` | `str \| null` | Required if `feasible: false`; names the specific architectural blocker |
+| `blocker` | `str` | null` | Required if `feasible: false`; names the specific architectural blocker |
 | `codebase_mapping` | `str` | Files, classes, or functions that would need to change |
 
 **Minimal valid oracle entry (before feasibility pass):**

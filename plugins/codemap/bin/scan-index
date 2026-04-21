@@ -34,6 +34,7 @@ class Resolution(str, Enum):
     LOCAL = "local"
     SELF = "self"
     BUILTIN = "builtin"
+    STAR = "star"
     UNRESOLVED = "unresolved"
 
 
@@ -79,7 +80,7 @@ class Symbol:
         }
 
 
-SCAN_VERSION = "3"
+SCAN_VERSION = 3
 
 SKIP_DIRS = {
     ".git",
@@ -98,6 +99,8 @@ SKIP_DIRS = {
 }
 
 BUILTINS = frozenset(dir(builtins))
+
+_TEST_PATH_RE = re.compile(r"(^|/)tests?/|/test_[^/]+\.py$|/[^/]+_test\.py$|/conftest\.py$")
 
 
 def find_root() -> Path:
@@ -202,6 +205,9 @@ def _detect_src_root_from_init(root: Path) -> Path | None:
     """
     source_roots: set[Path] = set()
     for init in sorted(root.rglob("__init__.py")):
+        rel = init.relative_to(root)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
         pkg_dir = init.parent
         parent = pkg_dir.parent
         if not str(parent).startswith(str(root)):
@@ -374,6 +380,7 @@ def resolve_call(
     local_names: set[str],
     current_class: str,
     current_module: str,
+    star_imports: list[str] | None = None,
 ) -> CallEdge:
     """Resolve a call chain to a CallEdge with target and resolution kind.
 
@@ -401,7 +408,7 @@ def resolve_call(
         if "." in fqn:
             mod, sym = fqn.rsplit(".", 1)
             return CallEdge(target=f"{mod}::{sym}", resolution=Resolution.IMPORT)
-        return CallEdge(target=f"::{fqn}", resolution=Resolution.IMPORT)
+        return CallEdge(target=chain, resolution=Resolution.UNRESOLVED)
 
     # Also handle dotted chains where the first component is in name_map
     if first_component in name_map and first_component != chain:
@@ -418,14 +425,24 @@ def resolve_call(
         if "." in full_chain:
             mod, sym = full_chain.rsplit(".", 1)
             return CallEdge(target=f"{mod}::{sym}", resolution=Resolution.IMPORT)
-        return CallEdge(target=f"::{full_chain}", resolution=Resolution.IMPORT)
+        return CallEdge(target=chain, resolution=Resolution.UNRESOLVED)
 
     # 3. Local names (functions/classes defined in the same file)
     if first_component in local_names:
         return CallEdge(target=f"{current_module}::{chain}", resolution=Resolution.LOCAL)
 
+    # 3.5 Star import — name may come from a star-imported module
+    if star_imports:
+        return CallEdge(target=chain, resolution=Resolution.STAR)
+
     # 4. Self / class reference
     if chain.startswith("self."):
+        method_attr = chain[5:]  # strip "self."
+        if current_class:
+            return CallEdge(
+                target=f"{current_module}::{current_class}.{method_attr}",
+                resolution=Resolution.SELF,
+            )
         return CallEdge(target=chain, resolution=Resolution.SELF)
     if current_class and chain.startswith(f"{current_class}."):
         return CallEdge(target=chain, resolution=Resolution.SELF)
@@ -448,6 +465,7 @@ def _walk_calls(
     local_names: set[str],
     current_class: str,
     module_name: str,
+    star_imports: list[str] | None = None,
 ) -> list[CallEdge]:
     """Walk an AST node and return all non-builtin call edges.
 
@@ -458,6 +476,7 @@ def _walk_calls(
         local_names: top-level names defined in the current file.
         current_class: enclosing class name for self-resolution, or empty string.
         module_name: dotted module name of the file being analysed.
+        star_imports: modules imported via ``from X import *``, or None.
     """
     calls: list[CallEdge] = []
     for child in ast.walk(ast_node):
@@ -466,7 +485,7 @@ def _walk_calls(
         chain = resolve_call_chain(child.func)
         if not chain:
             continue
-        edge = resolve_call(chain, name_map, module_map, local_names, current_class, module_name)
+        edge = resolve_call(chain, name_map, module_map, local_names, current_class, module_name, star_imports)
         if edge.resolution != Resolution.BUILTIN:
             calls.append(edge)
     return calls
@@ -478,6 +497,7 @@ def _extract_class_symbol(
     module_map: dict[str, str],
     local_names: set[str],
     module_name: str,
+    star_imports: list[str] | None = None,
 ) -> list[Symbol]:
     """Return the class Symbol plus one Symbol per method from a ClassDef node.
 
@@ -487,13 +507,18 @@ def _extract_class_symbol(
         module_map: first-component -> full module path from build_import_scope.
         local_names: top-level names defined in the current file.
         module_name: dotted module name of the file being analysed.
+        star_imports: modules imported via ``from X import *``, or None.
     """
     class_calls: list[CallEdge] = []
     for decorator in node.decorator_list:
-        class_calls.extend(_walk_calls(decorator, name_map, module_map, local_names, node.name, module_name))
+        class_calls.extend(
+            _walk_calls(decorator, name_map, module_map, local_names, node.name, module_name, star_imports)
+        )
     for child in node.body:
         if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            class_calls.extend(_walk_calls(child, name_map, module_map, local_names, node.name, module_name))
+            class_calls.extend(
+                _walk_calls(child, name_map, module_map, local_names, node.name, module_name, star_imports)
+            )
 
     symbols: list[Symbol] = [
         Symbol(
@@ -508,7 +533,7 @@ def _extract_class_symbol(
     for child in node.body:
         if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        method_calls = _walk_calls(child, name_map, module_map, local_names, node.name, module_name)
+        method_calls = _walk_calls(child, name_map, module_map, local_names, node.name, module_name, star_imports)
         symbols.append(
             Symbol(
                 name=child.name,
@@ -527,6 +552,7 @@ def extract_symbols(
     module_name: str = "",
     name_map: dict[str, str] | None = None,
     module_map: dict[str, str] | None = None,
+    star_imports: list[str] | None = None,
 ) -> list[Symbol]:
     """Extract top-level classes, functions, and class methods with line ranges and call edges.
 
@@ -535,6 +561,7 @@ def extract_symbols(
         module_name: dotted module name used for local-resolution targets.
         name_map: pre-built import name map; computed fresh if omitted.
         module_map: pre-built module map; computed fresh if omitted.
+        star_imports: modules imported via ``from X import *``, or None.
     """
     nm = name_map or {}
     mm = module_map or {}
@@ -545,10 +572,10 @@ def extract_symbols(
     symbols: list[Symbol] = []
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
-            symbols.extend(_extract_class_symbol(node, nm, mm, local_names, module_name))
+            symbols.extend(_extract_class_symbol(node, nm, mm, local_names, module_name, star_imports))
             continue
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            func_calls = _walk_calls(node, nm, mm, local_names, "", module_name)
+            func_calls = _walk_calls(node, nm, mm, local_names, "", module_name, star_imports)
             symbols.append(
                 Symbol(
                     name=node.name,
@@ -616,7 +643,7 @@ def _parse_file(filepath: Path, root: Path, src_root: Path) -> dict:
             nm, mm, star_imports = build_import_scope(tree, name)
         except Exception:
             nm, mm, star_imports = {}, {}, []
-        symbols = extract_symbols(tree, name, nm, mm)
+        symbols = extract_symbols(tree, name, nm, mm, star_imports or None)
         return {
             "name": name,
             "path": str(rel_path),
@@ -625,6 +652,7 @@ def _parse_file(filepath: Path, root: Path, src_root: Path) -> dict:
             "direct_imports": imports,
             "symbols": [s.as_dict() for s in symbols],
             "is_entry_point": has_main_guard(source),
+            "is_test": bool(_TEST_PATH_RE.search(str(rel_path))),
             "has_star_imports": bool(star_imports),
             "status": "ok",
         }
@@ -641,15 +669,10 @@ def _recompute_metrics(modules: list[dict]) -> None:
         modules: list of module entry dicts (mutated in-place).
     """
     rdep_counts: dict[str, int] = {}
+    rcall_counts: dict[str, int] = {}
     for m in modules:
         for imp in m.get("direct_imports", []):
             rdep_counts[imp] = rdep_counts.get(imp, 0) + 1
-    for m in modules:
-        if m.get("status") == "ok":
-            m["rdep_count"] = rdep_counts.get(m["name"], 0)
-
-    rcall_counts: dict[str, int] = {}
-    for m in modules:
         for sym in m.get("symbols", []):
             for edge in sym.get("calls", []):
                 if edge["resolution"] != "import":
@@ -658,7 +681,9 @@ def _recompute_metrics(modules: list[dict]) -> None:
                 rcall_counts[target_module] = rcall_counts.get(target_module, 0) + 1
     for m in modules:
         if m.get("status") == "ok":
+            m["rdep_count"] = rdep_counts.get(m["name"], 0)
             m["rcall_count"] = rcall_counts.get(m["name"], 0)
+            m["dep_count"] = len(m.get("direct_imports", []))
 
 
 def scan(root: Path) -> dict:
@@ -675,6 +700,18 @@ def scan(root: Path) -> dict:
         if any(part in SKIP_DIRS for part in rel.parts):
             continue
         modules.append(_parse_file(filepath, root, src_root))
+
+    seen_names: dict[str, str] = {}
+    for m in modules:
+        name = m.get("name", "")
+        if name in seen_names:
+            print(
+                f"[codemap] \u26a0 name collision: '{name}' found at both "
+                f"'{seen_names[name]}' and '{m['path']}' \u2014 second entry kept",
+                file=sys.stderr,
+            )
+        else:
+            seen_names[name] = m.get("path", "")
 
     _recompute_metrics(modules)
 
@@ -747,7 +784,7 @@ def _build_index(args: argparse.Namespace, root: Path, out_path: Path) -> dict:
     if args.incremental and out_path.exists():
         with out_path.open() as f:
             old_index = json.load(f)
-        if old_index.get("scan_version", "2") >= "3" and old_index.get("file_shas"):
+        if int(old_index.get("scan_version", 2)) >= 3 and old_index.get("file_shas"):
             print(f"[codemap] Incremental scan {root} ...", file=sys.stderr)
             return incremental_scan(root, old_index)
         print("[codemap] v2 index found — falling back to full scan ...", file=sys.stderr)
@@ -780,8 +817,10 @@ def main() -> None:
         ok = sum(1 for m in index["modules"] if m.get("status") == "ok")
         degraded = sum(1 for m in index["modules"] if m.get("status") == "degraded")
 
-        with out_path.open("w") as f:
+        tmp_path = out_path.with_suffix(".json.tmp")
+        with tmp_path.open("w") as f:
             json.dump(index, f, indent=2)
+        tmp_path.replace(out_path)
 
         print(f"[codemap] \u2713 {out_path}", file=sys.stderr)
         print(f"[codemap]   {ok} modules indexed, {degraded} degraded", file=sys.stderr)

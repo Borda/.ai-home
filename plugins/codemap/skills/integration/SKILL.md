@@ -4,7 +4,7 @@ description: Manage codemap integration — 'check' audits installation health (
 argument-hint: check | init [--approve]
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
-model: opus
+model: sonnet
 ---
 
 <objective>
@@ -33,7 +33,7 @@ NOT for: building or rebuilding index (use `/codemap:scan`); running structural 
 Parse `$ARGUMENTS` (case-insensitive):
 
 - Starts with `check` or empty → run **check mode** (Steps C1–C5)
-- Starts with `init` → run **init mode** (Steps I0–I6)
+- Starts with `init` → run **init mode** (Steps I0–I6 (I5 has sub-steps I5a, I5b))
 - Anything else → print: `Usage: /codemap:integration check | init [--approve]` and stop.
 
 ______________________________________________________________________
@@ -127,6 +127,7 @@ rm -f /tmp/cmc_err
 
 ```bash
 # timeout: 20000
+[ -z "$CLAUDE_PLUGIN_ROOT" ] && { printf "${RED}✗${NC} CLAUDE_PLUGIN_ROOT unset — cannot audit injection\n"; return 1; }
 CACHE=$(dirname "$(dirname "$CLAUDE_PLUGIN_ROOT")")
 printf "\n--- Skill injection audit (cache: %s) ---\n" "$CACHE"
 FILES=$(find "$CACHE" -name "SKILL.md" -exec grep -l "command -v scan-query" {} \; 2>/dev/null | sort)
@@ -153,7 +154,7 @@ ______________________________________________________________________
 
 ### I0 — Detect --approve
 
-Parse `$ARGUMENTS` for `--approve` (case-insensitive). If found, set `APPROVE_ALL=true` — skip every `AskUserQuestion` below and auto-apply ★ recommended option. Print `[--approve] applying recommended options` in place of each question.
+If `--approve` is present in `$ARGUMENTS` (case-insensitive), skip all `AskUserQuestion` calls in this workflow and auto-select the ★ option for every prompt. Print `[--approve] applying recommended options` in place of each question. This is a reasoning instruction — do not set a bash variable.
 
 ### I1 — Verify or build the index
 
@@ -166,7 +167,7 @@ INDEX=".cache/scan/${PROJ}.json"
 
 Index exists: report and proceed. Index missing:
 
-Use `AskUserQuestion` to present (unless `APPROVE_ALL=true`, then auto-select a):
+Use `AskUserQuestion` to present (if `--approve` was detected in I0: auto-select a; otherwise ask):
 
 ```
 No codemap index found for project: $PROJ
@@ -224,15 +225,13 @@ Codemap injection candidates for: $PROJ
 
   Status  Skill/Agent          Tier    Notes
   ──────────────────────────────────────────────────────────────────
-  ✓       develop:fix          HIGH    spawns sw-engineer — already integrated
-  ✓       develop:feature      HIGH    spawns sw-engineer — already integrated
   a)      develop:refactor     MEDIUM  restructures code; reads module deps for target
   b)      oss:ci-guardian      MEDIUM  diagnoses failures; reads code structure for context
   —       foundry:doc-scribe   LOW     writes docstrings; skip
   —       oss:release          SKIP    release artifact; no code traversal
 ```
 
-Use `AskUserQuestion` to ask (unless `APPROVE_ALL=true`, then auto-select all HIGH+MEDIUM):
+Use `AskUserQuestion` to ask (if `--approve` was detected in I0: auto-select all HIGH+MEDIUM; otherwise ask):
 
 ```
 Which skills/agents should I add codemap injection to?
@@ -248,11 +247,13 @@ For each selected file, determine insertion point and content:
 
 ```bash
 # Structural context (codemap — Python projects only, silent skip if absent)
+# TARGET_MODULE — derive from $ARGUMENTS (e.g. strip leading ./ and .py suffix from file path argument)
 PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
-    scan-query central --top 5  # timeout: 5000
+    scan-query central --top 3  # timeout: 5000
 fi
 # If results returned: prepend a ## Structural Context (codemap) block to the agent spawn prompt.
+# Also add: "For targeted analysis run: scan-query rdeps <module> or scan-query fn-blast module::function"
 ```
 
 For skills where target module can be derived from `$ARGUMENTS` (refactor, fix with module path, review), also add after `central`:
@@ -272,7 +273,7 @@ Report each edit: `✓ injected: <plugin>/<skill-or-agent> at line N`
 
 ### I5a — Offer git post-commit hook
 
-Use `AskUserQuestion` to present option (unless `APPROVE_ALL=true`, then auto-select a):
+Use `AskUserQuestion` to present option (if `--approve` was detected in I0: auto-select a; otherwise ask):
 
 ```
 Install post-commit git hook for automatic incremental rebuild?

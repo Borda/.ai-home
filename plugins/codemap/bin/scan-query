@@ -56,6 +56,34 @@ class Symbol(TypedDict):
 
 
 # ---------------------------------------------------------------------------
+# Cached git state (populated once in main(), reused across commands)
+# ---------------------------------------------------------------------------
+
+_git_root_cache: Path | None = None
+_git_root_resolved: bool = False
+_current_sha_cache: str | None = None
+_current_sha_resolved: bool = False
+
+
+def _get_git_root_cached() -> Path | None:
+    """Return cached git root, resolving on first call."""
+    global _git_root_cache, _git_root_resolved
+    if not _git_root_resolved:
+        _git_root_cache = _git_root()
+        _git_root_resolved = True
+    return _git_root_cache
+
+
+def _get_current_sha_cached() -> str | None:
+    """Return cached HEAD SHA, resolving on first call."""
+    global _current_sha_cache, _current_sha_resolved
+    if not _current_sha_resolved:
+        _current_sha_cache = _current_git_sha()
+        _current_sha_resolved = True
+    return _current_sha_cache
+
+
+# ---------------------------------------------------------------------------
 # Index location
 # ---------------------------------------------------------------------------
 
@@ -79,7 +107,7 @@ def find_index() -> Path:
     3. Fallback — CWD convention; produces a clear error if missing
     """
     # Strategy 1: git root owns the index
-    git_root = _git_root()
+    git_root = _get_git_root_cached()
     if git_root:
         candidate = git_root / ".cache" / "scan" / f"{git_root.name}.json"
         if candidate.exists():
@@ -218,7 +246,7 @@ def build_module_map(index: dict) -> dict[str, dict]:
     return {m["name"]: m for m in index.get("modules", [])}
 
 
-def build_symbol_map(index: dict) -> dict[str, tuple[dict, dict]]:
+def build_symbol_map(index: dict, exclude_tests: bool = False) -> dict[str, tuple[dict, dict]]:
     """Flat lookup: ``full_qname -> (module_entry, symbol_dict)``.
 
     ``full_qname`` is ``module_name::symbol_qualified_name``.
@@ -231,13 +259,15 @@ def build_symbol_map(index: dict) -> dict[str, tuple[dict, dict]]:
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
             continue
+        if exclude_tests and m.get("is_test"):
+            continue
         for sym in m.get("symbols", []):
             qname = f"{m['name']}::{sym['qualified_name']}"
             result[qname] = (m, sym)
     return result
 
 
-def build_reverse_call_graph(index: dict) -> dict[str, list[str]]:
+def build_reverse_call_graph(index: dict, exclude_tests: bool = False) -> dict[str, list[str]]:
     """Reverse call map: ``callee_full_qname -> [caller_full_qname, ...]``.
 
     Only edges with ``resolution`` of ``"import"`` or ``"local"`` are
@@ -250,10 +280,12 @@ def build_reverse_call_graph(index: dict) -> dict[str, list[str]]:
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
             continue
+        if exclude_tests and m.get("is_test"):
+            continue
         for sym in m.get("symbols", []):
             caller_qname = f"{m['name']}::{sym['qualified_name']}"
             for edge in sym.get("calls", []):
-                if edge.get("resolution") in ("import", "local"):
+                if edge.get("resolution") in ("import", "local", "self"):
                     target = edge["target"]
                     rev.setdefault(target, []).append(caller_qname)
     return rev
@@ -275,7 +307,7 @@ def _require_call_graph(index: dict) -> None:
     Args:
         index: parsed codemap index dict to check for v3 call graph support.
     """
-    if index.get("scan_version", "2") < "3":
+    if int(index.get("scan_version", 2)) < 3:
         _exit_error("Index is v2 — call graph not available. Re-run /codemap:scan to upgrade.")
 
 
@@ -301,10 +333,11 @@ def _coverage(index: dict) -> dict:
     total = sum(1 for m in modules if m.get("status") == "ok")
     degraded = sum(1 for m in modules if m.get("status") == "degraded")
     total_syms = sum(len(m.get("symbols", [])) for m in modules if m.get("status") == "ok")
-    has_call_graph = index.get("scan_version", "2") >= "3"
+    star_modules = sum(1 for m in modules if m.get("status") == "ok" and m.get("has_star_imports"))
+    has_call_graph = int(index.get("scan_version", 2)) >= 3
 
     scan_sha: str | None = index.get("git_sha")
-    current_sha = _current_git_sha()
+    current_sha = _get_current_sha_cached()
 
     if scan_sha and current_sha:
         stale = scan_sha != current_sha
@@ -330,6 +363,7 @@ def _coverage(index: dict) -> dict:
         "total_modules": total,
         "total_symbols": total_syms,
         "degraded": degraded,
+        "star_import_modules": star_modules,
         "has_call_graph": has_call_graph,
         "exhaustive": not stale,
         "stale": stale,
@@ -365,18 +399,22 @@ def cmd_deps(index: dict, module: str) -> None:
     )
 
 
-def cmd_rdeps(index: dict, module: str) -> None:
+def cmd_rdeps(index: dict, module: str, exclude_tests: bool = False) -> None:
     """Print all modules that import a given module as JSON.
 
     Args:
         index: parsed codemap index dict.
         module: dotted module name whose reverse dependencies are queried.
+        exclude_tests: if True, exclude test modules from results.
     """
-    result = sorted(m["name"] for m in index.get("modules", []) if module in m.get("direct_imports", []))
+    modules_list = index.get("modules", [])
+    if exclude_tests:
+        modules_list = [m for m in modules_list if not m.get("is_test")]
+    result = sorted(m["name"] for m in modules_list if module in m.get("direct_imports", []))
     print(json.dumps({"module": module, "imported_by": result, "index": _coverage(index)}))
 
 
-def cmd_central(index: dict, top: int) -> None:
+def cmd_central(index: dict, top: int, exclude_tests: bool = False) -> None:
     """Print the top N most-imported modules ranked by reverse-dependency count.
 
     Args:
@@ -384,6 +422,8 @@ def cmd_central(index: dict, top: int) -> None:
         top: number of top-ranked modules to return.
     """
     candidates = [m for m in index.get("modules", []) if m.get("status") != "degraded"]
+    if exclude_tests:
+        candidates = [m for m in candidates if not m.get("is_test")]
     ranked = sorted(candidates, key=lambda m: m.get("rdep_count", 0), reverse=True)[:top]
     print(
         json.dumps(
@@ -397,20 +437,33 @@ def cmd_central(index: dict, top: int) -> None:
     )
 
 
-def cmd_coupled(index: dict, top: int) -> None:
-    """Print the top N most-coupled modules ranked by direct import count.
+def cmd_coupled(index: dict, top: int, exclude_tests: bool = False) -> None:
+    """Print the top N most-coupled modules ranked by internal import count.
 
     Args:
         index: parsed codemap index dict.
         top: number of top-ranked modules to return.
+        exclude_tests: if True, exclude test modules from results.
     """
     candidates = [m for m in index.get("modules", []) if m.get("status") != "degraded"]
-    ranked = sorted(candidates, key=lambda m: m.get("dep_count", 0), reverse=True)[:top]
+    if exclude_tests:
+        candidates = [m for m in candidates if not m.get("is_test")]
+    all_module_names = {m["name"] for m in index.get("modules", []) if m.get("status") == "ok"}
+    for m in candidates:
+        internal = [i for i in m.get("direct_imports", []) if i in all_module_names]
+        m["_internal_dep_count"] = len(internal)
+    ranked = sorted(candidates, key=lambda m: m.get("_internal_dep_count", 0), reverse=True)[:top]
     print(
         json.dumps(
             {
                 "coupled": [
-                    {"name": m["name"], "dep_count": m.get("dep_count", 0), "path": m.get("path", "")} for m in ranked
+                    {
+                        "name": m["name"],
+                        "dep_count": m.get("dep_count", 0),
+                        "internal_dep_count": m.get("_internal_dep_count", 0),
+                        "path": m.get("path", ""),
+                    }
+                    for m in ranked
                 ],
                 "index": _coverage(index),
             }
@@ -472,9 +525,7 @@ def _read_lines(index: dict, module_entry: dict, start_line: int, end_line: int)
         start_line: first line to read (1-based, inclusive).
         end_line: last line to read (1-based, inclusive).
     """
-    git_root = _git_root()
-    if git_root is None:
-        git_root = Path.cwd()
+    git_root = _get_git_root_cached() or Path.cwd()
     file_path = git_root / module_entry["path"]
     if not file_path.exists():
         return ""
@@ -482,16 +533,19 @@ def _read_lines(index: dict, module_entry: dict, start_line: int, end_line: int)
     return "\n".join(lines[start_line - 1 : end_line])
 
 
-def cmd_symbol(index: dict, name: str) -> None:
+def cmd_symbol(index: dict, name: str, limit: int = 20, exclude_tests: bool = False) -> None:
     """Find a symbol by name (exact match, then qualified_name substring) and return its source.
 
     Args:
         index: parsed codemap index dict.
         name: symbol name or qualified name to search for.
+        limit: max results to return (0 = unlimited).
     """
     matches: list[tuple[dict, Symbol]] = []
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
+            continue
+        if exclude_tests and m.get("is_test"):
             continue
         for sym in m.get("symbols", []):
             if sym["name"] == name or sym["qualified_name"] == name:
@@ -510,21 +564,38 @@ def cmd_symbol(index: dict, name: str) -> None:
     if not matches:
         _exit_error(f"Symbol '{name}' not found. Try /codemap:query find-symbol <pattern> to search.")
 
-    results = []
+    if limit > 0:
+        matches = matches[:limit]
+
+    # Group by file path to read each file at most once
+    from collections import defaultdict
+
+    by_path: dict[str, list[tuple[dict, dict]]] = defaultdict(list)
     for m, sym in matches:
-        source = _read_lines(index, m, sym["start_line"], sym["end_line"])
-        results.append(
-            {
-                "name": sym["name"],
-                "qualified_name": sym["qualified_name"],
-                "type": sym["type"],
-                "module": m["name"],
-                "path": m.get("path", ""),
-                "start_line": sym["start_line"],
-                "end_line": sym["end_line"],
-                "source": source,
-            }
-        )
+        by_path[m.get("path", "")].append((m, sym))
+
+    results = []
+    git_root = _get_git_root_cached() or Path.cwd()
+    for rel_path, group in by_path.items():
+        lines: list[str] = []
+        if rel_path:
+            file_path = git_root / rel_path
+            if file_path.exists():
+                lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        for m, sym in group:
+            source = "\n".join(lines[sym["start_line"] - 1 : sym["end_line"]]) if lines else ""
+            results.append(
+                {
+                    "name": sym["name"],
+                    "qualified_name": sym["qualified_name"],
+                    "type": sym["type"],
+                    "module": m["name"],
+                    "path": m.get("path", ""),
+                    "start_line": sym["start_line"],
+                    "end_line": sym["end_line"],
+                    "source": source,
+                }
+            )
     print(json.dumps({"symbols": results, "count": len(results), "index": _coverage(index)}))
 
 
@@ -562,12 +633,13 @@ def cmd_symbols(index: dict, module: str) -> None:
     )
 
 
-def cmd_find_symbol(index: dict, pattern: str) -> None:
+def cmd_find_symbol(index: dict, pattern: str, limit: int = 20, exclude_tests: bool = False) -> None:
     """Regex search across all symbol qualified_names in the index.
 
     Args:
         index: parsed codemap index dict.
         pattern: Python regex pattern matched against each symbol's qualified name.
+        limit: max results to return (0 = unlimited).
     """
     try:
         rx = re.compile(pattern, re.IGNORECASE)
@@ -577,6 +649,8 @@ def cmd_find_symbol(index: dict, pattern: str) -> None:
     results = []
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
+            continue
+        if exclude_tests and m.get("is_test"):
             continue
         for sym in m.get("symbols", []):
             if rx.search(sym["qualified_name"]):
@@ -591,6 +665,8 @@ def cmd_find_symbol(index: dict, pattern: str) -> None:
                         "end_line": sym["end_line"],
                     }
                 )
+    if limit > 0:
+        results = results[:limit]
     print(json.dumps({"pattern": pattern, "matches": results, "count": len(results), "index": _coverage(index)}))
 
 
@@ -619,7 +695,7 @@ def cmd_fn_deps(index: dict, qname: str) -> None:
     print(json.dumps({"qname": qname, "calls": calls, "count": len(calls), "index": _coverage(index)}))
 
 
-def cmd_fn_rdeps(index: dict, qname: str) -> None:
+def cmd_fn_rdeps(index: dict, qname: str, exclude_tests: bool = False) -> None:
     """What calls function *qname*? Lists reverse call edges.
 
     Args:
@@ -642,10 +718,12 @@ def cmd_fn_rdeps(index: dict, qname: str) -> None:
                 "path": m_entry.get("path", ""),
             }
         )
+    if exclude_tests:
+        callers = [c for c in callers if not (sym_map.get(c["caller"]) or ({},))[0].get("is_test")]
     print(json.dumps({"qname": qname, "called_by": callers, "count": len(callers), "index": _coverage(index)}))
 
 
-def cmd_fn_central(index: dict, top: int) -> None:
+def cmd_fn_central(index: dict, top: int, exclude_tests: bool = False) -> None:
     """Most-called functions globally (by incoming call-edge count).
 
     Args:
@@ -658,6 +736,8 @@ def cmd_fn_central(index: dict, top: int) -> None:
     counts: dict[str, int] = {}
     for m in index.get("modules", []):
         if m.get("status") == "degraded":
+            continue
+        if exclude_tests and m.get("is_test"):
             continue
         for sym in m.get("symbols", []):
             for edge in sym.get("calls", []):
@@ -745,12 +825,19 @@ def main() -> None:
 
     p_rdeps = sub.add_parser("rdeps", help="What imports a module?")
     p_rdeps.add_argument("module")
+    p_rdeps.add_argument("--exclude-tests", action="store_true", default=False, help="Exclude test files from results")
 
     p_central = sub.add_parser("central", help="Most-imported modules (highest blast radius).")
     p_central.add_argument("--top", type=int, default=10, metavar="N")
+    p_central.add_argument(
+        "--exclude-tests", action="store_true", default=False, help="Exclude test files from results"
+    )
 
     p_coupled = sub.add_parser("coupled", help="Modules with the most imports (highest coupling).")
     p_coupled.add_argument("--top", type=int, default=10, metavar="N")
+    p_coupled.add_argument(
+        "--exclude-tests", action="store_true", default=False, help="Exclude test files from results"
+    )
 
     p_path = sub.add_parser("path", help="Shortest import path between two modules.")
     p_path.add_argument("frm", metavar="from")
@@ -760,12 +847,20 @@ def main() -> None:
 
     p_symbol = sub.add_parser("symbol", help="Get source of a symbol by name (function/class/method).")
     p_symbol.add_argument("name", help="Symbol name, e.g. 'authenticate' or 'MyClass.method'")
+    p_symbol.add_argument(
+        "--limit", type=int, default=20, metavar="N", help="Max results (default 20). Use 0 for unlimited."
+    )
+    p_symbol.add_argument("--exclude-tests", action="store_true", default=False, help="Exclude test files from results")
 
     p_symbols = sub.add_parser("symbols", help="List all symbols in a module.")
     p_symbols.add_argument("module", help="Dotted module name, e.g. 'mypackage.auth'")
 
     p_find = sub.add_parser("find-symbol", help="Regex search across all symbol names.")
     p_find.add_argument("pattern", help="Python regex pattern, e.g. 'auth' or '^My.*Handler$'")
+    p_find.add_argument(
+        "--limit", type=int, default=20, metavar="N", help="Max results (default 20). Use 0 for unlimited."
+    )
+    p_find.add_argument("--exclude-tests", action="store_true", default=False, help="Exclude test files from results")
 
     # Function-level commands (require v3 index with call graph)
     p_fn_deps = sub.add_parser("fn-deps", help="What does a function call? (requires v3 index)")
@@ -773,9 +868,15 @@ def main() -> None:
 
     p_fn_rdeps = sub.add_parser("fn-rdeps", help="What calls a function? (requires v3 index)")
     p_fn_rdeps.add_argument("qname", help="Full qname: module::symbol")
+    p_fn_rdeps.add_argument(
+        "--exclude-tests", action="store_true", default=False, help="Exclude test files from results"
+    )
 
     p_fn_central = sub.add_parser("fn-central", help="Most-called functions globally (requires v3 index)")
     p_fn_central.add_argument("--top", type=int, default=10, metavar="N")
+    p_fn_central.add_argument(
+        "--exclude-tests", action="store_true", default=False, help="Exclude test files from results"
+    )
 
     p_fn_blast = sub.add_parser("fn-blast", help="Transitive reverse-call blast radius (requires v3 index)")
     p_fn_blast.add_argument("qname", help="Full qname: module::symbol")
@@ -791,27 +892,27 @@ def main() -> None:
     if args.command == "deps":
         cmd_deps(index, args.module)
     elif args.command == "rdeps":
-        cmd_rdeps(index, args.module)
+        cmd_rdeps(index, args.module, exclude_tests=args.exclude_tests)
     elif args.command == "central":
-        cmd_central(index, args.top)
+        cmd_central(index, args.top, exclude_tests=args.exclude_tests)
     elif args.command == "coupled":
-        cmd_coupled(index, args.top)
+        cmd_coupled(index, args.top, exclude_tests=args.exclude_tests)
     elif args.command == "path":
         cmd_path(index, args.frm, args.to)
     elif args.command == "list":
         cmd_list(index)
     elif args.command == "symbol":
-        cmd_symbol(index, args.name)
+        cmd_symbol(index, args.name, args.limit, exclude_tests=args.exclude_tests)
     elif args.command == "symbols":
         cmd_symbols(index, args.module)
     elif args.command == "find-symbol":
-        cmd_find_symbol(index, args.pattern)
+        cmd_find_symbol(index, args.pattern, args.limit, exclude_tests=args.exclude_tests)
     elif args.command == "fn-deps":
         cmd_fn_deps(index, args.qname)
     elif args.command == "fn-rdeps":
-        cmd_fn_rdeps(index, args.qname)
+        cmd_fn_rdeps(index, args.qname, exclude_tests=args.exclude_tests)
     elif args.command == "fn-central":
-        cmd_fn_central(index, args.top)
+        cmd_fn_central(index, args.top, exclude_tests=args.exclude_tests)
     elif args.command == "fn-blast":
         cmd_fn_blast(index, args.qname)
 

@@ -23,14 +23,15 @@ NOT for: querying existing index (use `/codemap:query`).
 ## Step 1: Run the scanner
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/scan-index  # add --root <path> if provided
 # timeout: 360000
+${CLAUDE_PLUGIN_ROOT}/bin/scan-index  # add --root <path> if provided
 ```
 
 If `--incremental` passed: re-parse only files changed since last scan (git SHA comparison), then recompute global metrics. Falls back to full scan when no v3 index exists.
 
 ```bash
 # timeout: 60000
+# scan-index handles v2→v3 fallback internally — exits 0 on either path
 ${CLAUDE_PLUGIN_ROOT}/bin/scan-index --incremental
 ```
 
@@ -46,14 +47,25 @@ Scanner writes to `.cache/scan/<project>.json` and prints summary line:
 After scan completes, read index and report compact summary:
 
 ```bash
-# Note: $(...) inside the double-quoted python3 -c "..." string is shell-expanded before Python sees it.
-# basename/git rev-parse resolve the project name at call time — intentional shell substitution.
+# scan-query has no summary mode — inline script required to extract project stats from raw index JSON
 python3 -c "
-import json, sys
-with open('.cache/scan/\$(basename \$(git rev-parse --show-toplevel)).json') as f:
-    d = json.load(f)
+import json, sys, subprocess, os
+try:
+    proj = os.path.basename(subprocess.check_output(['git','rev-parse','--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip())
+except Exception:
+    proj = os.path.basename(os.getcwd())
+index_path = f'.cache/scan/{proj}.json'
+try:
+    with open(index_path) as f:
+        d = json.load(f)
+except FileNotFoundError:
+    print(f'Index not found: {index_path}')
+    sys.exit(0)
 ok = [m for m in d['modules'] if m.get('status') == 'ok']
 deg = [m for m in d['modules'] if m.get('status') == 'degraded']
+if not ok:
+    print('No modules indexed.')
+    sys.exit(0)
 top = sorted(ok, key=lambda m: m.get('rdep_count', 0), reverse=True)[:5]
 total_syms = sum(len(m.get('symbols', [])) for m in ok)
 total_calls = sum(len(s.get('calls', [])) for m in ok for s in m.get('symbols', []))
@@ -77,14 +89,7 @@ Index ready. Query it with:
   /codemap:query deps <module>
   /codemap:query rdeps <module>
   /codemap:query coupled --top 10
-  /codemap:query symbol <function_name>
-  /codemap:query find-symbol <pattern>
-
-  # Call graph (v3 index):
-  /codemap:query fn-deps <module::function>
-  /codemap:query fn-rdeps <module::function>
-  /codemap:query fn-central --top 10
-  /codemap:query fn-blast <module::function>
+  # see /codemap:query for full list of subcommands
 ```
 
 </workflow>
