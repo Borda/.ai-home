@@ -1,6 +1,6 @@
 # 🔬 research — Claude Code Plugin
 
-ML research plugin: two specialist agents and five slash-command skills for literature search, experiment design, methodology review, metric-driven optimization loops, and automated research sweeps — built on a profile-first, judge-gated pipeline that spends compute only on experiments worth running.
+ML research plugin: two specialist agents and eight slash-command skills for literature search, experiment design, methodology review, metric-driven optimization loops, and automated research sweeps — built on a profile-first, judge-gated pipeline that spends compute only on experiments worth running.
 
 > [!NOTE]
 >
@@ -49,7 +49,7 @@ claude plugin install research@borda-ai-rig
 
 > [!NOTE]
 >
-> Skills are always invoked with the `research:` prefix: `/research:topic`, `/research:plan`, `/research:judge`, `/research:run`, `/research:sweep`.
+> Skills are always invoked with the `research:` prefix: `/research:topic`, `/research:plan`, `/research:judge`, `/research:run`, `/research:sweep`, `/research:verify`, `/research:fortify`, `/research:retro`.
 
 ## 🔁 How to Use
 
@@ -95,7 +95,6 @@ claude plugin install research@borda-ai-rig
 
 ```bash
 /research:sweep "increase test coverage to 90%"           # plan → judge → run, no prompts
-/research:sweep program.md                                # sweep from existing config
 ```
 
 ### Standard pipeline
@@ -105,6 +104,17 @@ claude plugin install research@borda-ai-rig
 /research:plan "reduce training step time by 20%"         # 2. configure experiment
 /research:judge                                           # 3. validate methodology
 /research:run program.md                                  # 4. run loop with auto-rollback
+/research:retro                                           # 5. analyze results + next hypotheses
+```
+
+### Post-run analysis and hardening
+
+```bash
+/research:verify paper.pdf                                # audit paper-vs-code fidelity
+/research:verify https://arxiv.org/abs/2406.12345        # same from arXiv URL
+/research:fortify                                         # run ablations, rank components
+/research:fortify --venue NeurIPS                         # ablations + reviewer Q&A
+/research:retro --compare <run-id-2>                      # compare two runs statistically
 ```
 
 ### Direct agent dispatch
@@ -127,15 +137,18 @@ use data-steward to verify train/val split integrity and check for data leakage
 
 **data-steward** owns data lifecycle: fetching datasets from external sources, verifying completeness from paginated APIs, versioning with DVC, auditing train/val/test splits, detecting data leakage, and configuring DataLoaders. It does not design experiments — it ensures the data feeding them is correct.
 
-### Five Research Modes
+### Eight Research Modes
 
-| Mode      | What It Does                                                                                                                                      |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **topic** | SOTA literature search + codebase-mapped implementation plan; uses web-explorer to fetch current papers, scientist to analyze and design          |
-| **plan**  | Interactive config wizard → `program.md`; or `plan <file.py>` for profile-first bottleneck discovery from an existing script                      |
-| **judge** | Methodology review: hypothesis clarity, measurement validity, controls, scope fit, strategy appropriateness → APPROVED / NEEDS-REVISION / BLOCKED |
-| **run**   | Metric-driven iteration loop with auto-rollback on regression; reads `program.md`; supports `--team` (parallel) and `--colab` (GPU via Colab MCP) |
-| **sweep** | Non-interactive pipeline: auto-plan → judge gate → run; safe for overnight runs                                                                   |
+| Mode        | What It Does                                                                                                                                                   |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **topic**   | SOTA literature search + codebase-mapped implementation plan; uses web-explorer to fetch current papers, scientist to analyze and design                       |
+| **plan**    | Interactive config wizard → `program.md`; or `plan <file.py>` for profile-first bottleneck discovery from an existing script                                   |
+| **judge**   | Methodology review: hypothesis clarity, measurement validity, controls, scope fit, strategy appropriateness → APPROVED / NEEDS-REVISION / BLOCKED              |
+| **run**     | Metric-driven iteration loop with auto-rollback on regression; reads `program.md`; supports `--team` (parallel) and `--colab` (GPU via Colab MCP)              |
+| **sweep**   | Non-interactive pipeline: auto-plan → judge gate → run; safe for overnight runs                                                                                |
+| **verify**  | Paper-vs-code consistency audit across five dimensions (formula, hyperparameter, eval protocol, notation, citation chain); flags mismatches with severity      |
+| **fortify** | Ablation study runner; identifies components from git diff + diary, runs each in an isolated git worktree, ranks importance, optionally generates reviewer Q&A |
+| **retro**   | Post-run retrospective; statistical significance (Wilcoxon), dead-iteration detection, suspicious-jump flags, learning summary + next-hypothesis queue         |
 
 ### Orchestration Flows
 
@@ -250,5 +263,16 @@ plugins/research/
     ├── plan/
     ├── judge/
     ├── run/
-    └── sweep/
+    ├── sweep/
+    ├── verify/
+    ├── fortify/
+    └── retro/
 ```
+
+## 🙏 Acknowledgments
+
+This plugin draws inspiration from two open-source research automation projects:
+
+- **[fcakyon/phd-skills](https://github.com/fcakyon/phd-skills)** — Claude Code plugin built from real PhD mistakes. Its hook-first guardrail philosophy (visual output inspection, citation guards, Stop-hook integrity checks) directly influenced the design of `verify` and `fortify`. The `--venue` reviewer Q&A in `fortify` is a direct port of its `fortify` command concept.
+
+- **[karpathy/autoresearch](https://github.com/karpathy/autoresearch)** — Autonomous overnight ML experiment runner that inverts the human/agent role: agents touch code, humans shape direction via `program.md`. The core loop design of `run` (single metric, atomic commits, wall-clock budgets, program.md as the research contract) traces directly to this work.

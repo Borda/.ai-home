@@ -3,9 +3,9 @@
     "name": "Jirka",
     "url": "https://github.com/Borda/AI-Rig"
   },
-  "description": "ML/perf investigation skills: topic, plan, judge, run, sweep",
+  "description": "ML research skills: topic, plan, judge, run, sweep, verify, fortify, retro",
   "license": "MIT",
   "name": "research",
   "repository": "https://github.com/Borda/AI-Rig",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

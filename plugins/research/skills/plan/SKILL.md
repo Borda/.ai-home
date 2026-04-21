@@ -83,7 +83,7 @@ Set as `<goal>`, proceed to P-P1.
 **Scope guard (first action)**: Before scanning, check `<goal>` is optimization goal. Input clearly not optimization goal (code question, regex/algo explanation, debug question, or any prompt without measurable improvement target) → print:
 
 ```
-⚠ This input does not look like an optimization goal.
+Warning: This input does not look like an optimization goal.
 /research:plan expects: "Reduce X" / "Increase Y" / "Improve Z metric".
 Use /research for explanatory questions.
 ```
@@ -206,6 +206,6 @@ Next steps:
    - Number of distinct method families found (used to determine team size at run step)
    - Whether SOTA consensus exists — if clear winner, note team mode may not add value
 3. Tell user: "`--team` applies at run step, not plan step. Run: `/research:run <program.md> --team` to execute with parallel researchers."
-4. Read `$HOME/.claude/plugins/cache/research/*/skills/run/modes/team.md` (Glob to find installed path) for team spawn protocol — include a one-line summary of the team protocol in the Team Mode Notes section.
+4. Read `${CLAUDE_SKILL_DIR}/../run/modes/team.md` for team spawn protocol — include a one-line summary of the team protocol in the Team Mode Notes section.
 
 </workflow>

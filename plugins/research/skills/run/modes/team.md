@@ -121,7 +121,7 @@ Poll every 5 min: `find $RUN_DIR -newer "$CHECKPOINT" -type f | wc -l` — new f
    │ #  │ Hypothesis                       │ Axis               │ Scope  │ Expected Δ    │ Conf.    │ Agent      │
    ├────┼──────────────────────────────────┼────────────────────┼────────┼───────────────┼──────────┼────────────┤
    │ 1  │ Cache embeddings in forward pass │ data pipeline      │ small  │ +2–4% speed   │ 0.90     │ perf-opt   │
-   │ 2  │ Fuse batch-norm + conv layers    │ model architecture │ small  │ +1–2% speed   │ 0.85     │ ai-res     │
+   │ 2  │ Fuse batch-norm + conv layers    │ model architecture │ small  │ +1–2% speed   │ 0.85     │ research:scientist     │
    │ …  │ …                                │ …                  │ …      │ …             │ …        │ …          │
    └────┴──────────────────────────────────┴────────────────────┴────────┴───────────────┴──────────┴────────────┘
 

@@ -29,14 +29,14 @@ One JSON obj per line. Two-pass write by separate agents:
 | `confidence` | `float` | Oracle confidence [0–1]; entries < 0.7 are deprioritized to end of queue |
 | `expected_delta` | `str` | Expected metric change (e.g. `"+1–3% val_loss"`) |
 | `priority` | `int` | Execution order (1 = highest); journal-sourced entries use lower values than oracle entries |
-| `source` | `str` | `"oracle"` for researcher entries; `"journal"` for journal-sourced entries; `"team"` for team-mode hypothesis agents (Phase A) |
+| `source` | `str` | `"oracle"` for researcher entries; `"journal"` for journal-sourced entries; `"team"` for team-mode hypothesis agents (Phase A); `"retro"` for `/research:retro` output (feasibility fields absent — run treats as `feasible: true`) |
 
 **Pass 2 — solution-architect (feasibility filter):** annotates in place, preserves order
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `feasible` | `bool` | `true` if the codebase supports the change with reasonable effort |
-| `blocker` | `str \ | null` | Required if `feasible: false`; names the specific architectural blocker |
+| `blocker` | `str \| null` | Required if `feasible: false`; names the specific architectural blocker |
 | `codebase_mapping` | `str` | Files, classes, or functions that would need to change |
 
 **Minimal valid oracle entry (before feasibility pass):**

@@ -174,7 +174,7 @@ Trigger when: 3+ distinct method families exist AND field has no clear leading m
 ```
 # Substitute pre-computed values — do not pass raw $(date) expressions into spawn prompts
 You are an researcher teammate researching: [topic].
-Read $HOME/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Read ~/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your cluster: [method family N] (e.g., "attention-free architectures" vs "linear attention variants").
 Research the top 3 methods in your cluster: comparison table + recommendation given constraints.
 Write your full findings (comparison table, analysis, Confidence block) to `.temp/output-research-<teammate-name>-$BRANCH-<date>.md` using the Write tool.
@@ -192,24 +192,24 @@ Produce sequenced, dependency-ordered implementation plan from SOTA research fin
 **Input detection** (parse argument after `plan`):
 
 - No argument → **auto-detect**: use Glob (pattern `**/output-research-*.md`, path `.temp/`) to find recent research outputs; exclude paths containing `-plan-` or `-codebase-`; sort by modification time descending; pick most recent. Print `→ Using: <path>` before proceeding. If no file found, stop: "No recent research output found — run `/research <topic>` first."
-- Ends in `.md` → treat as path to existing research output file; skip to Step R1-B
+- Ends in `.md` → treat as path to existing research output file; skip to Step P1-B
 
-### Step R1: Gather research findings
+### Step P1: Gather research findings
 
-**R1-A — From fresh research**: After Steps 1–3 complete, read generated `.temp/output-research-<date>.md`. Extract: Recommendation section, Implementation Plan, Key Hyperparameters, Gotchas, Integration with Current Codebase.
+**P1-A — From fresh research**: After Steps 1–3 complete, read generated `.temp/output-research-<date>.md`. Extract: Recommendation section, Implementation Plan, Key Hyperparameters, Gotchas, Integration with Current Codebase.
 
-**R1-B — From existing output**: Read file at given path directly. Extract same sections.
+**P1-B — From existing output**: Read file at given path directly. Extract same sections.
 
 **Validation**: file must contain clear **Recommendation** section naming specific method. If missing or ambiguous, stop: "Research output does not contain a clear method recommendation — run `/research <topic>` first, then pass the output path."
 
-Before spawning in Steps R2–R3, pre-compute output path components: `YYYY=$(date +%Y); MM=$(date +%m); DATE=$(date +%Y-%m-%d)` `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` <!-- same pattern as Step 2a date/branch block -->
+Before spawning in Steps P2–P3, pre-compute output path components: `YYYY=$(date +%Y); MM=$(date +%m); DATE=$(date +%Y-%m-%d)` `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` <!-- same pattern as Step 2a date/branch block -->
 
-### Step R2: Codebase analysis
+### Step P2: Codebase analysis
 
 Call `Agent(subagent_type="foundry:solution-architect", prompt=...)`:
 
 ```
-Read the research findings file at <path from R1>.
+Read the research findings file at <path from P1>.
 Analyze the current codebase to map the recommended method against existing code:
 1. Identify all files and modules relevant to the recommended method's domain
 2. Map existing abstractions: interfaces, base classes, patterns the codebase already uses
@@ -222,9 +222,9 @@ Return ONLY a compact JSON envelope on your final line — nothing else after it
 {"status":"done","integration_points":N,"conflicts":N,"file":".temp/output-research-codebase-$BRANCH-$DATE.md","confidence":0.N,"summary":"N integration points, N conflicts"}
 ```
 
-### Step R3: Synthesize plan
+### Step P3: Synthesize plan
 
-Read both files (research findings from R1 + codebase analysis from R2). Produce phased plan, write to `.temp/output-research-plan-$BRANCH-$DATE.md`:
+Read both files (research findings from P1 + codebase analysis from P2). Produce phased plan, write to `.temp/output-research-plan-$BRANCH-$DATE.md`:
 
 ```
 ## Implementation Roadmap: [method name]

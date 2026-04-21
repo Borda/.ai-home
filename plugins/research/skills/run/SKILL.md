@@ -27,8 +27,12 @@ VERIFY_TIMEOUT_SEC:         120 (local), 300 (--colab)
 COLAB_KNOWN_HW:             H100, L4, T4, A100
 SUMMARY_INTERVAL:           10 iterations
 DIMINISHING_RETURNS_WINDOW: 5 iterations < 0.5% each → warn user and suggest stopping
-STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run — see .claude/rules/artifact-lifecycle.md)
+STATE_DIR:                  .experiments/state/<run-id>/  (timestamped dir per run — see .claude/rules/artifact-lifecycle.md)
 ```
+
+<!-- Note: STATE_DIR (.experiments/state/) holds per-iteration artifacts (diary, experiments.jsonl).
+     Hypothesis pipeline outputs (hypotheses.jsonl, checkpoint.json, journal.md) go to .experiments/<run-id>/ (RUN_DIR).
+     These are two separate directories by design — see protocol.md for layout. -->
 
 **Agent strategy mapping** (`agent_strategy` in config → ideation agent to spawn):
 
@@ -40,7 +44,6 @@ STATE_DIR:                  .experiments/<run-id>/      (timestamped dir per run
 | `ml` | `research:scientist` | accuracy, loss, F1, AUC, BLEU |
 | `arch` | `foundry:solution-architect` | coupling, cohesion, modularity metrics |
 
-> note: foundry:solution-architect uses opusplan tier — higher cost per ideation call
 
 **Auto-inference keyword heuristics** (when `agent_strategy: auto` or omitted; checked against `## Goal` text AND metric command):
 
@@ -72,8 +75,6 @@ When foundry **not** installed, substitute `foundry:X` with `general-purpose`, p
 | `foundry:perf-optimizer` | `general-purpose` | `opus` | `You are a performance engineer. Profile before changing. Focus on CPU/GPU/memory/IO bottlenecks in Python/ML workloads.` |
 | `foundry:solution-architect` | `general-purpose` | `opusplan` | `You are a system design specialist. Generate architectural optimization hypotheses and annotate feasibility of proposed changes. Write findings to the specified output file.` |
 
-Skills with `--team` mode: fallback agents work but lower-quality output.
-
 ## Default Mode (Steps R1–R7)
 
 Triggered by `run <goal|file.md>`.
@@ -84,39 +85,8 @@ Triggered by `run <goal|file.md>`.
 
 If no `--researcher`/`--architect`, skip to R1.
 
-> **Research run directory**: outputs (`hypotheses.jsonl`, `checkpoint.json`, `journal.md`) go to `.experiments/<run-id>/` — timestamped dir created at R0 start, distinct from `.experiments/state/<run-id>/`. Called `<RUN_DIR>` throughout. See `protocol.md` (companion file, same skill dir) for layout.
 
-1. **Build hypothesis queue** — if `--hypothesis <path>` provided, read as pre-built queue (skip oracle phase). Otherwise, spawn oracle agents per active flags — parallel if both set:
-
-   **If `--researcher` is set** — spawn `research:scientist` (`maxTurns: 15`):
-
-   ```
-   Read the program file and the project codebase. Generate 5–10 ML experiment hypotheses grounded in SOTA literature and the specific metric goal. Write to `<RUN_DIR>/hypotheses.jsonl` — one JSON object per line, each with fields: hypothesis, rationale, confidence (float 0–1), expected_delta, priority (int, 1=highest), source: "oracle". Write your full analysis, reasoning, and Confidence block to `<RUN_DIR>/oracle-researcher.md` using the Write tool. Return ONLY: {"status":"done","file":"<path>","count":N,"confidence":0.N}
-   ```
-
-   **If `--architect` is set** — spawn `foundry:solution-architect` (`maxTurns: 15`) as hypothesis generator (not just feasibility annotator):
-
-   ```
-   Read the program file and the project codebase. Analyze the architecture, coupling, and structural design. Generate 5–10 architectural optimization hypotheses (refactoring opportunities, coupling reductions, abstraction improvements) that could improve the metric. Write to `<RUN_DIR>/hypotheses-arch.jsonl` — one JSON object per line with the same schema as the research oracle (hypothesis, rationale, confidence, expected_delta, priority, source: "architect"). Write your full analysis, reasoning, and Confidence block to `<RUN_DIR>/oracle-solution-architect.md` using the Write tool. Return ONLY: {"status":"done","file":"<path>","count":N,"confidence":0.N}
-   ```
-
-   **If both `--researcher` and `--architect` set**: run both oracle agents in parallel. After both complete, merge JSONL files into `<RUN_DIR>/hypotheses.jsonl`, interleaving by priority (lower number = higher priority, round-robin on ties). Update priorities to reflect interleaved order.
-
-   After oracle phase(s), run feasibility annotation pass — spawn `foundry:solution-architect` (`maxTurns: 10`):
-
-   ```
-   Read `<RUN_DIR>/hypotheses.jsonl` and the project codebase. For each hypothesis, annotate with: feasible (bool), blocker (str|null, required if feasible=false), codebase_mapping (str). Write the annotated queue back to the same file preserving order. Write your full analysis, reasoning, and Confidence block to `<RUN_DIR>/oracle-feasibility.md` using the Write tool. Return ONLY: {"status":"done","file":"<path>","feasible":N,"infeasible":N,"confidence":0.N}
-   ```
-
-   Note: when `--architect` only (no `--researcher`), skip feasibility annotation — architect already validated feasibility. Set `feasible: true` implicitly.
-
-   Both agents follow handoff envelope protocol (CLAUDE.md §2). Schema: `protocol.md` (companion file, same skill dir).
-
-2. **Filter and sort** — load annotated queue. Infeasible (`feasible: false`) stay for audit, excluded from execution. Sort by `priority` ascending (1 = first).
-
-3. **Resume skip** — if `<RUN_DIR>/checkpoint.json` exists (resuming crashed run), read it. Skip any hypothesis whose 0-indexed position matches `hypothesis_id` in checkpoint.
-
-4. Store active queue in memory as `RESEARCH_QUEUE`.
+Read `${CLAUDE_SKILL_DIR}/modes/hypothesis-pipeline.md`
 
 **Per-iteration hypothesis selection** (when `--researcher`/`--architect` set, inside R5 loop): pop next from `RESEARCH_QUEUE`. Append to Phase 2 prompt: "Focus this iteration on testing this hypothesis: `<hypothesis text>`."
 
@@ -344,8 +314,6 @@ Program constraints: read `<program_file>` — especially `## Notes`, `## Config
 
 For `--colab` runs: ideation agent (especially `research:scientist`) may call `mcp__colab-mcp__runtime_execute_code` to prototype GPU code before committing.
 
-<!-- MCP tool call — invoked via MCP protocol, not Bash; requires colab-mcp server enabled in settings.local.json -->
-
 If Agent tool unavailable (nested subagent context), implement change inline, construct JSON result manually.
 
 #### Phase 2a — Sandbox validate (`sandbox_mode = "docker"` only)
@@ -458,6 +426,8 @@ No resource limits. Use Bash tool `timeout` parameter (not shell `timeout`): `ti
 
 **If `--colab` active**: routes through `mcp__colab-mcp__runtime_execute_code`; Docker not used. (`--colab` + `--docker` conflict caught at R2.) If `colab_hw` non-null, prepend GPU identity check: `import torch; actual=torch.cuda.get_device_name(0); assert '<colab_hw>' in actual, f'Wrong GPU: expected <colab_hw>, got {actual}'` via `mcp__colab-mcp__runtime_execute_code`. If fails: print `"⚠ GPU mismatch: requested <colab_hw> but runtime has {actual}. Change the Colab runtime type and re-run."` Stop — do not proceed to Phase 6.
 
+<!-- Colab assertion: MCP call, not Bash — exempt from the script-file rule; correct as an inline one-liner. -->
+
 If timeout expires: append `status: timeout`, revert via `git revert HEAD --no-edit`, continue loop.
 
 #### Phase 6 — Run guard
@@ -560,49 +530,8 @@ Pre-compute branch before writing: `BRANCH=$(git branch --show-current 2>/dev/nu
 
 Write full report to `.temp/output-optimize-run-$BRANCH-$(date +%Y-%m-%d).md` via Write tool. Do not print to terminal.
 
-**Report structure:**
-
-```markdown
-## Run: <goal>
-
-**Run ID**: <run-id>
-**Date**: <date>
-**Iterations**: <total> (<kept> kept, <reverted> reverted, <other> other)
-**Baseline**: <metric> = <baseline value>
-**Best**: <metric> = <best value> (<delta>% improvement)
-**Best commit**: <sha>
-**Diary**: ".experiments/state/<run-id>/diary.md"
-**Codex co-pilot**: active (ran every iteration) — <N> Codex passes run (omit line if --codex not used)
-**Codex wins**: <N> Codex proposals kept vs <N> Claude proposals kept
-
-### Experiment History
-
-| #   | Metric | Delta  | Status   | Description | Agent | Confidence |
-| --- | ------ | ------ | -------- | ----------- | ----- | ---------- |
-| N   | value  | +X.X%  | status   | desc        | agent | 0.N        |
-
-### Summary
-[2-3 sentences on what strategies worked, what didn't, what to try next]
-
-### Recommended Follow-ups
-- [next action]
-```
-
-Print compact terminal summary:
-
-```
----
-Run — <goal>
-Iterations: <total>  Kept: <kept>  Reverted: <reverted>
-Baseline:   <metric_key> = <baseline>
-Best:       <metric_key> = <best> (<delta>% improvement, commit <sha>)
-Agent:      <agent type used>
-→ saved to .temp/output-optimize-run-<branch>-<date>.md
-→ diary: .experiments/state/<run-id>/diary.md
----
-```
-
-Update `state.json`: `status = completed`.
+Read `${CLAUDE_SKILL_DIR}/modes/report.md`
+`state.json`: `status = completed`.
 
 ### Step R7: Codex delegation (optional)
 

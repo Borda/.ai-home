@@ -31,7 +31,7 @@ When foundry **not** installed, substitute `foundry:solution-architect` with `ge
 
 ## --team flag (committee mode)
 
-If `--team` present in arguments: after verdict (Step J5/J6), read `${CLAUDE_SKILL_DIR}/../run/modes/team.md` Phase A (hypothesis generation only). Spawn 2–3 reviewers via team protocol to independently audit methodology — majority rules on verdict. This = "committee" review mode.
+If `--team` present in arguments: after verdict (Step J5/J6), spawn 2–3 independent `foundry:solution-architect` agents, each reading the program file and returning `{"verdict": "pass|conditional|fail", "findings": [...]}`. Aggregate by majority verdict. This = "committee" review mode.
 
 # Judge Mode (Steps J1–J6)
 

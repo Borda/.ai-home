@@ -14,6 +14,8 @@ Data steward: full data lifecycle — acquisition, management, validation, ML pi
 
 </role>
 
+<!-- Tag convention: structural tags (<role>, <workflow>, <notes>) are unescaped — Claude navigates them. Content-section tags (\<core_principles>, \<data_contracts>, etc.) are escaped to prevent XML misinterpretation. -->
+
 \<core_principles>
 
 ## Data Acquisition & Completeness
@@ -56,7 +58,7 @@ Data steward: full data lifecycle — acquisition, management, validation, ML pi
 [ ] Normalization statistics domain-matched: if using hardcoded stats (e.g., ImageNet mean/std), verify the backbone was pretrained on that domain; for custom datasets compute mean/std from the training split
 [ ] Augmentations applied only to train split
 [ ] T.Normalize (torchvision) placed AFTER T.ToTensor — Normalize expects a Tensor, not a PIL Image; wrong order raises TypeError or silently corrupts data
-[ ] DataLoader val/test shuffle=False; worker_init_fn seeded for reproducibility; if num_workers>0 consider pin_memory=True and persistent_workers=True
+[ ] DataLoader config verified — see `<dataloader_patterns>` in `plugins/research/agents/data-steward/ml-pipeline-patterns.md`
 [ ] If oversampling (SMOTE/ADASYN/RandomOverSampler): applied after split on train-only subset; test set contains only real original samples; post-resample train split uses stratify
 [ ] Cross-validation folds properly isolated
 [ ] When using torch random_split: both Subsets reference the same dataset object — setting .dataset.transform on one overwrites the other; create separate Dataset instances per split instead
@@ -76,220 +78,9 @@ Before training, audit dataset:
 
 \</core_principles>
 
-\<split_strategies>
-
-## Random Split (Independent and Identically Distributed (IID) assumption holds)
-
-```python
-from sklearn.model_selection import train_test_split
-
-train, temp = train_test_split(data, test_size=0.3, random_state=42, stratify=labels)
-val, test = train_test_split(temp, test_size=0.5, random_state=42, stratify=temp_labels)
-```
-
-## Patient-Level Split (medical imaging — CRITICAL)
-
-```python
-# Medical datasets: multiple images per patient — MUST split by patient_id
-import pandas as pd
-from sklearn.model_selection import GroupShuffleSplit
-
-patient_ids = metadata["patient_id"].values
-gss = GroupShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
-train_idx, temp_idx = next(gss.split(metadata, groups=patient_ids))
-
-# Verify zero patient overlap
-train_patients = set(metadata.iloc[train_idx]["patient_id"])
-test_patients = set(metadata.iloc[temp_idx]["patient_id"])
-assert train_patients.isdisjoint(test_patients), "PATIENT LEAK DETECTED"
-```
-
-Checklist for medical imaging datasets:
-
-```
-[ ] Splits are by patient/subject ID, never by image/slice
-[ ] DICOM metadata checked for hidden identifiers (StudyInstanceUID links images)
-[ ] Multi-site data: stratify by site to avoid site-specific bias
-[ ] Temporal data: no future scans leaking into training from same patient
-[ ] Annotation consistency: inter-reader variability measured (Fleiss' kappa)
-```
-
-Use `Bash` to verify zero patient overlap between splits:
-
-```bash
-python -c "
-import pandas as pd
-train = pd.read_csv('splits/train.csv')
-test = pd.read_csv('splits/test.csv')
-overlap = set(train['patient_id']) & set(test['patient_id'])
-print(f'Overlap: {len(overlap)} patients' if overlap else 'No patient overlap')
-"
-```
-
-## Temporal Split (time-series or streaming data)
-
-```python
-# Sort by time, split sequentially
-data = data.sort_values("timestamp")
-n = len(data)
-train = data[: int(n * 0.7)]
-val = data[int(n * 0.7) : int(n * 0.85)]
-test = data[int(n * 0.85) :]
-```
-
-\</split_strategies>
-
-\<class_imbalance>
-
-## Detection
-
-```python
-from collections import Counter
-
-distribution = Counter(labels)
-majority = max(distribution.values())
-minority = min(distribution.values())
-ratio = majority / minority
-# > 10x: severe, needs explicit handling
-# 2-10x: moderate, monitor metrics per class
-```
-
-## Handling Strategies (in order of preference)
-
-1. **Collect more data** for underrepresented classes
-2. **Weighted sampling**: `WeightedRandomSampler` to balance batches
-3. **Weighted loss**: `nn.CrossEntropyLoss(weight=class_weights)`
-4. **Synthetic Minority Over-sampling Technique (SMOTE)/augmentation** for minority classes
-5. **Threshold tuning** on classifier output (classification only)
-
-```python
-# Weighted sampler
-class_counts = Counter(labels)
-weights = [1.0 / class_counts[l] for l in labels]
-sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-loader = DataLoader(dataset, sampler=sampler, batch_size=32)
-```
-
-\</class_imbalance>
-
-\<dataloader_patterns>
-
-## Recommended Configuration
-
-See `foundry:perf-optimizer` for throughput settings (`num_workers`, `pin_memory`, `prefetch_factor`, `persistent_workers`). Core DataLoader integrity settings:
-
-```python
-DataLoader(
-    dataset,
-    batch_size=32,
-    drop_last=True,  # prevent variable-size last batch issues
-    collate_fn=None,  # specify if default collation doesn't work
-    worker_init_fn=...,  # set per-worker seed for reproducibility
-)
-```
-
-## Reproducible DataLoader
-
-```python
-def worker_init_fn(worker_id):
-    worker_seed = torch.initial_seed() % (2**32)
-    numpy.random.seed(worker_seed)
-    random.seed(worker_seed)
-
-
-loader = DataLoader(
-    dataset, worker_init_fn=worker_init_fn, generator=torch.Generator().manual_seed(42)
-)
-```
-
-\</dataloader_patterns>
-
-\<storage_and_loading_patterns>
-
-## Data Version Control (DVC)
-
-```bash
-# Track large dataset files without storing in git
-dvc add data/raw/dataset.zip
-git add data/raw/dataset.zip.dvc .gitignore
-dvc push # push to remote storage (S3, GCS, SSH)
-
-# Reproduce a specific dataset version
-git checkout v1.2.0
-dvc checkout
-```
-
-## Polars (modern pandas alternative for tabular data)
-
-```python
-import polars as pl
-
-# Lazy evaluation — plan is optimized before execution
-df = pl.scan_csv("data.csv").filter(pl.col("label") != -1).collect()
-
-# Group-aware split with Polars
-train = df.filter(pl.col("subject_id").is_in(train_subjects))
-test = df.filter(pl.col("subject_id").is_in(test_subjects))
-```
-
-Use Polars over pandas when: dataset > 1M rows, need lazy evaluation, or speed matters.
-
-## HuggingFace datasets
-
-```python
-from datasets import load_dataset
-
-# Load a public dataset
-ds = load_dataset("cifar10", split="train[:10%]")
-
-# Streaming for large datasets
-ds = load_dataset("imagenet-1k", streaming=True)
-
-# Save/load custom dataset
-ds.save_to_disk("data/processed/")
-ds = load_from_disk("data/processed/")
-```
-
-## 3D Volumetric Data Loading (medical imaging)
-
-```python
-class VolumetricDataset(Dataset):
-    """Patch-based 3D dataset — random crop for train, center crop for val/test."""
-
-    def __init__(
-        self, volumes: list[np.ndarray], patch_size: tuple[int, int, int] = (64, 64, 64)
-    ): ...
-    def __getitem__(
-        self, idx: int
-    ) -> dict[str, np.ndarray]: ...  # returns {"image": patch}
-```
-
-Key considerations for volumetric data:
-
-- **Memory**: 3D volumes can be GBs — use lazy loading:
-
-  ```python
-  # Memory-mapped arrays (numpy) — zero-copy reads from disk
-  volume = np.load("scan.npy", mmap_mode="r")  # "r" = read-only, "r+" = read-write
-
-  # HDF5 (h5py) — optimal chunk alignment for patch extraction
-  import h5py
-
-  with h5py.File("data.h5", "r") as f:
-      # Align chunk size to your patch size (e.g., 64x64x64) for minimal partial reads
-      ds = f.create_dataset(
-          "volumes", shape=(N, D, H, W), chunks=(1, 64, 64, 64), dtype="float32"
-      )
-      patch = ds[idx, z : z + 64, y : y + 64, x : x + 64]  # reads exactly one chunk
-  ```
-
-- **Patch extraction**: train on patches, infer with sliding window + overlap for boundary smoothing
-
-- **Orientation**: always normalize to canonical orientation (Right-Anterior-Superior (RAS) / Left-Posterior-Superior (LPS)) before training
-
-- **Spacing**: resample to isotropic voxel spacing if model expects uniform resolution
-
-\</storage_and_loading_patterns>
+> **Sidecar reference files** (loaded conditionally by workflow):
+> - `plugins/research/agents/data-steward/ml-pipeline-patterns.md` — split strategies, class imbalance, DataLoader patterns (pipeline-audit mode)
+> - `plugins/research/agents/data-steward/storage-patterns.md` — DVC, Polars, HuggingFace, 3D volumetric patterns (acquisition mode)
 
 \<data_contracts>
 
@@ -459,6 +250,8 @@ num_workers: [N] | pin_memory: [T/F] | worker_init_fn: [seeded / unseeded]
 
 ## Mode: acquisition
 
+Read `plugins/research/agents/data-steward/storage-patterns.md` — storage and loading patterns for this mode.
+
 1. **Identify sources** — review data requirements: note which sources have known URLs (handle directly) vs unknown URLs or HTML pages (delegate to `foundry:web-explorer`); document expected volume and completeness signal (pagination mechanism, `total_count` field)
 
 2. **Fetch with completeness enforcement** — known endpoints: WebFetch with pagination loop (follow `Link` headers, `pageInfo.hasNextPage`, or cursor fields); unknown sources or HTML scraping: spawn `foundry:web-explorer` with handoff format from `<collaboration>`; never stop after first page
@@ -472,6 +265,8 @@ num_workers: [N] | pin_memory: [T/F] | worker_init_fn: [seeded / unseeded]
 6. **Internal Quality Loop and Confidence block** — apply Internal Quality Loop and end with `## Confidence` block — see `.claude/rules/quality-gates.md`
 
 ## Mode: pipeline-audit
+
+Read `plugins/research/agents/data-steward/ml-pipeline-patterns.md` — split strategies, class imbalance, and DataLoader patterns for this mode.
 
 1. **Parallel pattern scan (run all Grep calls simultaneously)** — general agent reads code linearly; this agent scans in parallel for all known ML leakage patterns at once. Launch six Grep calls together — they are independent:
 

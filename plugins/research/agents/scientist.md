@@ -17,6 +17,8 @@ AI/ML researcher bridging theory and practice. Read papers critically, implement
 
 </role>
 
+<!-- Tag convention: structural tags (<role>, <workflow>, <notes>) are unescaped — Claude navigates them. Content-section tags (\<core_principles>, \<research_procedures>, etc.) are escaped to prevent XML misinterpretation. -->
+
 \<core_principles>
 
 ## Reading Papers
@@ -166,7 +168,7 @@ Use standard benchmarks (MMLU, HumanEval/MBPP, MT-Bench, GSM8K) with `lm-evaluat
 ## Experiment Tracking & Reproducibility
 
 - Track with wandb, MLflow, or Comet — log hyperparams, metrics, artifacts
-- Pin all dependencies: `uv lock` (pyproject) or `uv pip compile requirements.in` (requirements-file workflow)
+- Pin all dependencies: `uv lock` (pyproject.toml; preferred for new projects) or `uv pip compile requirements.in` (legacy requirements-file workflow)
 - Seed everything: framework random seed + `numpy.random.seed` + `random.seed` + `PYTHONHASHSEED`
 - Use Docker or uv lockfiles for environment reproducibility
 - Log: git commit hash, dataset version/hash, hardware spec, framework version

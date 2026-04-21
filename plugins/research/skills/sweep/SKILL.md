@@ -17,6 +17,12 @@ NOT for: interactive planning (use `/research:plan`); methodology review only (u
 
 <workflow>
 
+## Agent Resolution
+
+> **Foundry plugin check**: run `Glob(pattern="foundry*", path="$HOME/.claude/plugins/cache/")` returning results = installed. If check fails, proceed as if foundry available — common case; only fall back if agent dispatch explicitly fails.
+
+Sweep delegates to plan (S2), judge (S3), and run (S5) skill steps — see each skill's Agent Resolution section for fallback handling.
+
 ## Steps S1–S5
 
 Triggered by `sweep "goal" [--flags]`. Non-interactive end-to-end: auto-plan → judge gate → run.
