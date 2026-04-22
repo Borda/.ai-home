@@ -73,6 +73,8 @@ If `$ARGUMENTS` was provided, use it as additional context for the pattern analy
 
 ## Step 3: Gap analysis
 
+> **`review` mode**: focus on agent/skill quality and coverage gaps — skip "Recommend: New Agent/Skill" analysis and focus on "Existing Coverage" and "Recommend: Enhance Existing".
+
 For each identified pattern, check:
 
 1. **Is it already covered?** — search existing agent/skill descriptions for overlap
@@ -87,6 +89,8 @@ Thresholds for recommendation:
 - **No new file needed**: one-off or already covered by existing agent
 
 ## Step 4: Check for duplication
+
+> **`review` mode**: duplication checks still apply — review mode does not skip this step.
 
 Before recommending anything, run through both the overlap check and the anti-pattern checklist:
 
@@ -273,9 +277,9 @@ ______________________________________________________________________
 
 **Step L4: Apply (with confirmation)**
 
-Print the proposal table. Then use AskUserQuestion:
+Print the proposal table. Then invoke `AskUserQuestion` tool with:
 
-> "Apply the distillation proposals?" (a) Apply — write all `→ rule` and `→ agent/skill update` changes now (b) Review first — show a diff of each proposed change before writing (c) Skip — discard proposals and exit without changes
+Options: "(a) Apply — write all `→ rule` and `→ agent/skill update` changes now | (b) Review first — show a diff of each proposed change before writing | (c) Skip — discard proposals and exit without changes"
 
 If the user selects (a), apply changes:
 

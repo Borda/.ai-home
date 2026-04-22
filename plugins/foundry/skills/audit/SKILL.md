@@ -1,7 +1,7 @@
 ---
 name: audit
 description: "Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness. Two mutually exclusive action modes: 'fix [high|medium|all]' auto-fixes at the requested severity level; 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes."
-argument-hint: '[agents|skills|rules|communication|setup|plugin] fix [high|medium|all] | upgrade'
+argument-hint: '[agents|skills|rules|communication|setup|plugin|plugins [<name>]] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
 effort: high
@@ -9,7 +9,7 @@ effort: high
 
 <objective>
 
-Run a full-sweep quality audit of the `.claude/` configuration: every agent file, every skill file, every rule file, settings.json, and hooks. Spawns `foundry:self-mentor` for per-file analysis, then aggregates findings system-wide to catch issues that only surface across files — infinite loops, inventory drift, missing permissions, and cross-file interoperability breaks. Reports all findings and auto-fixes at the requested level: `fix high` (critical+high only), `fix medium` (critical+high+medium, default fix level), or `fix all` (all findings including low).
+Run a full-sweep quality audit of the `.claude/` configuration and all `plugins/*/` agent and skill files: every agent file, every skill file, every rule file, settings.json, and hooks. Spawns `foundry:self-mentor` for per-file analysis, then aggregates findings system-wide to catch issues that only surface across files — infinite loops, inventory drift, missing permissions, and cross-file interoperability breaks. Reports all findings and auto-fixes at the requested level: `fix high` (critical+high only), `fix medium` (critical+high+medium, default fix level), or `fix all` (all findings including low).
 
 </objective>
 
@@ -28,7 +28,9 @@ Run a full-sweep quality audit of the `.claude/` configuration: every agent file
   - `communication` — restrict sweep to communication governance files: `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
   - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, plugin integration, and post-install user state (Checks 1–11, I1, I2, I3); Step 3 runs for `init` SKILL.md only (one foundry:self-mentor spawn); Checks I1–I3 read `~/.claude/` not `.claude/`
   - `plugin` — restrict sweep to plugin integration only: codex plugin (Check 7), foundry plugin + init validation (Check 8, including 8g); Step 3 runs for `init` SKILL.md only (one foundry:self-mentor spawn)
-  - Scope and fix level can be combined: `agents fix medium`, `rules fix all` — scope always precedes `fix`
+  - `plugins` — full audit of all plugins: per-file audit of every `plugins/*/agents/*.md` and `plugins/*/skills/*/SKILL.md` + integration checks (7, 8) for each plugin found
+  - `plugins <name>` — same as `plugins` but scoped to one plugin: per-file audit of `plugins/<name>/agents/*.md` and `plugins/<name>/skills/*/SKILL.md` + integration checks; `<name>` must match a directory under `plugins/` (e.g. `plugins foundry`, `plugins oss`, `plugins research`)
+  - Scope and fix level can be combined: `agents fix medium`, `rules fix all`, `plugins foundry fix all` — scope always precedes `fix`
   - **Invalid combinations** (report error and stop): `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade`
 
 </inputs>
@@ -136,18 +138,30 @@ If pre-commit is not configured, skip this step silently.
 
 ## Step 2: Collect all config files
 
-Enumerate everything in scope using built-in tools:
+Enumerate everything in scope using built-in tools. Run all Glob calls in parallel:
 
-- **Agents**: Glob tool, pattern `agents/*.md`, path `.claude/`
-- **Skills**: Glob tool, pattern `skills/*/SKILL.md`, path `.claude/`
+- **Agents (project)**: Glob tool, pattern `agents/*.md`, path `.claude/`
+- **Agents (plugins)**: Glob tool, pattern `*/agents/*.md`, path `plugins/`
+- **Skills (project)**: Glob tool, pattern `skills/*/SKILL.md`, path `.claude/`
+- **Skills (plugins)**: Glob tool, pattern `*/skills/*/SKILL.md`, path `plugins/`
 - **Rules**: Glob tool, pattern `rules/*.md`, path `.claude/`
 - **Communication**: Read tool on `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
 - **Settings**: Read tool on `.claude/settings.json`
 - **Hooks**: Glob tool, pattern `hooks/*`, path `.claude/`
 
-Record the full file list — this becomes the audit scope for Steps 3–4. Cross-reference checks in Step 3 depend on this inventory being current. If MEMORY.md has not been updated since the last agent or skill was added or removed, run a live disk scan now rather than relying on the cached roster. Stale inventory is the primary cause of false-negative cross-reference findings.
+Merge project and plugin results into a single flat inventory. Record full paths — cross-reference checks in Step 3 depend on this inventory being current. If MEMORY.md has not been updated since the last agent or skill was added or removed, run a live disk scan now rather than relying on the cached roster. Stale inventory is the primary cause of false-negative cross-reference findings.
+
+**Scope filtering for Step 2**: only include files relevant to the active scope:
+- `agents` scope — collect agents from both `.claude/agents/` and `plugins/*/agents/`; skip skills, rules, hooks
+- `skills` scope — collect skills from both `.claude/skills/*/SKILL.md` and `plugins/*/skills/*/SKILL.md`; skip agents, rules, hooks
+- `plugins` scope — collect agents from `plugins/*/agents/*.md` and skills from `plugins/*/skills/*/SKILL.md` across all plugins
+- `plugins <name>` scope — collect agents from `plugins/<name>/agents/*.md` and skills from `plugins/<name>/skills/*/SKILL.md` only
+- `setup`/`plugin` (bare) scope — no agent/skill collection from plugins; see setup/plugin notes below
+- Full sweep (no scope) — collect everything
 
 **Setup scope**: when `$SCOPE` is `setup`, also collect `plugins/foundry/skills/init/SKILL.md` for the Step 3 foundry:self-mentor spawn — this is the only per-file spawn in setup scope. Checks I1–I3 (from `checks-install.md`) run in Step 4 against `~/.claude/` to validate post-install user state.
+
+**`plugins <name>` scope**: verify `plugins/<name>/` exists before proceeding — abort with `! BREAKING: plugins/<name>/ not found` if absent. Collect `plugins/<name>/skills/init/SKILL.md` for Step 3 in addition to all agents and skills in that plugin. **`plugins` (no name)**: iterate all subdirectories under `plugins/` that contain an `agents/` or `skills/` directory.
 
 ## Step 3: Per-file audit via foundry:self-mentor
 
@@ -194,12 +208,21 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 
 ## Step 4: System-wide checks
 
-> **Full implementation instructions** are split across 4 scope files in `.claude/skills/audit/templates/`. Read only the file(s) for the active scope at the start of this step — do not read all 4 files unless running a full sweep.
+> **Template path resolution**: `.claude/skills/audit/templates/` is symlinked by `/foundry:init`. If absent, fall back to plugin cache:
+> ```bash
+> AUDIT_TPL=".claude/skills/audit/templates"
+> [ -d "$AUDIT_TPL" ] || AUDIT_TPL="$(find ${HOME}/.claude/plugins/cache -path "*/audit/templates" -type d 2>/dev/null | head -1)"
+> [ -d "$AUDIT_TPL" ] || { printf "! BREAKING: audit/templates not found — run /foundry:init first\n"; exit 1; }
+> ```
+
+> **Full implementation instructions** are split across 4 scope files in `$AUDIT_TPL/`. Read only the file(s) for the active scope at the start of this step — do not read all 4 files unless running a full sweep.
 >
 > | Scope | File(s) to read |
 > | --- | --- |
 > | `setup` | `checks-setup.md` + `checks-install.md` |
 > | `plugin` | `checks-setup.md` (Checks 7, 8 only) |
+> | `plugins` | `checks-setup.md` (Checks 7, 8) + `checks-agents.md` + `checks-skills.md` + `checks-shared.md` (14, 15, 17, 12, 13, 25, 29) |
+> | `plugins <name>` | same as `plugins` — scoped to one plugin directory |
 > | `agents` | `checks-agents.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13, 25, 29) + `checks-skills.md` (Check 22 only) |
 > | `skills` | `checks-skills.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13, 25, 29) |
 > | `rules` | `checks-shared.md` (run only: 18, 12, 13, 29) |
@@ -225,12 +248,14 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 
 **Scope filter**: when `$SCOPE` is set, run only the checks listed for that scope; skip all others silently.
 
-- `agents` — Checks 14, 15, 19, 20, 17, 12, 13, 25, 22, 26, 29
-- `skills` — Checks 14, 15, 21, 17, 12, 23, 22, 13, 24, 25, 26, 27, 28, 29
+- `agents` — Checks 14, 15, 19, 20, 17, 12, 13, 25, 22, 26, 29 (files: `.claude/agents/*.md` + `plugins/*/agents/*.md`)
+- `skills` — Checks 14, 15, 21, 17, 12, 23, 22, 13, 24, 25, 26, 27, 28, 29 (files: `.claude/skills/*/SKILL.md` + `plugins/*/skills/*/SKILL.md`)
 - `rules` — Checks 18, 12, 13, 29
 - `communication` — Checks 15, 16, 12, 13, 29
 - `setup` — Checks 1, 2, 3, 4, 5, 9, 10, 11, 7, 6, 8, I1, I2, I3 (Step 3: one foundry:self-mentor spawn for `init` SKILL.md only; I1–I3 read `~/.claude/`)
-- `plugin` — Checks 7, 8 (Step 3: one foundry:self-mentor spawn for `init` SKILL.md only)
+- `plugin` — Checks 7, 8 (Step 3: one foundry:self-mentor spawn for `plugins/foundry/skills/init/SKILL.md` only)
+- `plugins` — Checks 7, 8, 14, 15, 19, 20, 17, 12, 13, 25, 22, 26, 21, 23, 24, 27, 28, 29 (files: all `plugins/*/agents/*.md` + `plugins/*/skills/*/SKILL.md`; Step 3: foundry:self-mentor batches for all plugin agents + skills + each plugin's init SKILL.md)
+- `plugins <name>` — same check list as `plugins`, scoped to `plugins/<name>/` only
 - No scope argument — run all checks
 
 ### Check summary
@@ -252,7 +277,7 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 | I1 | Plugin cache intact | high | setup | foundry in ~/.claude/plugins/installed_plugins.json; installPath exists |
 | I2 | Settings merge complete | medium | setup | statusLine, permissions.allow, enabledPlugins.codex in ~/.claude/settings.json |
 | I3 | Link health (conditional) | high | setup | Symlinks in ~/.claude/rules/ and ~/.claude/TEAM_PROTOCOL.md resolve; fix: /foundry:init |
-| 12 | File length | medium | all | Agents >300, skills >600, rules >200 lines - report only |
+| 12 | File length | medium | all | Agents ~4 k tokens (≈300 lines), skills ~8 k tokens (≈600 lines), rules ~2.5 k tokens (≈200 lines); estimated via wc -c / 4; short lines preferred; report only — fix = remove content, never collapse lines |
 | 13 | Heading hierarchy continuity | medium | all | Heading level jumps >1 (e.g. ## to ####) |
 | 14 | Orphaned follow-up references | medium | agents/skills | Skill-name refs in SKILL.md vs disk inventory |
 | 15 | Hardcoded user paths | high | agents/skills | /Users/ and /home/ in config files + settings.json |
@@ -371,6 +396,8 @@ Spawn one agent per affected file, batching all findings for that file into a si
 Each subagent prompt template: Read the fix prompt template from .claude/skills/audit/templates/fix-prompt.md and use it, filling in `<file path>` and the list of findings.
 
 **Preferred orchestration pattern — audit-fix sub-agent**
+
+<!-- Canonical multi-file orchestration template — intentionally inline; NOT derived from fix-prompt.md (per-file only). Keep both in sync when changing shared audit-fix behavior. -->
 
 When the finding count exceeds 10 or `fix all` was passed, spawn a dedicated **audit-fix** sub-agent that handles all of Steps 8–10 in isolation:
 

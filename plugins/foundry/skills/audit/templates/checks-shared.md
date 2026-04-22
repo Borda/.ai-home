@@ -6,34 +6,46 @@ ______________________________________________________________________
 
 ## Check 12 — File length (context budget risk)
 
-Thresholds: agents > 300 lines · skill SKILL.md > 600 lines · rules > 200 lines.
+Thresholds: agents > 300 lines (~4 k tokens) · skill SKILL.md > 600 lines (~8 k tokens) · rules > 200 lines (~2.5 k tokens).
+
+> **Line count = human-readable proxy; token count = true measure.** Thresholds here guide human review — not the actual context budget. Short sentences and short lines are preferred: easier to read AND often cheaper per logical unit of information. Collapsing multiple short lines into one long line does NOT reduce token cost and destroys readability. Fix = remove or distill content. Collapsing lines is not a fix.
 
 ```bash
 YEL='\033[1;33m'
 GRN='\033[0;32m'
 NC='\033[0m'
-printf "%-52s %s\n" "FILE" "LINES"
+# Token estimate: wc -c (bytes) / 4 — rough but consistent proxy (1 token ≈ 4 bytes in English markdown)
+printf "%-52s %8s %8s\n" "FILE" "~TOKENS" "LINES"
 for f in .claude/agents/*.md; do # timeout: 5000
+    [ -f "$f" ] || continue
     lines=$(wc -l <"$f" | tr -d ' ')
-    [ "$lines" -gt 300 ] &&
-    printf "${YEL}⚠ TOO LONG${NC}: agents/%s — %d lines (threshold: 300)\n" "$(basename "$f")" "$lines" ||
-    printf "  %-50s %d\n" "agents/$(basename "$f")" "$lines"
+    bytes=$(wc -c <"$f" | tr -d ' ')
+    est=$((bytes / 4))
+    [ "$est" -gt 4000 ] &&
+    printf "${YEL}⚠ OVER BUDGET${NC}: agents/%s — ~%d tokens / %d lines (limit: ~4 k)\n" "$(basename "$f")" "$est" "$lines" ||
+    printf "  %-50s %8d %8d\n" "agents/$(basename "$f")" "$est" "$lines"
 done
 for f in .claude/skills/*/SKILL.md; do
+    [ -f "$f" ] || continue
     lines=$(wc -l <"$f" | tr -d ' ')
-    [ "$lines" -gt 600 ] &&
-    printf "${YEL}⚠ TOO LONG${NC}: skills/%s/SKILL.md — %d lines (threshold: 600)\n" "$(basename "$(dirname "$f")")" "$lines" ||
-    printf "  %-50s %d\n" "skills/$(basename "$(dirname "$f")")/SKILL.md" "$lines"
+    bytes=$(wc -c <"$f" | tr -d ' ')
+    est=$((bytes / 4))
+    [ "$est" -gt 8000 ] &&
+    printf "${YEL}⚠ OVER BUDGET${NC}: skills/%s/SKILL.md — ~%d tokens / %d lines (limit: ~8 k)\n" "$(basename "$(dirname "$f")")" "$est" "$lines" ||
+    printf "  %-50s %8d %8d\n" "skills/$(basename "$(dirname "$f")")/SKILL.md" "$est" "$lines"
 done
 for f in .claude/rules/*.md; do
+    [ -f "$f" ] || continue
     lines=$(wc -l <"$f" | tr -d ' ')
-    [ "$lines" -gt 200 ] &&
-    printf "${YEL}⚠ TOO LONG${NC}: rules/%s — %d lines (threshold: 200)\n" "$(basename "$f")" "$lines" ||
-    printf "  %-50s %d\n" "rules/$(basename "$f")" "$lines"
+    bytes=$(wc -c <"$f" | tr -d ' ')
+    est=$((bytes / 4))
+    [ "$est" -gt 2500 ] &&
+    printf "${YEL}⚠ OVER BUDGET${NC}: rules/%s — ~%d tokens / %d lines (limit: ~2.5 k)\n" "$(basename "$f")" "$est" "$lines" ||
+    printf "  %-50s %8d %8d\n" "rules/$(basename "$f")" "$est" "$lines"
 done
 ```
 
-**Severity**: **medium** — report only, never auto-fix.
+**Severity**: **medium** — report only, never auto-fix. When flagging, remind the fixer: only content removal or distillation counts; collapsing lines is not acceptable.
 
 ______________________________________________________________________
 
@@ -74,7 +86,7 @@ ______________________________________________________________________
 
 ## Check 14 — Orphaned follow-up references
 
-Use Grep tool (pattern `` `/[a-z-]*` ``, glob `skills/*/SKILL.md`, path `.claude/`, output mode `content`) to find skill-name references; compare against disk inventory.
+→ Subsumed by Check 24 (skill sequence compatibility in `checks-skills.md`). Check 24 covers reference existence (24a), argument plausibility (24b), and cycle detection (24c) for all documented follow-up chains. Run Check 24 instead.
 
 ______________________________________________________________________
 
@@ -210,6 +222,8 @@ fix: use fully-qualified form, e.g. subagent_type="foundry:<name>"
 ```
 
 **Report only** — no auto-fix; correct prefix depends on which plugin owns agent.
+
+> **Related**: Check 28 (in `checks-skills.md`) covers cross-plugin fallback coverage — dispatched agent exists but no fallback when that plugin is absent. Check 25 and Check 28 address different failure modes; run both.
 
 ______________________________________________________________________
 

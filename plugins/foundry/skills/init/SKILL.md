@@ -23,7 +23,7 @@ Set up foundry on new machine:
 
 **Why not symlink agents and skills?** Claude Code plugin system already exposes all plugin skills and agents at root namespace. Agents must always use full plugin prefix (`foundry:sw-engineer`, not `sw-engineer`) for unambiguous dispatch regardless of symlinks. Init creates no agent or skill symlinks.
 
-**Why hooks need no action?** `hooks/hooks.json` inside plugin registers automatically when plugin enabled. Init's only hook-adjacent step: write `statusLine.command` path (Step 3) — `statusLine` is top-level settings key, not part of `hooks.json`.
+**Why hooks need no action?** `hooks/hooks.json` inside plugin registers automatically when plugin enabled. Init's only hook-adjacent step: write `statusLine.command` path (Step 4) — `statusLine` is top-level settings key, not part of `hooks.json`.
 
 NOT for: editing project `.claude/settings.json`.
 
@@ -75,7 +75,7 @@ cp ~/.claude/settings.json ~/.claude/settings.json.bak  # timeout: 5000
 
 Report: "Backed up ~/.claude/settings.json → ~/.claude/settings.json.bak"
 
-## Step 2b: Check for stale hooks block
+## Step 3: Check for stale hooks block
 
 ```bash
 jq -e 'has("hooks")' ~/.claude/settings.json >/dev/null 2>&1  # timeout: 5000
@@ -92,7 +92,7 @@ Otherwise, use `AskUserQuestion`:
 
 On **(a)**: use jq to strip `hooks` key, write back with Write tool, continue. On **(b)**: warn "Double-firing risk: existing hooks block will fire alongside plugin-registered hooks." Continue.
 
-## Step 3: Merge statusLine
+## Step 4: Merge statusLine
 
 Check if statusLine already points to statusline.js:
 
@@ -102,6 +102,8 @@ jq -e '(.statusLine.command // "") | contains("statusline.js")' ~/.claude/settin
 
 If already set: report "statusLine already set — skipping." Otherwise:
 
+Writes `statusLine` key to `~/.claude/settings.json`:
+
 ```bash
 jq --arg cmd "node \"$PLUGIN_ROOT/hooks/statusline.js\"" \
     '.statusLine = {"async":true,"command":$cmd,"type":"command"}' \
@@ -110,9 +112,11 @@ jq --arg cmd "node \"$PLUGIN_ROOT/hooks/statusline.js\"" \
 
 Write `/tmp/foundry_init_tmp.json` back to `~/.claude/settings.json` using Write tool.
 
-## Step 4: Merge permissions.allow and permissions.deny
+## Step 5: Merge permissions.allow and permissions.deny
 
 Read `$PLUGIN_ROOT/.claude-plugin/permissions-allow.json` using Read tool. Merge into `~/.claude/settings.json` — add only entries not already present (exact string match):
+
+Writes merged `permissions.allow` array:
 
 ```bash
 jq --slurpfile perms "$PLUGIN_ROOT/.claude-plugin/permissions-allow.json" \
@@ -124,6 +128,8 @@ Write back with Write tool. Report: "Added N new permissions.allow entries (M al
 
 Check whether `$PLUGIN_ROOT/.claude-plugin/permissions-deny.json` exists. If so, read with Read tool and merge — add only entries not already present:
 
+Writes merged `permissions.deny` array:
+
 ```bash
 jq --slurpfile deny "$PLUGIN_ROOT/.claude-plugin/permissions-deny.json" \
     '.permissions.deny = ((.permissions.deny // []) + $deny[0] | unique)' \
@@ -132,7 +138,7 @@ jq --slurpfile deny "$PLUGIN_ROOT/.claude-plugin/permissions-deny.json" \
 
 Write back with Write tool. Report: "Added N new permissions.deny entries (M already present)."
 
-## Step 4b: Copy permissions-guide.md
+## Step 6: Copy permissions-guide.md
 
 Copy `$PLUGIN_ROOT/permissions-guide.md` to `.claude/permissions-guide.md` — only if destination absent (preserves project-local edits via `/manage`):
 
@@ -145,13 +151,15 @@ else
 fi
 ```
 
-## Step 5: Merge enabledPlugins
+## Step 7: Merge enabledPlugins
 
 ```bash
 jq -e '.enabledPlugins["codex@openai-codex"] == true' ~/.claude/settings.json >/dev/null 2>&1  # timeout: 5000
 ```
 
 If already `true`: report "enabledPlugins already set — skipping." Otherwise:
+
+Writes `enabledPlugins["codex@openai-codex"]` key:
 
 ```bash
 jq '.enabledPlugins["codex@openai-codex"] = true' \
@@ -160,7 +168,7 @@ jq '.enabledPlugins["codex@openai-codex"] = true' \
 
 Write back with Write tool.
 
-## Step 6: Validate
+## Step 8: Validate
 
 After all writes, confirm file parses as valid JSON:
 
@@ -170,7 +178,7 @@ jq empty ~/.claude/settings.json  # timeout: 5000
 
 If `jq` exits non-zero: restore from backup (`cp ~/.claude/settings.json.bak ~/.claude/settings.json`), report error, stop. If valid: continue.
 
-## Step 7: Symlink rules and TEAM_PROTOCOL.md
+## Step 9: Symlink rules and TEAM_PROTOCOL.md
 
 Ensure target dir exists:
 
@@ -231,7 +239,7 @@ ln -sf "$PLUGIN_ROOT/TEAM_PROTOCOL.md" ~/.claude/TEAM_PROTOCOL.md  # timeout: 50
 echo "  linked: TEAM_PROTOCOL.md"
 ```
 
-## Step 8: Final report
+## Step 10: Final report
 
 Print summary:
 
@@ -248,6 +256,6 @@ Suggest: "Re-run `/foundry:init` after any plugin upgrade to refresh symlinks to
 
 <notes>
 
-**Testing init changes**: Init skill has no `.claude/skills/init` entry — only reachable as `/foundry:init` after plugin installed. To test: bump `version` in `plugins/foundry/.claude-plugin/plugin.json`, run `claude plugin install foundry@borda-ai-rig` from repo root to refresh cache, invoke `/foundry:init`. **Upgrade path**: After `claude plugin install foundry@borda-ai-rig` upgrades version, symlinks point to old cache path. Re-run `/foundry:init` — Step 7 detects stale symlinks as conflicts and replaces them.
+**Testing init changes**: Init skill has no `.claude/skills/init` entry — only reachable as `/foundry:init` after plugin installed. To test: bump `version` in `plugins/foundry/.claude-plugin/plugin.json`, run `claude plugin install foundry@borda-ai-rig` from repo root to refresh cache, invoke `/foundry:init`. **Upgrade path**: After `claude plugin install foundry@borda-ai-rig` upgrades version, symlinks point to old cache path. Re-run `/foundry:init` — Step 9 detects stale symlinks as conflicts and replaces them.
 
 </notes>

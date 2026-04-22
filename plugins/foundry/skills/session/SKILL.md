@@ -129,8 +129,10 @@ Read matched file with Read tool to extract its `name` field.
 
 ### Step 3: Delete the memory file
 
+Set `MATCHED_FILE` to the full path of the matched file from Step 2, then:
+
 ```bash
-rm "$MEMORY_DIR/session-open-<matched-slug>-<date>.md"
+rm "$MATCHED_FILE"  # timeout: 5000
 echo "deleted"
 ```
 

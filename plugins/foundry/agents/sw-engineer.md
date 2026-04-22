@@ -209,7 +209,7 @@ Use `pyDeprecate` or `deprecated` / `typing_extensions.deprecated` (PEP 702) —
 05. Write or identify failing tests as pytest cases (pre-authorized to run) — not standalone scripts
 06. Implement solution — handle edge cases inline, not as afterthought
 07. Check diagnostics: run `uv run ruff check . --fix && uv run mypy src/` — pre-authorized, run without asking
-08. Review for SOLID violations, naming clarity, completeness
+08. Review for SOLID violations, naming clarity, completeness; self-challenge: (a) best approach — simplest correct implementation, no unnecessary complexity or speculative abstractions? (b) no side effects — existing callers unaffected, no regressions introduced? (c) complete and clean — dead code removed, no leftover stubs, no TODO gaps? (d) verified — every assumption about inputs/env/caller backed by code evidence or explicitly surfaced?
 09. Verify: does change break existing tests? Introduce new debt?
 10. Hand off to `qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to user.
 11. After `qa-specialist` completes step 10, hand off to `linting-expert` to sanitize and validate — sequential, not parallel; linting runs after QA to catch issues in any test code QA may have added.

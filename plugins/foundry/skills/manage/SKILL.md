@@ -84,6 +84,14 @@ Maintain colors manually — add new agent colors here when creating agents; thi
 
 Extract operation, type, name, optional arguments from `$ARGUMENTS`.
 
+```bash
+# Parse --skip-audit flag before other argument processing
+SKIP_AUDIT=false
+[[ "$ARGUMENTS" == *"--skip-audit"* ]] && SKIP_AUDIT=true
+ARGUMENTS="${ARGUMENTS//--skip-audit/}"
+ARGUMENTS="${ARGUMENTS#"${ARGUMENTS%%[![:space:]]*}"}"
+```
+
 **Validation rules:**
 
 - Name must match `^[a-z][a-z0-9-]*$` (kebab-case)
@@ -537,7 +545,7 @@ Keep descriptions concise (one line), consistent in tone with surrounding rows. 
 
 Confirm no broken references remain:
 
-Use Grep (pattern `` `[a-z]+(-[a-z]+)+` ``, glob `{agents/*.md,skills/*/SKILL.md}`, path `.claude/`, output mode `content`).
+Use Grep (pattern `[a-z]+:[a-z]+(-[a-z]+)*` to find cross-plugin references, or `See [a-z-]+ agent` for cross-references, glob `{agents/*.md,skills/*/SKILL.md}`, path `.claude/`, output mode `content`). Avoid broad kebab-case patterns — they match code examples and produce false positives.
 
 Use Glob (`agents/*.md`, path `.claude/`) and Glob (`skills/*/`, path `.claude/`) for on-disk inventory; extract names inline. Use Grep to search for changed name and confirm:
 

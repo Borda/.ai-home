@@ -25,7 +25,7 @@ docs/specs/
 .claude/agent-memory/
 
 # Local Claude overrides (not synced to ~/.claude/)
-CLAUDE.local.md
+*.local.md
 
 # JetBrains IDEs
 .idea/

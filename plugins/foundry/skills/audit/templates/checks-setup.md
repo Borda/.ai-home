@@ -199,8 +199,9 @@ else
         fi
     done
 
-    # 8c — Hook scripts: real files in plugin; .claude/hooks/ symlinks point back to them
+    # 8c — Hook scripts: real files in plugin; hooks auto-register via hooks.json + CLAUDE_PLUGIN_ROOT
     HOOKS_DIR="$PLUGIN_DIR/hooks"
+    HOOKS_JSON="$HOOKS_DIR/hooks.json"
     if [ ! -d "$HOOKS_DIR" ]; then
         printf "${RED}! HIGH${NC}: Check 8c — hooks/ directory not found in plugin\n"
         FAIL=$((FAIL + 1))
@@ -214,22 +215,36 @@ else
                 printf "${YEL}⚠ MEDIUM${NC}: Check 8c — %s is a symlink; expected real file in plugin hooks/\n" "$name"
                 JS_FAIL=$((JS_FAIL + 1))
             fi
-            # 8c-ii: matching .claude/hooks/ entry must be a valid symlink resolving to plugin
-            local_hook=".claude/hooks/$name"
-            if [ ! -L "$local_hook" ]; then
-                printf "${YEL}⚠ MEDIUM${NC}: Check 8c — .claude/hooks/%s is not a symlink (expected symlink → plugin)\n" "$name"
-                JS_FAIL=$((JS_FAIL + 1))
-            elif [ ! -f "$local_hook" ]; then
-                printf "${RED}! HIGH${NC}: Check 8c — broken symlink: .claude/hooks/%s -> %s\n" "$name" "$(readlink "$local_hook" 2>/dev/null)"
-                FAIL=$((FAIL + 1))
-                JS_FAIL=$((JS_FAIL + 1))
-            fi
+            # 8c-ii: verify every .js referenced in hooks.json exists in plugin hooks/
+            # (hooks auto-register via hooks.json + CLAUDE_PLUGIN_ROOT — no .claude/hooks/ symlinks needed)
         done
-        [ "$JS_FAIL" -eq 0 ] && printf "${GRN}✓${NC}: Check 8c — plugin hook files valid; .claude/hooks/ symlinks resolve\n"
+        [ "$JS_FAIL" -eq 0 ] && printf "${GRN}✓${NC}: Check 8c — plugin hook files valid\n"
+
+        # 8c-iii: hooks.json reference integrity — every referenced .js must exist
+        if command -v node &>/dev/null && [ -f "$HOOKS_JSON" ]; then
+            REF_FAIL=0
+            while IFS= read -r js_name; do
+                if [ ! -f "$HOOKS_DIR/$js_name" ]; then
+                    printf "${RED}! HIGH${NC}: Check 8c — hooks.json references missing file: hooks/%s\n" "$js_name"
+                    REF_FAIL=$((REF_FAIL + 1))
+                fi
+            done < <(node -e "
+                const h = JSON.parse(require('fs').readFileSync('$HOOKS_JSON'));
+                const scripts = new Set();
+                Object.values(h.hooks || {}).flat().forEach(e => (e.hooks || []).forEach(hook => {
+                    const m = (hook.command || '').match(/\\\$\\{CLAUDE_PLUGIN_ROOT\\}\\/hooks\\/([^\"'\\s]+\\.js)/);
+                    if (m) scripts.add(m[1]);
+                }));
+                scripts.forEach(s => console.log(s));
+            " 2>/dev/null)
+            [ "$REF_FAIL" -eq 0 ] && printf "${GRN}✓${NC}: Check 8c — hooks.json references all resolve to plugin files\n"
+            [ "$REF_FAIL" -gt 0 ] && FAIL=$((FAIL + 1))
+        else
+            printf "${YEL}⚠ SKIPPED${NC}: Check 8c-iii — node not available; hooks.json reference check skipped\n"
+        fi
     fi
 
     # 8d — hooks.json: exists, valid JSON
-    HOOKS_JSON="$HOOKS_DIR/hooks.json"
     if [ ! -f "$HOOKS_JSON" ]; then
         printf "${RED}! HIGH${NC}: Check 8d — hooks/hooks.json not found\n"
         FAIL=$((FAIL + 1))
@@ -319,7 +334,7 @@ else
 fi
 ```
 
-**Severity**: manifest missing/invalid JSON → **critical**; broken symlink, hooks.json invalid, or `claude plugin validate` fails → **high**; .js file not symlink → **medium**; 8f permissions-allow.json entries missing from settings.json → **medium**; settings.json entries missing from permissions-allow.json → **low**; setup-foundry SKILL.md missing → **high**; missing required keyword coverage → **medium**. **Report only** — never auto-fix.
+**Severity**: manifest missing/invalid JSON → **critical**; broken symlink, hooks.json invalid, hooks.json references missing file, or `claude plugin validate` fails → **high**; .js plugin file is symlink (not real file) → **medium**; 8f permissions-allow.json entries missing from settings.json → **medium**; settings.json entries missing from permissions-allow.json → **low**; setup-foundry SKILL.md missing → **high**; missing required keyword coverage → **medium**. **Report only** — never auto-fix.
 
 ______________________________________________________________________
 

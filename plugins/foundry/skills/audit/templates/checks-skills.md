@@ -132,12 +132,19 @@ For references with a trailing argument token (e.g., `fix` in `/audit fix`, `bre
 1. Read the target skill's frontmatter `argument-hint:` (Glob-resolved path, first 5 lines)
 2. If the argument token does NOT appear as a case-insensitive substring of `argument-hint` → **[medium]**: `Sequence argument '<arg>' absent from /<name> argument-hint: '<hint>'`
 
+**Step 4 — Cycle detection (Check 24c)**:
+
+Build a directed graph from (source-file, skill-reference) pairs collected in Step 1. Walk all paths from each node; flag back-edges (skill A → skill B → … → skill A).
+
+→ Any cycle found: **[high] 24c**: `Cycle: <A> → <B> → … → <A>` — document full cycle path; do not auto-fix; resolution requires removing or redirecting one chain edge.
+
 **Report only** — do not auto-fix; sequence intent requires human judgment.
 
 | Sub-check | Severity | Auto-fix |
 | --- | --- | --- |
 | 24a — target skill not on disk | high | no |
 | 24b — argument absent from argument-hint | medium | no |
+| 24c — directed cycle in follow-up chain | high | no |
 
 ______________________________________________________________________
 
@@ -250,7 +257,92 @@ Partially covered → **[medium] 28b**: `<plugin>/<skill>: fallback section pres
 
 **Report only** — fixing requires adding an Agent Resolution section with fallback substitutes for each cross-plugin dependency; the pattern in `develop:plan` (Agent Resolution table with `foundry agent | Fallback | Model | Role description prefix`) is the reference implementation.
 
+> **Related**: Check 25 (in `checks-shared.md`) covers bare-name dispatch (missing plugin prefix). Check 25 and Check 28 address different failure modes — run both.
+
 | Sub-check | Condition | Severity | Auto-fix |
 | --- | --- | --- | --- |
 | 28a — no fallback for cross-plugin dispatch | high | no |
 | 28b — fallback present but agent not covered | medium | no |
+
+______________________________________________________________________
+
+## Check 30 — Plugin skill bash operational correctness
+
+Four static-grep patterns catching silent failures in skill SKILL.md bash blocks. Run across both `.claude/skills/` and `plugins/*/skills/` — these bugs appear in any skill.
+
+### 30a — Pipe exit code capture (PIPESTATUS)
+
+```bash
+YEL='\033[1;33m'
+GRN='\033[0;32m'
+CYN='\033[0;36m'
+NC='\033[0m'
+printf "=== Check 30a: Pipe exit code capture ===\n"
+# Find | tail or | head followed by $? assignment within 3 lines — tail/head always exit 0
+grep -rn '| tail\b\|| head\b' plugins/*/skills/ .claude/skills/ 2>/dev/null |
+  grep -v 'PIPESTATUS\|pipefail\|#.*tail\|#.*head' |
+  grep -v '^Binary' &&
+printf "  ${CYN}hint${NC}: use \${PIPESTATUS[0]} or set -o pipefail; \$? captures tail/head exit (always 0)\n" || true
+printf "${GRN}✓${NC}: Check 30a scan complete\n"
+```  # timeout: 5000
+
+Severity: **critical** — gate commands appear to pass even on genuine failure; `$?` after `cmd | tail -N` is tail's exit code (0), not cmd's.
+
+Fix pattern: `cmd 2>&1 | tail -N; EXIT=${PIPESTATUS[0]}`
+
+### 30b — SKIP variable guard missing
+
+```bash
+printf "=== Check 30b: SKIP variable guard ===\n"
+# Find SKIP_X=1 detection lines; check whether subsequent runner commands have a guard
+grep -rn 'SKIP_[A-Z_]*=1' plugins/*/skills/ .claude/skills/ 2>/dev/null |
+  grep -v '^Binary' | grep -v '#' | while IFS= read -r match; do
+    file=$(echo "$match" | cut -d: -f1)
+    # Check if any guard exists in same file
+    grep -q '\[ "\${SKIP_' "$file" 2>/dev/null ||
+      printf "${YEL}⚠ SKIP guard missing${NC}: %s — SKIP variable set but no conditional guard found\n" "$file"
+done
+printf "${GRN}✓${NC}: Check 30b scan complete\n"
+```  # timeout: 5000
+
+Severity: **critical** — `SKIP_RUFF=1` set by tool detection, but `$RUNNER ruff check` runs unconditionally; detection is cosmetic.
+
+Fix pattern: `[ "${SKIP_RUFF:-0}" -ne 1 ] && $RUNNER ruff check ...`
+
+### 30c — Agent filename convention mismatch (model reasoning)
+
+Cannot be caught by grep alone — requires reading spawn prompt and consolidator read pattern in the same file.
+
+Flag when a skill file:
+1. Spawns agents with a prompt instructing them to write findings to a file named with a plugin-prefixed format (e.g. `foundry:sw-engineer.md`)
+2. AND the consolidator reads files using a bare-name format (e.g. `sw-engineer.md`)
+
+These never match → all agent findings silently dropped.
+
+Severity: **high**
+
+Fix: standardize to bare agent name in both spawn prompt and consolidator read pattern (e.g. `sw-engineer.md`).
+
+### 30d — TEST_CMD used with pytest-specific flags without PYTEST_CMD split
+
+```bash
+printf "=== Check 30d: TEST_CMD/PYTEST_CMD split ===\n"
+grep -rn '\$TEST_CMD.*--tb\b\|\$TEST_CMD.*--co\b\|\$TEST_CMD.*::\|\$TEST_CMD.*--cov\b\|\$TEST_CMD.*--doctest' \
+  plugins/*/skills/ .claude/skills/ 2>/dev/null |
+  grep -v 'PYTEST_CMD\|#' | grep -v '^Binary' &&
+printf "  ${CYN}hint${NC}: derive PYTEST_CMD for pytest-specific flags; TEST_CMD=tox or make won't accept --tb/--co/::/--cov\n" || true
+printf "${GRN}✓${NC}: Check 30d scan complete\n"
+```  # timeout: 5000
+
+Severity: **high** — skill fails silently on tox/make projects when pytest-specific flags appended to TEST_CMD.
+
+Fix: after detecting TEST_CMD, derive `PYTEST_CMD` for targeted runs: `tox` → `PYTEST_CMD="uv run pytest"`; `make test` → `PYTEST_CMD="uv run pytest"`.
+
+**Report only** — do not auto-fix; resolution requires understanding each skill's runner detection block.
+
+| Sub-check | Pattern | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| 30a — pipe exit code | `\ | tail` / `\ | head` without PIPESTATUS | critical | no |
+| 30b — SKIP guard missing | `SKIP_X=1` with no `[ "${SKIP_X:-0}" ]` guard | critical | no |
+| 30c — filename mismatch | spawn filename ≠ consolidator filename (model reasoning) | high | no |
+| 30d — TEST_CMD+pytest flags | `$TEST_CMD --tb` / `--co` / `::` / `--cov` without PYTEST_CMD | high | no |

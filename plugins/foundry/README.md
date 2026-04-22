@@ -87,12 +87,16 @@ Use `link` to invoke foundry commands without a prefix (`/audit` instead of `/fo
 ### Quality sweep
 
 ```bash
-/audit                    # report only — lists all findings + upgrade proposals
+/audit                    # full sweep: .claude/ agents, skills, rules, setup, all plugins; report only
 /audit fix                # auto-fix critical + high findings
 /audit fix medium         # auto-fix critical + high + medium
 /audit upgrade            # apply docs-sourced improvements (A/B tested for capability changes)
-/audit agents             # agents only
+/audit agents             # .claude/agents/ only
 /audit setup              # system config only: settings.json, hooks, plugin integration
+/audit plugin             # plugin integration checks only: codex (Check 7), foundry (Check 8)
+/audit plugins            # deep audit of all installed plugins — unconstrained + Codex adversarial pass
+/audit plugins develop    # deep audit of develop plugin only
+/audit agents skills      # chain multiple scopes in one run
 ```
 
 ### Calibration
@@ -169,15 +173,15 @@ Agents are not independent — they form a directed pipeline:
 
 ### Skills
 
-| Skill          | What It Does                                                                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/audit`       | Config audit: broken refs, inventory drift, docs freshness; `fix [high\|medium\|all]` auto-fixes; `upgrade` applies docs-sourced improvements |
-| `/manage`      | Create, update, delete agents/skills/rules with full cross-reference propagation; add/remove permissions                                      |
-| `/calibrate`   | Synthetic benchmarks measuring recall vs confidence bias across all agent modes                                                               |
-| `/brainstorm`  | Idea → divergent branch tree → spec → action plan; two modes: `idea` and `breakdown`                                                          |
-| `/investigate` | Systematic failure diagnosis — env, tools, hooks, CI divergence; ranks hypotheses                                                             |
-| `/distill`     | Surface patterns from corrections, suggest new agents/skills, prune MEMORY.md                                                                 |
-| `/session`     | Parking lot for diverging ideas — auto-parks unanswered questions across sessions                                                             |
+| Skill          | What It Does                                                                                                                                                                                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/audit`       | Config audit: broken refs, inventory drift, docs freshness; scopes: `agents`, `skills`, `rules`, `communication`, `setup`, `plugin` (integration checks), `plugins [<name>]` (deep plugin audit + Codex pass); chainable; `fix [high\|medium\|all]` auto-fixes; `upgrade` applies docs-sourced improvements |
+| `/manage`      | Create, update, delete agents/skills/rules with full cross-reference propagation; add/remove permissions                                                                                                                                                                                                    |
+| `/calibrate`   | Synthetic benchmarks measuring recall vs confidence bias across all agent modes                                                                                                                                                                                                                             |
+| `/brainstorm`  | Idea → divergent branch tree → spec → action plan; two modes: `idea` and `breakdown`                                                                                                                                                                                                                        |
+| `/investigate` | Systematic failure diagnosis — env, tools, hooks, CI divergence; ranks hypotheses                                                                                                                                                                                                                           |
+| `/distill`     | Surface patterns from corrections, suggest new agents/skills, prune MEMORY.md                                                                                                                                                                                                                               |
+| `/session`     | Parking lot for diverging ideas — auto-parks unanswered questions across sessions                                                                                                                                                                                                                           |
 
 ### Hooks
 

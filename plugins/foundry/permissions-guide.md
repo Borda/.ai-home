@@ -10,6 +10,10 @@ ______________________________________________________________________
 
 | Permission | Description | Why denied |
 | --- | --- | --- |
+| `Bash(chmod 777:*)` | World-writable permissions | Security risk; overly broad file permissions |
+| `Bash(rm -rf:*)` | Recursive force delete | Irreversible; destroys entire directory trees |
+| `Bash(ssh:*)` | SSH connections | Prevents agent from opening remote sessions |
+| `Bash(sudo:*)` | Privilege escalation | Agents must not gain root access |
 | `Bash(git branch -D:*)` | Force-delete local branch | Irreversible; require explicit confirmation |
 | `Bash(git branch -d:*)` | Delete local branch | Requires explicit user confirmation |
 | `Bash(git tag -d:*)` | Delete local tag | Requires explicit user confirmation |
@@ -99,7 +103,6 @@ ______________________________________________________________________
 | `Bash(jq:*)` | Query and transform JSON | Parse API responses, inspect settings.json, filter JSONL logs |
 | `Bash(date:*)` | Print or format the current date/time | Timestamp log entries, generate dated filenames |
 | `Bash(which:*)` | Locate an executable on PATH | Verify a tool is installed before invoking it |
-| `Bash(env:*)` | Print or set environment variables | Inspect current env, run a command with a modified environment |
 | `Bash(comm:*)` | Compare two sorted files line by line | `/audit` Check 1: diff on-disk agent/skill names against MEMORY.md roster |
 | `Bash(mktemp:*)` | Create a temporary file with a unique name | Create temporary files for safe content comparison before overwriting |
 | `Bash(touch:*)` | Create a file or update its modification time | `/audit` health monitoring: create per-agent checkpoint files for stall detection |

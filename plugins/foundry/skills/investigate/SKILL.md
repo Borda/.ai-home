@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial Codex review for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop debug) or config quality (/audit).
+description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial Codex review for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop:debug) or config quality (/foundry:audit).
 argument-hint: <symptom, question, or failing command>
 allowed-tools: Read, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
@@ -10,7 +10,7 @@ effort: high
 
 Diagnose unknown failures: broken local setup, environment mismatch, tool misbehavior, hook problems, CI vs local divergence, permission errors, runtime anomalies. Gather signals broadly, eliminate hypotheses systematically, report confirmed root cause + recommended next skill. No fixes — diagnosis only.
 
-NOT for: known Python test failures with traceback (use `/develop:debug`); `.claude/` config quality sweep (use `/audit`).
+NOT for: known Python test failures with traceback (use `/develop:debug`); `.claude/` config quality sweep (use `/foundry:audit`).
 
 </objective>
 
@@ -55,7 +55,8 @@ Collect evidence in parallel — do NOT form hypotheses yet.
 which python3 && python3 --version                                                                   # timeout: 5000
 which uv 2>/dev/null && uv --version 2>/dev/null || echo "uv: not found"                             # timeout: 5000
 node --version 2>/dev/null || echo "node: not found"                                                 # timeout: 5000
-claude plugin list 2>/dev/null | grep 'codex@openai-codex' || echo "codex (openai-codex): not found" # timeout: 5000
+CODEX_AVAILABLE=false
+claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && CODEX_AVAILABLE=true || echo "codex (openai-codex): not found"  # timeout: 5000
 ```
 
 ```bash
@@ -96,12 +97,12 @@ Common categories:
 - **Config / permission error** — settings.json allow entry missing; hook path wrong; settings.local.json override
 - **State pollution** — stale lock file, leftover tmp artifact, or cached state conflicts with current run
 - **Recent change regression** — git commit or config edit introduced issue (check `git log`)
-- **Sync drift** — project `.claude/` and `~/.claude/` diverged; compare manually or run `/audit setup`
+- **Sync drift** — project `.claude/` and `~/.claude/` diverged; compare manually or run `/foundry:audit setup`
 - **External service** — network unavailable, API rate-limited, or remote tool unreachable
 
 ## Step 4: Auxiliary review (optional)
 
-If `codex` plugin available AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
+If `$CODEX_AVAILABLE` is `true` (from Step 2) AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
 
 ```
 Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review of hypothesis quality: [provide symptom, signals, and hypothesis table]. Challenge the top hypothesis, identify blindspots, and surface alternative root causes. Read-only.")
@@ -159,7 +160,7 @@ Stop when one hypothesis confirmed with clear evidence, or top-3 all ruled out (
 **Recommended next action**: <one of:>
   - `/develop:fix` — code regression confirmed (application code only — NOT for `.claude/` changes)
   - `/manage update <name> "<change directive>"` — `.claude/` agent/skill/rule content needs updating (use this, NOT `/develop:feature or /develop:fix`, for any proposed change to `.claude/`)
-  - `/audit fix` — structural/quality issue in `.claude/` config confirmed
+  - `/foundry:audit fix` — structural/quality issue in `.claude/` config confirmed
   - `/foundry:init` — propagate project `.claude/` to `~/.claude/` (foundry plugin is the distribution path)
   - Manual step: <exact command to run>
   - Further investigation needed: <what additional info would resolve it>
@@ -173,7 +174,7 @@ End with `## Confidence` block per output standards.
 
 - **Diagnosis only** — never apply fixes; hand off with specific recommended action
 - **Scope vs `/develop:debug`**: `/develop:debug` needs known test failure, runs TDD fix loop. `/investigate` = "something wrong, don't know what" — cause may not be in application code
-- **Scope vs `/audit`**: `/audit` = scheduled quality sweep of `.claude/`. `/investigate` = triggered by live failure; two complement each other (investigate finds config symptom → audit confirms structural issue)
+- **Scope vs `/foundry:audit`**: `/foundry:audit` = scheduled quality sweep of `.claude/`. `/investigate` = triggered by live failure; two complement each other (investigate finds config symptom → audit confirms structural issue)
 - **Broad first**: always complete Step 2 before hypothesising — premature anchoring = most common investigation failure
 - **Parallel probes**: run independent probes in single response to avoid serial latency
 - **Inconclusiveness valid**: report what ruled out and what info would close remaining gap — don't fabricate root cause to appear decisive

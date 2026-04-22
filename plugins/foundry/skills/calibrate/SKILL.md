@@ -110,6 +110,13 @@ Create tasks before proceeding:
 
 ## Step 2: Spawn pipeline subagents
 
+> **Pre-flight**: mode files at `.claude/skills/calibrate/modes/` are symlinked by `/foundry:init`. If absent, resolve via plugin cache:
+> ```bash
+> CALIB_MODES_DIR=".claude/skills/calibrate/modes"
+> [ -d "$CALIB_MODES_DIR" ] || CALIB_MODES_DIR="$(find ${HOME}/.claude/plugins/cache -path "*/calibrate/modes" -type d 2>/dev/null | head -1)"
+> [ -d "$CALIB_MODES_DIR" ] || { printf "! BREAKING: calibrate/modes/ not found — run /foundry:init first\n"; exit 1; }
+> ```
+
 For each target mode in resolved target list, read corresponding mode file and execute spawn instructions. Issue ALL spawns in **single response** — modes are independent and run concurrently.
 
 | Target mode | Mode file | Task to mark in_progress |

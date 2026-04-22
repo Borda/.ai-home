@@ -270,7 +270,7 @@ BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
 OUTPUT_PATH=".temp/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"
 ```
 
-Spawn **foundry:self-mentor** with tree-focused prompt (inject pre-computed `$OUTPUT_PATH` in place of `<output-path>`):
+Spawn **foundry:self-mentor** with tree-focused prompt. Substitute `$OUTPUT_PATH` value (pre-computed above) for `<output-path>` placeholder before passing the prompt — do NOT pass the literal `$OUTPUT_PATH` variable name in the prompt string:
 
 ```
 Read .plans/blueprint/<tree-file>. Audit for tree quality only (do NOT audit `.claude/` config files — scope is the brainstorm tree only):
@@ -299,7 +299,16 @@ Show tree file path and compact tree summary (same format as Step 3). Then call 
 - (b) Needs more exploration — [describe what to add or close]
 - (c) Start over — back to clarifying questions
 
-**Gate**: do not exit until user approves. On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles — after 3 (b) responses with no convergence, surface unresolved concerns to user and stop.)
+**Gate**: do not exit until user approves.
+
+```bash
+# Initialize approval counter at Step 5 entry
+APPROVAL_CYCLES=${APPROVAL_CYCLES:-0}
+APPROVAL_CYCLES=$((APPROVAL_CYCLES + 1))
+[ "$APPROVAL_CYCLES" -gt 3 ] && { echo "⚠ 3 approval cycles reached with no convergence — surfacing unresolved concerns:"; exit 0; }
+```
+
+On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles — counter tracked above.)
 
 On approval, suggest: `/brainstorm breakdown .plans/blueprint/<file>` to distill tree into spec.
 

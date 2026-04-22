@@ -182,7 +182,7 @@ Long-term confidence improvement loop: low score → targeted re-run → pattern
 
 <workflow>
 
-1. Glob all agent files: `.claude/agents/*.md` and skill files: `.claude/skills/**/*.md`
+1. Glob all agent files: `.claude/agents/*.md` and skill files: `.claude/skills/**/*.md` — **post-install only**: these paths only exist after `/foundry:init`; in plugin-dev context (working directly in `plugins/foundry/`) glob `plugins/foundry/agents/*.md` and `plugins/foundry/skills/**/*.md` instead
 2. Read each file and evaluate: structure, cross-refs, line count, duplication — when evaluating handoff envelope compliance specifically, read `.claude/skills/_shared/file-handoff-protocol.md` first to verify required fields from live source rather than memory
 3. For cross-refs: `Grep("See .* agent", ".claude/agents/")` — validate each target exists on disk
 4. For URLs: `WebFetch` each URL found in agent/skill files — confirm resolves and content matches description; flag any 404 or mismatch as P4 (outdated content)
