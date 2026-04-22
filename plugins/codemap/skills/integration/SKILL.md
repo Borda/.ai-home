@@ -52,7 +52,7 @@ if command -v scan-query >/dev/null 2>&1; then
 elif [ -x "${CLAUDE_PLUGIN_ROOT}/bin/scan-query" ]; then
     SQ="${CLAUDE_PLUGIN_ROOT}/bin/scan-query"; SRC="CLAUDE_PLUGIN_ROOT"
 else
-    SQ=$(ls "$HOME/.claude/plugins/cache/borda-ai-rig/codemap"/*/bin/scan-query 2>/dev/null | sort -V | tail -1)
+    SQ=$(ls "$HOME/.claude/plugins/cache"/*/codemap/*/bin/scan-query 2>/dev/null | sort -V | tail -1)
     SRC="cache glob"
 fi
 if [ -n "$SQ" ] && [ -x "$SQ" ]; then
@@ -102,6 +102,8 @@ print(f'{s}|{age} day{\"s\" if age != 1 else \"\"} ago ({sa[:10]})|Run /codemap:
         WARN) printf "${YEL}⚠${NC} freshness: %s\n  → %s\n" "$d" "$h" ;;
     esac
 done
+PYTHON3_EXIT=${PIPESTATUS[0]}
+[ "$PYTHON3_EXIT" -ne 0 ] && printf "${YEL}⚠${NC} freshness: python3 exited %s — index may be unreadable\n" "$PYTHON3_EXIT"
 ```
 
 ### C4 — Smoke test and git-staleness check
@@ -127,7 +129,7 @@ rm -f /tmp/cmc_err
 
 ```bash
 # timeout: 20000
-[ -z "$CLAUDE_PLUGIN_ROOT" ] && { printf "${RED}✗${NC} CLAUDE_PLUGIN_ROOT unset — cannot audit injection\n"; return 1; }
+[ -z "$CLAUDE_PLUGIN_ROOT" ] && { printf "${RED}✗${NC} CLAUDE_PLUGIN_ROOT unset — cannot audit injection\n"; exit 1; }
 CACHE=$(dirname "$(dirname "$CLAUDE_PLUGIN_ROOT")")
 printf "\n--- Skill injection audit (cache: %s) ---\n" "$CACHE"
 FILES=$(find "$CACHE" -name "SKILL.md" -exec grep -l "command -v scan-query" {} \; 2>/dev/null | sort)
@@ -176,9 +178,11 @@ a) Build now ★ — scans all .py files via ast.parse (Python only), <60s on mo
 b) Skip — I'll run /codemap:scan later (recommendations will be generic, no module-count weighting)
 ```
 
-If **a** (or auto-approved): run scanner:
+If **a** (or auto-approved): run scanner — verify binary exists first:
 
 ```bash
+# timeout: 5000
+[ -x "${CLAUDE_PLUGIN_ROOT}/bin/scan-index" ] || { printf "${RED}✗${NC} scan-index not found at ${CLAUDE_PLUGIN_ROOT}/bin/scan-index\nTry: /codemap:scan to install and rebuild.\n"; exit 1; }
 # timeout: 360000
 ${CLAUDE_PLUGIN_ROOT}/bin/scan-index
 ```

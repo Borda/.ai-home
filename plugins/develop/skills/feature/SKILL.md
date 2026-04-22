@@ -17,22 +17,17 @@ NOT for: bug fixes (use `/develop:fix`); `.claude/` config changes (use `/manage
 
 <workflow>
 
-<!-- Agent Resolution: skill-specific subset — update only agents used by this skill -->
+<!-- Agent Resolution: canonical table at plugins/develop/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
 
-> **Foundry plugin check**: run `ls ~/.claude/plugins/cache/ 2>/dev/null | grep -q foundry` (exit 0 = installed). If check fails or uncertain, proceed as if foundry available — it is common case; only fall back if agent dispatch explicitly fails.
+```bash
+# Locate develop plugin shared dir — installed first, local workspace fallback
+_DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_DEV_SHARED" ] && _DEV_SHARED="plugins/develop/skills/_shared"
+```
 
-When foundry **not** installed, substitute `foundry:X` references with `general-purpose` and prepend role description plus `model: <model>` to spawn call:
-
-| foundry agent | Fallback | Model | Role description prefix |
-| --- | --- | --- | --- |
-| `foundry:sw-engineer` | `general-purpose` | `opus` | `You are a senior Python software engineer. Write production-quality, type-safe code following SOLID principles.` |
-| `foundry:qa-specialist` | `general-purpose` | `opus` | `You are a QA specialist. Write deterministic, parametrized pytest tests covering edge cases and regressions.` |
-| `foundry:doc-scribe` | `general-purpose` | `sonnet` | `You are a documentation specialist. Write Google-style docstrings and keep README content accurate and concise.` |
-| `foundry:linting-expert` | `general-purpose` | `haiku` | `You are a static analysis specialist. Fix ruff/mypy violations, add missing type annotations, configure pre-commit hooks.` |
-
-Skills with `--team` mode: team spawning with fallback agents still works but lower-quality output.
+Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:doc-scribe`, `foundry:linting-expert`.
 
 ## Anti-Rationalizations
 
@@ -54,28 +49,7 @@ Skills with `--team` mode: team spawning with fallback agents still works but lo
 
 ## Project Detection
 
-Detect test runner once at skill start — before any `pytest` invocation:
-
-```bash
-if [ -f "uv.lock" ] || grep -q '\[tool\.uv\]' pyproject.toml 2>/dev/null; then TEST_CMD="uv run pytest"
-elif [ -f "poetry.lock" ] || grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null; then TEST_CMD="poetry run pytest"
-elif [ -f "tox.ini" ]; then TEST_CMD="tox"
-elif [ -f "Makefile" ] && grep -q '^test:' Makefile 2>/dev/null; then TEST_CMD="make test"
-else TEST_CMD="python -m pytest"; fi
-```
-
-Use `$TEST_CMD` in place of `python -m pytest` throughout this workflow.
-
-```bash
-# Derive PYTEST_CMD for commands needing pytest-specific flags
-# (tox and make test wrap pytest but don't accept pytest flags like --tb, --co, ::node, --doctest-modules)
-case "$TEST_CMD" in
-    tox|"make test")
-        if command -v uv >/dev/null 2>&1; then PYTEST_CMD="uv run pytest"
-        else PYTEST_CMD="python -m pytest"; fi ;;
-    *) PYTEST_CMD="$TEST_CMD" ;;
-esac
-```
+Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$PYTEST_CMD` (pytest flags). Run at skill start.
 
 **Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`). Store plan path as `PLAN_FILE`.
 
@@ -222,7 +196,7 @@ python examples/demo_<feature>.py 2>&1 | tail -5
 GATE_EXIT=${PIPESTATUS[0]}
 if [ $GATE_EXIT -eq 0 ]; then
     echo "⚠ GATE FAIL: demo passed (exit 0) — feature may already exist; revisit Step 1"
-    # Stop — do not proceed to Step 3
+    exit 1
 fi
 echo "✓ GATE OK: demo failed as expected (exit $GATE_EXIT)"
 ```
@@ -246,7 +220,7 @@ Drive implementation by making tests pass, one cycle at a time:
 
 ```bash
 # Baseline: confirm existing suite is green before adding any new code
-$TEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
+$PYTEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
 ```
 
 **Gate**: all existing tests must pass before proceeding. If any fail, stop — don't add new code on broken baseline. Use `/develop:fix` to address pre-existing failures first, then return here.
@@ -260,7 +234,7 @@ Start from Step 2 demo — already failing, becomes first target. For each piece
 1. **Target demo or write next focused test** — first iteration uses Step 2 demo directly; subsequent iterations add one new test per piece of new behaviour
 2. **Run existing suite — confirm all pass**:
    ```bash
-   $TEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
+   $PYTEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
    ```
 3. **Run new demo/test — confirm it fails**:
    ```bash
@@ -277,7 +251,7 @@ Start from Step 2 demo — already failing, becomes first target. For each piece
 5. **Run demo/test — confirm it passes**
 6. **Run full suite** to catch regressions:
    ```bash
-   $TEST_CMD --tb=short <target_test_dir> -v
+   $PYTEST_CMD --tb=short <target_test_dir> -v
    ```
 7. If regressions appear: fix before moving on — never carry forward broken suite
 
@@ -314,7 +288,7 @@ Use scan to prioritize which criteria below get deepest scrutiny.
 3. Re-run full suite to confirm nothing regressed:
 
    ```bash
-   $TEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
+   $PYTEST_CMD --tb=short <target_test_dir> -v 2>&1 | tail -20
    ```
 
    > **Objective convergence check**: if the set of findings in this cycle is identical to the previous cycle (same locations, same issues), declare convergence and exit loop — further cycles will not resolve the issue; surface to user.
@@ -425,7 +399,7 @@ Read `.claude/skills/_shared/quality-stack.md` (if file not found → skip quali
 
 ```
 You are a [role] teammate implementing: [feature].
-Read ~/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your task: [specific responsibility].
 [If QA]: include security checks for any auth/payment/data-handling code.
 Compact Instructions: preserve file paths, test results, API signatures. Discard verbose tool output.

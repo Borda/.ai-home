@@ -17,19 +17,17 @@ NOT for: production incidents without local reproduction (use `/foundry:investig
 
 <workflow>
 
-<!-- Agent Resolution: skill-specific subset — update only agents used by this skill -->
+<!-- Agent Resolution: canonical table at plugins/develop/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
 
-> **Foundry plugin check**: run `ls ~/.claude/plugins/cache/ 2>/dev/null | grep -q foundry` (exit 0 = installed). If check fails or uncertain, proceed as if foundry available — common case; fall back only if agent dispatch explicitly fails.
+```bash
+# Locate develop plugin shared dir — installed first, local workspace fallback
+_DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_DEV_SHARED" ] && _DEV_SHARED="plugins/develop/skills/_shared"
+```
 
-When foundry **not** installed, substitute `foundry:X` with `general-purpose`, prepend role description plus `model: <model>` to spawn call:
-
-| foundry agent | Fallback | Model | Role description prefix |
-| --- | --- | --- | --- |
-| `foundry:sw-engineer` | `general-purpose` | `opus` | `You are a senior Python software engineer. Write production-quality, type-safe code following SOLID principles.` |
-
-Skills with `--team` mode: team spawning with fallback agents still works but produces lower-quality output.
+Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`.
 
 **Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
 
@@ -50,27 +48,7 @@ Skills with `--team` mode: team spawning with fallback agents still works but pr
 
 ## Project Detection
 
-Detect test runner once — debug runs pytest in Step 1:
-
-```bash
-if [ -f "uv.lock" ] || grep -q '\[tool\.uv\]' pyproject.toml 2>/dev/null; then TEST_CMD="uv run pytest"
-elif [ -f "poetry.lock" ] || grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null; then TEST_CMD="poetry run pytest"
-elif [ -f "tox.ini" ]; then TEST_CMD="tox"
-elif [ -f "Makefile" ] && grep -q '^test:' Makefile 2>/dev/null; then TEST_CMD="make test"
-else TEST_CMD="python -m pytest"; fi
-```
-
-```bash
-# Derive PYTEST_CMD for commands needing pytest-specific flags
-case "$TEST_CMD" in
-    tox|"make test")
-        if command -v uv >/dev/null 2>&1; then PYTEST_CMD="uv run pytest"
-        else PYTEST_CMD="python -m pytest"; fi ;;
-    *) PYTEST_CMD="$TEST_CMD" ;;
-esac
-```
-
-Use `$TEST_CMD` in place of `python -m pytest` in this workflow.
+Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$PYTEST_CMD` (pytest flags). Run at skill start.
 
 **Checkpoint**: debug is investigation-only — no code changes. `.plans/active/debug_<slug>.md` (written in Step 4) serves as implicit session state. No `.developments/` checkpoint needed.
 
@@ -196,7 +174,7 @@ After root cause confirmed and handoff to `/develop:fix` complete, emit terminal
 Root Cause: <one sentence>
 File(s): <suspect files>
 Evidence: <key signals>
-→ Handed off to /develop:fix from Step 2
+→ Handed off to /develop:fix --diagnosis $DIAG_FILE from Step 2
 
 ## Confidence
 **Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
@@ -222,7 +200,7 @@ Evidence: <key signals>
 
 ```
 You are a foundry:sw-engineer teammate debugging: [symptom].
-Read ~/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
 Report findings to @lead using deltaT# or epsilonT# codes.
 Compact Instructions: preserve file paths, errors, line numbers. Discard verbose tool output.

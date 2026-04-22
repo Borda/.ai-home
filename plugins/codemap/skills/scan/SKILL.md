@@ -59,8 +59,8 @@ try:
     with open(index_path) as f:
         d = json.load(f)
 except FileNotFoundError:
-    print(f'Index not found: {index_path}')
-    sys.exit(0)
+    print(f'Index not found: {index_path} — run /codemap:scan first')
+    sys.exit(1)
 ok = [m for m in d['modules'] if m.get('status') == 'ok']
 deg = [m for m in d['modules'] if m.get('status') == 'degraded']
 if not ok:

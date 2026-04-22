@@ -15,23 +15,24 @@ NOT for: bug fixes (use `/develop:fix`); new features (use `/develop:feature`); 
 
 </objective>
 
+<constants>
+- MAX_INNER_CYCLES: 5 (change-test cycles per outer session — Step 4 safety break)
+- MAX_AGGREGATE_CYCLES: 10 (total change-test cycles across all outer cycles combined — Step 4 + Step 5)
+</constants>
+
 <workflow>
 
-<!-- Agent Resolution: skill-specific subset — update only agents used by this skill -->
+<!-- Agent Resolution: canonical table at plugins/develop/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
 
-> **Foundry plugin check**: run `ls ~/.claude/plugins/cache/ 2>/dev/null | grep -q foundry` (exit 0 = installed). If check fails or uncertain, proceed as if foundry available — common case; fall back only if agent dispatch explicitly fails.
+```bash
+# Locate develop plugin shared dir — installed first, local workspace fallback
+_DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_DEV_SHARED" ] && _DEV_SHARED="plugins/develop/skills/_shared"
+```
 
-When foundry **not** installed, substitute `foundry:X` with `general-purpose`, prepend role description plus `model: <model>` to spawn call:
-
-| foundry agent | Fallback | Model | Role description prefix |
-| --- | --- | --- | --- |
-| `foundry:sw-engineer` | `general-purpose` | `opus` | `You are a senior Python software engineer. Write production-quality, type-safe code following SOLID principles.` |
-| `foundry:qa-specialist` | `general-purpose` | `opus` | `You are a QA specialist. Write deterministic, parametrized pytest tests covering edge cases and regressions.` |
-| `foundry:linting-expert` | `general-purpose` | `haiku` | `You are a static analysis specialist. Fix ruff/mypy violations, add missing type annotations, configure pre-commit hooks.` |
-
-Skills with `--team` mode: team spawning with fallback agents still works but lower-quality output.
+Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`.
 
 **Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
 
@@ -53,28 +54,7 @@ Skills with `--team` mode: team spawning with fallback agents still works but lo
 
 ## Project Detection
 
-Detect test runner once at skill start:
-
-```bash
-if [ -f "uv.lock" ] || grep -q '\[tool\.uv\]' pyproject.toml 2>/dev/null; then TEST_CMD="uv run pytest"
-elif [ -f "poetry.lock" ] || grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null; then TEST_CMD="poetry run pytest"
-elif [ -f "tox.ini" ]; then TEST_CMD="tox"
-elif [ -f "Makefile" ] && grep -q '^test:' Makefile 2>/dev/null; then TEST_CMD="make test"
-else TEST_CMD="python -m pytest"; fi
-```
-
-Use `$TEST_CMD` in place of `python -m pytest` throughout this workflow.
-
-```bash
-# Derive PYTEST_CMD for commands needing pytest-specific flags
-# (tox and make test wrap pytest but don't accept flags like --tb, --co, --cov, ::node selectors)
-case "$TEST_CMD" in
-    tox|"make test")
-        if command -v uv >/dev/null 2>&1; then PYTEST_CMD="uv run pytest"
-        else PYTEST_CMD="python -m pytest"; fi ;;
-    *) PYTEST_CMD="$TEST_CMD" ;;
-esac
-```
+Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$PYTEST_CMD` (pytest flags). Run at skill start.
 
 **Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to inform Step 1 scope analysis. Skip redundant codebase exploration for already-classified files. Store plan path as `PLAN_FILE`.
 
@@ -104,6 +84,22 @@ fi
 
 If results returned: prepend `## Structural Context (codemap)` block to foundry:sw-engineer spawn prompt with hotspot JSON. If target maps to module in index, also include `scan-query deps <target_module>` (coupling) and `scan-query rdeps <target_module>` (blast radius). Derive `<target_module>` from target path: strip project root prefix, replace `/` with `.`, drop `.py` extension. If `scan-query` not found or index missing: proceed silently — don't mention codemap to user.
 
+
+**Multi-file / API-change scope — extended codemap scan**: if target is a directory, spans multiple files, or the goal mentions renaming/restructuring public API (i.e., refactoring is NOT limited to internals of a single function or class with unchanged public interface):
+
+```bash
+if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
+    # Reusability: who calls each affected module outside the refactoring scope
+    for mod in <affected_modules>; do
+        scan-query rdeps "$mod"
+    done
+    # Tightest coupling pairs — determines refactor sequence and what must change together
+    scan-query coupled --top 10
+fi
+```
+
+Include `## Scope & Reusability (codemap)` block in foundry:sw-engineer spawn prompt. If `rdeps` returns callers **outside** the refactoring scope: flag them explicitly — those callers must be updated or the refactoring silently breaks the public contract. If codemap not installed / index missing **and** scope is multi-file: warn user: "codemap unavailable — blast radius unknown; run `/codemap:scan` before proceeding with cross-module refactoring".
+
 Spawn **foundry:sw-engineer** agent to analyze code and identify:
 
 - Public API surface (functions, classes, methods external code calls)
@@ -128,7 +124,7 @@ $PYTEST_CMD --co -q 2>&1 | head -5
 
 # Check pytest-cov available
 SKIP_COV=0
-if ! ${RUNNER:-python -m} python -c "import pytest_cov" 2>/dev/null; then
+if ! python3 -c "import pytest_cov" 2>/dev/null; then
     echo "WARNING: pytest-cov not installed — coverage data unavailable; classifying all public functions as UNCOVERED (conservative)"
     SKIP_COV=1
 fi
@@ -295,7 +291,7 @@ Read `.claude/skills/_shared/quality-stack.md` (if file not found → skip quali
 
 ```
 You are a [foundry:sw-engineer|foundry:qa-specialist] teammate refactoring: [target].
-Read ~/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2. Apply file locking protocol for concurrent edits.
+Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2. Apply file locking protocol for concurrent edits.
 Your task: [refactoring steps 4 | characterization tests step 3].
 Compact Instructions: preserve file paths, test results, coverage numbers. Discard verbose tool output.
 Task tracking: do NOT call TaskCreate or TaskUpdate — the lead owns all task state. Signal your completion in your final delta message: "Status: complete | blocked — <reason>".

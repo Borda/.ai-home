@@ -17,18 +17,17 @@ NOT for: writing code/tests (use develop mode); `.claude/` config changes (use `
 
 <workflow>
 
+<!-- Agent Resolution: canonical table at plugins/develop/skills/_shared/agent-resolution.md -->
+
 ## Agent Resolution
-<!-- Agent Resolution: skill-specific subset — update only agents used by this skill -->
 
-> **Foundry plugin check**: run `ls ~/.claude/plugins/cache/ 2>/dev/null | grep -q foundry` (exit 0 = installed). If check fails or uncertain, proceed as if foundry available — common case; fall back only if agent dispatch explicitly fails.
+```bash
+# Locate develop plugin shared dir — installed first, local workspace fallback
+_DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_DEV_SHARED" ] && _DEV_SHARED="plugins/develop/skills/_shared"
+```
 
-When foundry **not** installed, substitute `foundry:X` with `general-purpose`, prepend role description plus `model: <model>` to spawn call:
-
-| foundry agent | Fallback | Model | Role description prefix |
-| --- | --- | --- | --- |
-| `foundry:sw-engineer` | `general-purpose` | `opus` | `You are a senior Python software engineer. Write production-quality, type-safe code following SOLID principles.` |
-| `foundry:qa-specialist` | `general-purpose` | `opus` | `You are a QA specialist. Write deterministic, parametrized pytest tests covering edge cases and regressions.` |
-| `foundry:linting-expert` | `general-purpose` | `haiku` | `You are a static analysis specialist. Fix ruff/mypy violations, add missing type annotations, configure pre-commit hooks.` |
+Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`.
 
 **Checkpoint**: plan is single-pass — `.plans/active/<slug>` file existence serves as implicit resume signal. No `.developments/` checkpoint needed; if skill interrupted, re-run `/develop:plan` to regenerate (plan makes no code changes).
 

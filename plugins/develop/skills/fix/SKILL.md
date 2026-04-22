@@ -17,20 +17,17 @@ NOT for: unknown failures without traceback (use `/foundry:investigate`); `.clau
 
 <workflow>
 
-<!-- Agent Resolution: identical across all develop skills -->
+<!-- Agent Resolution: canonical table at plugins/develop/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
 
-> **Foundry plugin check**: run `ls ~/.claude/plugins/cache/ 2>/dev/null | grep -q foundry` (exit 0 = installed). If check fails or uncertain, proceed as if foundry available — common case; only fall back if agent dispatch explicitly fails.
+```bash
+# Locate develop plugin shared dir — installed first, local workspace fallback
+_DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_DEV_SHARED" ] && _DEV_SHARED="plugins/develop/skills/_shared"
+```
 
-When foundry **not** installed, substitute `foundry:X` with `general-purpose`, prepend role description plus `model: <model>`:
-
-| foundry agent | Fallback | Model | Role description prefix |
-| --- | --- | --- | --- |
-| `foundry:sw-engineer` | `general-purpose` | `opus` | `You are a senior Python software engineer. Write production-quality, type-safe code following SOLID principles.` |
-| `foundry:qa-specialist` | `general-purpose` | `opus` | `You are a QA specialist. Write deterministic, parametrized pytest tests covering edge cases and regressions.` |
-
-Skills with `--team` mode: team spawning with fallback agents works but lower-quality output.
+Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`.
 
 ## Anti-Rationalizations
 
@@ -52,32 +49,17 @@ Skills with `--team` mode: team spawning with fallback agents works but lower-qu
 
 ## Project Detection
 
-Detect test runner once at skill start:
+Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$PYTEST_CMD` (pytest flags). Run at skill start.
+
+**Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, extract and read the plan file first:
 
 ```bash
-if [ -f "uv.lock" ] || grep -q '\[tool\.uv\]' pyproject.toml 2>/dev/null; then TEST_CMD="uv run pytest"
-elif [ -f "poetry.lock" ] || grep -q '\[tool\.poetry\]' pyproject.toml 2>/dev/null; then TEST_CMD="poetry run pytest"
-elif [ -f "tox.ini" ]; then TEST_CMD="tox"
-elif [ -f "Makefile" ] && grep -q '^test:' Makefile 2>/dev/null; then TEST_CMD="make test"
-else TEST_CMD="python -m pytest"; fi
+# Extract --plan path from arguments
+PLAN_FILE=$(echo "$ARGUMENTS" | sed 's/.*--plan //' | awk '{print $1}')
+[ -z "$PLAN_FILE" ] && PLAN_FILE=""
 ```
 
-Use `$TEST_CMD` in place of `python -m pytest` throughout this workflow.
-
-```bash
-# Derive PYTEST_CMD for commands needing pytest-specific flags
-# (tox and make test wrap pytest but don't accept flags like --tb, ::node selectors)
-case "$TEST_CMD" in
-    tox|"make test")
-        if command -v uv >/dev/null 2>&1; then PYTEST_CMD="uv run pytest"
-        else PYTEST_CMD="python -m pytest"; fi ;;
-    *) PYTEST_CMD="$TEST_CMD" ;;
-esac
-```
-
-Use `$PYTEST_CMD` when running a single test file/node with pytest-specific flags (`--tb`, `::test_name`). Use `$TEST_CMD` for full suite runs.
-
-**Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`). Store plan path as `PLAN_FILE`.
+If `PLAN_FILE` is set: Read `$PLAN_FILE`, extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`).
 
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4), append `step: N — completed`. On skill start, check for existing `.developments/*/checkpoint.md` — offer resume from last completed step if found.
 
@@ -172,7 +154,7 @@ Spawn with context:
 GATE_EXIT=$?
 if [ $GATE_EXIT -eq 0 ]; then
     echo "GATE FAIL: test passed (exit 0) — bug not captured; revisit Step 1"
-    # Stop — do not proceed to Step 3
+    exit 1
 fi
 echo "GATE OK: test failed as expected (exit $GATE_EXIT)"
 ```
@@ -201,7 +183,7 @@ Make minimal change to fix root cause:
    ```
 3. Run full test suite for affected module:
    ```bash
-   $TEST_CMD --tb=short <test_dir> -v
+   $PYTEST_CMD --tb=short <test_dir> -v
    ```
    **If `<test_dir>` does not exist or has no tests beyond the regression test**: run only the regression test (already verified in Step 2). Note in Final Report: "No pre-existing test suite found — regression test is sole verification."
 
@@ -235,7 +217,7 @@ Use scan to prioritize which criteria below get deepest scrutiny.
 3. Re-run test suite:
 
    ```bash
-   $TEST_CMD --tb=short <test_dir> -v 2>&1 | tail -20
+   $PYTEST_CMD --tb=short <test_dir> -v 2>&1 | tail -20
    ```
 
 4. **Adjacent bugs** (observation only): scan for similar patterns; document in Follow-up — do not fix here, avoids scope creep.
@@ -301,7 +283,7 @@ Read `.claude/skills/_shared/quality-stack.md` (if file not found -> skip qualit
 
 ```
 You are a foundry:sw-engineer teammate debugging: [bug description].
-Read ~/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
+Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
 Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
 Report findings to @lead using deltaT# or epsilonT# codes.
 Compact Instructions: preserve file paths, errors, line numbers. Discard verbose tool output.
