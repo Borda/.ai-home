@@ -395,24 +395,14 @@ Print `### Codex Delegation` only when tasks delegated — omit if nothing deleg
 
 `REPLY_MODE` not set → skip.
 
-Pre-compute the reply date: `SPAWN_DATE="$(date -u +%Y-%m-%d)"`
+Read `$_OSS_SHARED/shepherd-reply-protocol.md` — apply invocation pattern and terminal summary format.
 
-Call `Agent(subagent_type="oss:shepherd", prompt=...)` with:
+Spawn with:
+- Report path: review output file from Step 6
+- PR number and contributor handle: from Step 1 `gh pr view` output
+- Output path: `.temp/output-reply-<PR#>-$(date -u +%Y-%m-%d).md`
 
-- Review output file path from Step 6
-- PR number and contributor handle (if known from Step 1)
-- Prompt: "Read the review report at `<path>`. Write a two-part contributor reply: **Part 1 — Reply summary** (always present, always complete on its own): (a) acknowledgement + praise naming what is genuinely good — technique, structural decisions, test quality — 1–3 concrete observations, not generic; (b) thematic areas needing improvement — no counts, no itemisation, no 'see below'; name the concern areas concretely enough that the contributor knows what to look at without Part 2; (c) optional closing sentence only when Part 2 follows (e.g. 'I've left inline suggestions with specifics.'). **Part 2 — Inline suggestions** (optional; single unified table, all findings in one place — no separate prose paragraphs): `| Importance | Confidence | File | Line | Comment |` — Importance and Confidence as the two leftmost columns; high → medium → low, then most confident first within tier; 1–2 sentences per row for high items; include all high/medium/low findings in one table. No column-width line-wrapping in prose. Write your full output to `.temp/output-reply-<PR#>-$SPAWN_DATE.md` using the Write tool. Return ONLY a one-line summary: `part1=done | part2=N_rows | → .temp/output-reply-<PR#>-<date>.md`"
-
-Print compact terminal summary:
-
-```text
-  Part 1  — reply summary (complete standalone)
-  Part 2  — N inline suggestions
-
-  Reply:  .temp/output-reply-<PR#>-<date>.md
-```
-
-End with `## Confidence` block per CLAUDE.md. Static analysis of complete, self-contained code → baseline 0.88+; below 0.80 only when runtime behavior, external deps, or execution traces needed. Always last thing, regardless of `--reply`.
+End with `## Confidence` block per CLAUDE.md. Always last thing, regardless of `--reply`.
 
 </workflow>
 

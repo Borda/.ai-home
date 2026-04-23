@@ -12,13 +12,14 @@ effort: high
 
 Comprehensive code review of local files or working-tree diff. Spawn specialized sub-agents in parallel, consolidate findings into structured feedback with severity levels.
 
-NOT for: GitHub PR review (use `/oss:review <PR#>`); implementation (use `/develop:feature` or `/develop:fix`); `.claude/` config changes (use `/manage` or `/audit`).
+NOT for: GitHub PR review (use `/oss:review <PR#>`); GitHub thread analysis or PR reply drafting (use `/oss:analyse <PR#>`); implementation (use `/develop:feature` or `/develop:fix`); `.claude/` config changes (use `/manage` or `/audit`).
 
 </objective>
 
 <inputs>
 
 - **$ARGUMENTS**: optional file path or directory to review.
+  - Integer (positive number): print `For PR review use /oss:review <N>` and stop.
   - Path given: review those files
   - Omitted: review current git diff (`git diff HEAD` — staged + unstaged vs HEAD)
   - **Scope**: reviews Python source only. Non-Python file (YAML, JSON, shell script, etc.) → state out of scope, suggest appropriate tool. No findings.

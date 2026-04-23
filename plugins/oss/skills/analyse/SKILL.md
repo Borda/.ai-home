@@ -170,24 +170,22 @@ Read `plugins/oss/skills/analyse/modes/<mode>.md` and execute all steps defined 
 
 ## Step 7: Draft contributor reply (only when --reply, thread mode only)
 
-Report at `$REPORT_FILE` guaranteed to exist — either reused via fast-path (Step 2, `FAST_PATH=true`) or freshly written by Step 5. `$DRIFT` set by Step 2 (`true` if new activity detected, `false` otherwise).
+Report at `$REPORT_FILE` guaranteed to exist — either reused via fast-path (Step 2, `FAST_PATH=true`) or freshly written by Step 5.
 
-**Call `Agent(subagent_type="oss:shepherd", prompt=...)`** with report path, item number, and this prompt (note: shepherd runs in forked context — all required context must be self-contained in prompt):
+Read `$_OSS_SHARED/shepherd-reply-protocol.md` — apply invocation pattern and terminal summary format.
 
-"Write your full output to `.reports/analyse/thread/output-reply-thread-<number>-$(date +%Y-%m-%d).md` using the Write tool. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\".reports/analyse/thread/output-reply-thread-<number>-<date>.md\",\"sentences\":N,\"resolved\":\"yes|no|partial\",\"confidence\":0.N,\"summary\":\"Reply: N sentences, resolved: yes|no|partial\"}` Read the report at `<path>` for context. If item is issue or discussion, also fetch full thread (`gh issue view <number> --comments` or equivalent GraphQL for discussions) and read every comment."
+Spawn with:
+- Report path: `$REPORT_FILE`
+- Item number: `$CLEAN_ARGS`
+- Thread context: also fetch `gh issue view $CLEAN_ARGS --comments` (or equivalent GraphQL for discussions) if not already in report
+- Output path: `.reports/analyse/thread/output-reply-thread-$CLEAN_ARGS-$(date +%Y-%m-%d).md`
+- Note: shepherd runs in forked context — all required context must be self-contained in prompt
 
-**Health monitoring** (CLAUDE.md §8): Agent spawns synchronous — Claude awaits natively. On timeout (`$HARD_CUTOFF` seconds of no response): (1) read `tail -100` of expected reply path for partial results; (2) if none, use `{"verdict":"timed_out"}`; (3) surface with ⏱ marker in terminal summary. Never silently omit.
+If `DRIFT=true`: append `[analysis refreshed — new activity since last report]` to terminal summary.
 
-Print compact terminal summary:
+**Health monitoring** (CLAUDE.md §8): Agent spawns synchronous — Claude awaits natively. On timeout (`$HARD_CUTOFF` seconds): read `tail -100` of expected reply path; if none, use `{"verdict":"timed_out"}`; surface with ⏱. Never silently omit.
 
-```markdown
-  Reply — N sentences  |  resolved: yes|no|partial
-  [analysis refreshed — new activity since last report]  ← only if drift detected
-
-  Reply:  .reports/analyse/thread/output-reply-thread-<number>-<date>.md
-```
-
-End response with `## Confidence` block per CLAUDE.md output standards — always **absolute last thing**. If `REPLY_MODE=true`, place after completing reply step above, never after analysis alone.
+End response with `## Confidence` block per CLAUDE.md — always **absolute last thing**.
 
 </workflow>
 
