@@ -65,7 +65,7 @@ Gather project context before asking anything:
 - `config`: look for `.claude/` agents, skills, rules, and `settings.json` entries
 - `research`: look for existing notes, benchmarks, prior experiment results, and related papers/tickets
 
-When no `--type` declared, perform generic scan as before.
+When no `--type` declared, perform generic scan.
 
 **Existing codebase guidance**: when the project has existing code, note patterns in use (naming, architecture, data flow) — Step 3 branches should follow established patterns unless the idea explicitly requires changing them. Where existing code has problems that affect the work (e.g., a file grown too large, unclear boundaries), note them as open threads — do not propose unrelated refactoring, but flag targeted improvements that serve the current goal.
 
@@ -99,7 +99,7 @@ On write failure: log `> Viewer write failed: <reason>` inline and continue.
 
 Print launch note:
 
-> **Live tree viewer**: run `python3 -m http.server 8000` from project root, then open:
+> **Live tree viewer**: run `python3 -m http.server 8000` (if port 8000 is in use, substitute any free port) from project root, then open:
 > `http://localhost:8000/plugins/foundry/skills/brainstorm/scripts/tree-viewer.html?state=<sidecar-path>`
 
 ## Step 2: Clarifying questions
@@ -293,11 +293,11 @@ If `findings > 0`: add missing details, improve closure reasons, or add open thr
 
 ## Step 6: Present and gate
 
-Show tree file path and compact tree summary (same format as Step 3). Then call `AskUserQuestion` with:
-
-- (a) Tree looks good — ready to distill ★ recommended
-- (b) Needs more exploration — [describe what to add or close]
-- (c) Start over — back to clarifying questions
+Show tree file path and compact tree summary (same format as Step 3). Then call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "How does the exploration tree look?"
+- (a) label: `Tree looks good — ready to distill` — description: proceed to distillation (★ recommended)
+- (b) label: `Needs more exploration` — description: describe what to add or close; loop back to Step 5
+- (c) label: `Start over` — description: back to clarifying questions
 
 **Gate**: do not exit until user approves.
 
@@ -456,11 +456,11 @@ Spec: <file path>
 
 #### Step B3: Post-plan prompt
 
-Call `AskUserQuestion` with:
-
-- (a) Start task 1 now ★ recommended
-- (b) Copy plan and pass to another agent
-- (c) Revise spec first
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "Plan ready. What next?"
+- (a) label: `Start task 1 now` — description: proceed immediately with task 1 invocation (★ recommended)
+- (b) label: `Copy plan` — description: output plan table as clean markdown block, then stop
+- (c) label: `Revise spec first` — description: stop; revise spec and re-run `/brainstorm breakdown <spec>`
 
 On **(a)**: proceed immediately with invocation from task 1. On **(b)**: output plan table as clean markdown block, then stop. On **(c)**: stop and tell user to revise spec and re-run `/brainstorm breakdown <spec>`.
 

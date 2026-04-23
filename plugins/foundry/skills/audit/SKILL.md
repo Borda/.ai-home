@@ -3,7 +3,7 @@ name: audit
 description: "Full-sweep quality audit of .claude/ config — cross-references, permissions, inventory drift, model tiers, docs freshness. Two mutually exclusive action modes: 'fix [high|medium|all]' auto-fixes at the requested severity level; 'upgrade' applies docs-sourced improvements with correctness verification and calibrate A/B testing for capability changes."
 argument-hint: '[agents|skills|rules|communication|setup|plugin|plugins [<name>]] fix [high|medium|all] | upgrade'
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
 ---
 
@@ -26,12 +26,12 @@ Run a full-sweep quality audit of the `.claude/` configuration and all `plugins/
   - `skills` — restrict sweep to skill files only, report only
   - `rules` — restrict sweep to rule files only, report only
   - `communication` — restrict sweep to communication governance files: `rules/communication.md`, `rules/quality-gates.md`, `TEAM_PROTOCOL.md`, `skills/_shared/file-handoff-protocol.md`
-  - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, plugin integration, and post-install user state (Checks 1–11, I1, I2, I3); Step 3 runs for `init` SKILL.md only (one foundry:self-mentor spawn); Checks I1–I3 read `~/.claude/` not `.claude/`
+  - `setup` — restrict sweep to system-configuration files: `settings.json`, `permissions-guide.md`, hooks, `MEMORY.md`, `README.md`, plugin integration, and post-install user state (Checks 1–11, 30, I1, I2, I3); Step 3 runs for `init` SKILL.md only (one foundry:self-mentor spawn); Checks I1–I3 read `~/.claude/` not `.claude/`
   - `plugin` — restrict sweep to plugin integration only: codex plugin (Check 7), foundry plugin + init validation (Check 8, including 8g); Step 3 runs for `init` SKILL.md only (one foundry:self-mentor spawn)
   - `plugins` — full audit of all plugins: per-file audit of every `plugins/*/agents/*.md` and `plugins/*/skills/*/SKILL.md` + integration checks (7, 8) for each plugin found
   - `plugins <name>` — same as `plugins` but scoped to one plugin: per-file audit of `plugins/<name>/agents/*.md` and `plugins/<name>/skills/*/SKILL.md` + integration checks; `<name>` must match a directory under `plugins/` (e.g. `plugins foundry`, `plugins oss`, `plugins research`)
   - Scope and fix level can be combined: `agents fix medium`, `rules fix all`, `plugins foundry fix all` — scope always precedes `fix`
-  - **Invalid combinations** (report error and stop): `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade`
+  - **Invalid combinations**: `fix upgrade`, `upgrade fix`, `upgrade agents`, combining any scope/fix flag with `upgrade` — when detected, use `AskUserQuestion` to clarify which mode was intended: (a) `fix [high|medium|all]` — auto-fix findings at the given severity level, (b) `upgrade` — fetch latest Claude Code docs and apply improvements
 
 </inputs>
 
@@ -52,7 +52,7 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 
 **Orchestration contract**: the audit orchestrator is a thin coordinator — it issues Glob/Grep calls for inventory, spawns agents, reads JSON envelopes, and aggregates findings. It must NOT read agent/skill/rule file bodies directly. Any inline read of a non-template file is a protocol violation and will cause context overflow at scale.
 
-**Task tracking**: per CLAUDE.md, create tasks (TaskCreate) for each major phase and mark status live so the user can see progress in real time:
+**Task tracking**: create tasks (TaskCreate) for each major phase; mark status live:
 
 - Phase 1: setup + collect (Pre-flight + Steps 1–2) → mark in_progress when starting, completed when file list is ready
 - Phase 2: per-file audit (Step 3) → mark in_progress when agents launch, completed when all reports received
@@ -219,7 +219,7 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 >
 > | Scope | File(s) to read |
 > | --- | --- |
-> | `setup` | `checks-setup.md` + `checks-install.md` |
+> | `setup` | `checks-setup.md` + `checks-install.md` (Checks 1–11, 30, I1–I3) |
 > | `plugin` | `checks-setup.md` (Checks 7, 8 only) |
 > | `plugins` | `checks-setup.md` (Checks 7, 8) + `checks-agents.md` + `checks-skills.md` + `checks-shared.md` (14, 15, 17, 12, 13, 25, 29) |
 > | `plugins <name>` | same as `plugins` — scoped to one plugin directory |
@@ -252,7 +252,7 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 - `skills` — Checks 14, 15, 21, 17, 12, 23, 22, 13, 24, 25, 26, 27, 28, 29 (files: `.claude/skills/*/SKILL.md` + `plugins/*/skills/*/SKILL.md`)
 - `rules` — Checks 18, 12, 13, 29
 - `communication` — Checks 15, 16, 12, 13, 29
-- `setup` — Checks 1, 2, 3, 4, 5, 9, 10, 11, 7, 6, 8, I1, I2, I3 (Step 3: one foundry:self-mentor spawn for `init` SKILL.md only; I1–I3 read `~/.claude/`)
+- `setup` — Checks 1, 2, 3, 4, 5, 9, 10, 11, 7, 6, 8, 30, I1, I2, I3 (Step 3: one foundry:self-mentor spawn for `init` SKILL.md only; I1–I3 read `~/.claude/`)
 - `plugin` — Checks 7, 8 (Step 3: one foundry:self-mentor spawn for `plugins/foundry/skills/init/SKILL.md` only)
 - `plugins` — Checks 7, 8, 14, 15, 19, 20, 17, 12, 13, 25, 22, 26, 21, 23, 24, 27, 28, 29 (files: all `plugins/*/agents/*.md` + `plugins/*/skills/*/SKILL.md`; Step 3: foundry:self-mentor batches for all plugin agents + skills + each plugin's init SKILL.md)
 - `plugins <name>` — same check list as `plugins`, scoped to `plugins/<name>/` only
@@ -295,6 +295,7 @@ Do not leave overlap findings as vague "potential duplication" notes. The audit 
 | 27 | Cross-plugin shared-file ref integrity | critical/high/med | skills | 27a absent from foundry/\_shared/; 27b catch-22 (fallback needs foundry); 27c plugin-local \_shared/ unmounted |
 | 28 | Cross-plugin agent dispatch fallback | high/medium | skills | 28a no fallback for cross-plugin dispatch; 28b fallback present but incomplete |
 | 29 | LLM context minimality | medium/low | agents/skills/rules | Within-file repetition, prose inflation, obvious-consequence restatement — report only |
+| 30 | Config token overhead | medium/low | setup | 30a total always-loaded config (CLAUDE.md + global + rules/) > 100 KB; 30b single rules file > 10 KB; rules/ loads entirely at session start — agents/skills are lazy-loaded |
 
 ### Claude Code docs freshness (within Step 4)
 
@@ -545,6 +546,16 @@ Run `/foundry:init` to propagate clean config to ~/.claude/
 **Trigger**: `/audit upgrade`
 
 Read and execute `plugins/foundry/skills/audit/modes/upgrade.md`.
+
+## Follow-up gate
+
+**Analysis mode only** — skip this gate when running in `fix` or `upgrade` mode (those are action modes, not analysis-only).
+
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "What next?"
+- (a) label: `/foundry:init` — description: sync clean config to `~/.claude/`
+- (b) label: `/audit fix all` — description: auto-fix all findings
+- (c) label: `skip` — description: no action
 
 </workflow>
 

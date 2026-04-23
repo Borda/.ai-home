@@ -1,7 +1,7 @@
 ---
 name: debug
 description: Investigation-first debugging — gather evidence, form confirmed root-cause hypothesis, write regression test, apply minimal fix via fix mode handoff.
-argument-hint: <symptom or failing test>
+argument-hint: <symptom or failing test> [--no-challenge]
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
@@ -55,6 +55,10 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 # Debug Mode
 
 > **Argument type detection**: if `$ARGUMENTS` is a positive integer (or prefixed with `#`, e.g. `#123`), treat as GitHub issue number and fetch with `gh issue view`. If text (contains spaces, letters, or special chars), treat as symptom description.
+
+## Flag parsing
+
+**Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
 
 ## Step 1: Understand the symptom
 
@@ -110,6 +114,19 @@ Find nearest similar working code path, compare exhaustively:
    - None/empty guards present in working path but absent in broken one?
 
 Step catches non-obvious causes — ordering dependency, environment-specific state, type coercion silently changing behaviour.
+
+## Challenger gate
+
+**Skip if `CHALLENGE_ENABLED=false`.**
+
+Spawn `foundry:challenger` with the pattern analysis from Step 2 (differences between working/broken paths, candidate causes):
+
+> "Review the pattern analysis and candidate root causes identified. Challenge across all 5 dimensions: Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep. Apply mandatory refutation step."
+
+Parse result:
+- **Blockers found** → STOP. Present findings. Incorporate challenger's surviving challenges into the hypothesis list before the Step 3 gate.
+- **Concerns only** → add as alternative hypotheses in Step 3; continue.
+- **No findings / all refuted** → proceed.
 
 ## Step 3: Hypothesis and gate
 
@@ -186,6 +203,11 @@ Evidence: <key signals>
 **Gaps**: [e.g., unverified alternative hypotheses, hypothesis only — not confirmed via test reproduction]
 **Refinements**: N passes.
 ```
+
+**Follow-up gate (NEVER SKIP)** — Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "Proceed with fix?"
+- (a) label: `/develop:fix --diagnosis $DIAG_FILE` — description: proceed with fix using confirmed diagnosis
+- (b) label: `skip` — description: no action
 
 ## Team Assignments
 

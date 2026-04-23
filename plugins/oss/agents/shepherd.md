@@ -203,6 +203,7 @@ Trusted Publishing uses GitHub OpenID Connect (OIDC) — no `API_TOKEN` or `TWIN
 ### Post-release
 
 ```markdown
+[ ] Published to PyPI (twine upload / trusted publisher workflow completed)
 [ ] Verify PyPI page renders correctly (README, classifiers)
 [ ] Test install: pip install <package>==<version> in fresh env
 [ ] Close milestone on GitHub
@@ -454,7 +455,7 @@ Can be longer than issue replies when topic warrants (3–5 sentences or short b
 - `@deprecated(target=None, ...)` — pyDeprecate requires callable target for argument forwarding; `None` disables forwarding and may silently break callers; flag as `[flag]` and ask whether migration target exists
 - Deprecating to private function (underscore-prefixed) — gives users no stable migration path; replacement must be made public before deprecation ships
 - Removing deprecated API in minor release — deprecated items must complete at least one minor-version cycle before removal; removal = MAJOR bump
-- Changing documented behavior without prior deprecation cycle — if function had documented/user-relied-upon behavior (return value, exception type, argument semantics) and that behavior changes, must follow same deprecation lifecycle as API removal: warn in minor, remove/change in MAJOR. Shipping behavior change silently under `### Changed` = breaking change dressed as non-breaking; flag as critical and require MAJOR bump or deprecation cycle.
+- Changing documented behavior without prior deprecation cycle — if function had documented/user-relied-upon behavior (return value, exception type, argument semantics) and that behavior changes, must follow same deprecation lifecycle as API removal: warn in minor, remove/change in MAJOR. Shipping behavior change silently under `### Changed` = breaking change dressed as non-breaking; flag as high (not critical — caller still has migration path) and require MAJOR bump or deprecation cycle.
 
 **Release**:
 
@@ -507,8 +508,8 @@ gh release list --limit 5
 
 1. Triage new issues within 48h: label, respond, close or acknowledge
 2. For PRs: check CI first — don't review code if tests are red
-3. Review diff before reading description (avoids anchoring)
-4. Use PR review checklist, but don't be pedantic on nits for minor fixes. When task narrowly scoped (e.g., "review this checklist" or "identify CHANGELOG gaps"), restrict primary findings to stated scope — surface adjacent valid concerns as brief `### Also note` block using `[suggestion]` (non-blocking) not promoted to main findings.
+3. Review diff before description (avoids anchoring)
+4. Use PR review checklist, but don't be pedantic on nits for minor fixes. When task narrowly scoped (e.g., "review this checklist" or "identify CHANGELOG gaps"), restrict primary findings to stated scope — surface adjacent valid concerns as brief `### Also note` block using `[suggestion]` (non-blocking) not promoted to main findings. Corollary for release plan reviews: do not promote version-bump implications, migration guidance, sequencing commentary, or artifact consistency observations to primary findings unless explicitly requested — these are adjacent; only the concrete governance violation (wrong SemVer, missing step, missing entry) belongs in primary findings.
 5. For breaking changes: check deprecation cycle was respected
 6. Before merging: squash commits if history is messy, ensure commit message is descriptive
 7. After merging: check if issue can be closed, update milestone

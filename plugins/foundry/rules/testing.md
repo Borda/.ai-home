@@ -18,15 +18,20 @@ paths:
 1. **Function goals / docs / intended user application** — verify contract and normal use
 2. **Edge cases** — boundary values, empty inputs, extreme sizes, unusual combinations
 3. **Exception handling** — only after above; don't lead with error-path tests
-   - When adding exception-handling tests, include at least one contract/normal-use test in same commit or point to existing — no error-path-only test files.
+   - When adding exception-handling tests, include at least one contract/normal-use test in same commit
+     or point to existing — no error-path-only test files.
 
 ## Test Structure
 
-- **Arrange-Act-Assert (AAA)**: one setup block, one `act`, one assertion group per test — never second `act` in same test
+- **Arrange-Act-Assert (AAA)**: one setup block, one `act`, one assertion group per test
+  - Never second `act` in same test
 - Each test validates exactly one scenario
-- No `if`/`for` logic in test bodies; exception: list-comprehension or generator used solely to build `@pytest.mark.parametrize` args, spanning fewer than 30% of lines in `parametrize` decorator call
+- No `if`/`for` logic in test bodies
+  - Exception: list-comprehension or generator used solely to build `@pytest.mark.parametrize` args,
+    spanning fewer than 30% of lines in `parametrize` decorator call
 - Parametrize aggressively — 3+ test functions with same structure → `@pytest.mark.parametrize`
-- Group topic-related tests into class; class name carries unit (and optionally condition) so method names describe expected outcome only
+- Group topic-related tests into class; class name carries unit (and optionally condition)
+  so method names describe expected outcome only
 
 ## File Layout
 
@@ -35,7 +40,8 @@ Mirror `src/` layout in `tests/unit/`: `src/foo/bar.py` → `tests/unit/foo/test
 ## Seeding / Randomness
 
 - Never seed RNG except inside `autouse=True` fixture — not in test bodies, module level, or non-autouse fixtures
-- If fixture needed project-wide, place in `tests/conftest.py` — don't duplicate per file. Per-file placement only when file needs different seed strategy.
+- If fixture needed project-wide, place in `tests/conftest.py` — don't duplicate per file
+  - Per-file placement only when file needs different seed strategy
 - Use pytest fixture resetting all RNG sources: `torch.manual_seed`, `numpy.random.seed`, `random.seed`, `torch.cuda.manual_seed_all`
 - Fixture must use `autouse=True`
 
@@ -77,17 +83,18 @@ def test_cuda_inference(): ...
 
 ## TDD for New Features
 
-Write tests before implementation; tests define contract.
+Write tests before implementation — tests define contract.
 
 ## Doctests
 
-Doctests live in **source files** (`src/**/*.py`), not test files — part of module docs, not test suite. Run with:
+Doctests live in **source files** (`src/**/*.py`), not test files — part of module docs. Run with:
 
 ```bash
 python -m pytest --doctest-modules src/
 ```
 
-Don't rely on `tests/**/*.py` globs for doctests — missed. Add `--doctest-modules src/` explicitly to pytest invocation or `pyproject.toml`:
+Don't rely on `tests/**/*.py` globs for doctests — missed.
+Add `--doctest-modules src/` explicitly to pytest invocation or `pyproject.toml`:
 
 ```toml
 [tool.pytest.ini_options]

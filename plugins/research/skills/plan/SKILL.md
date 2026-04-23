@@ -24,18 +24,18 @@ NOT for: running experiments (use `/research:run`); methodology validation (use 
 ```bash
 # Locate research plugin shared dir — installed first, local workspace fallback
 _RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
-[ -z "_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
+[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
 ```
 
 Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:solution-architect`, `foundry:perf-optimizer`.
 
-## Plan Mode (Steps P-P0–P-P3)
+## Plan Mode (Steps P-P0–P-P4)
 
 <!-- P-P prefix = Plan-mode steps; R-prefix = Run-mode steps; these labels appear in task-tracking instructions -->
 
 Triggered by `plan <goal|file>`. Wizard configures run.
 
-**Task tracking**: create tasks for P-P0, P-P1, P-P2, P-P2b, P-P3 at start.
+**Task tracking**: create tasks for P-P0, P-P1, P-P2, P-P2b, P-P3 at start; add P-P4 only if `--team` detected in arguments.
 
 ### Step P-P0: Detect input type
 
@@ -199,7 +199,7 @@ Next steps:
   /research:run program.md     ← start iteration loop directly
 ```
 
-## --team flag
+### Step P-P4: --team flag
 
 `--team` detected in `$ARGUMENTS`:
 1. Complete Steps 1–3 as normal — produce `program.md` with full single-researcher structure.

@@ -9,14 +9,14 @@ effort: high
 
 <objective>
 
-Analyze how Claude Code is being used in this project and surface concrete improvements — either by suggesting new agents or skills that would reduce repetition, or by consolidating accumulated lessons and feedback into governance files (rules, agent instructions, skill updates) — without duplicating what already exists.
+Analyze how Claude Code is used and surface concrete improvements — new agents/skills to reduce repetition, or consolidate lessons into governance files (rules, agent instructions, skill updates) — without duplicating what exists.
 
 </objective>
 
 <inputs>
 
 - **$ARGUMENTS**: optional. Four modes:
-  - Omitted — analyze the project's existing patterns and agents to generate suggestions proactively.
+  - Omitted — analyze existing patterns and agents; generate suggestions proactively.
   - `review` — review the existing agent/skill roster for quality and gaps without suggesting new additions.
   - `prune` — evaluate the project memory file for stale, redundant, or verbose entries and apply a trimmed version.
   - `lessons` — read `.notes/lessons.md` and memory feedback files, then distill recurring patterns into proposed rule files, agent instruction updates, and skill workflow changes.
@@ -292,9 +292,11 @@ Annotate each conflicting proposal row with ⚠. If any conflicts found, print a
 Review conflicts manually or select (b) to inspect each change before writing.
 ```
 
-Print the (annotated) proposal table. Then invoke `AskUserQuestion` tool with:
-
-Options: "(a) Apply non-conflicting — write all `→ rule` and `→ agent/skill update` changes except ⚠ flagged proposals | (b) Review first — show a diff of each proposed change before writing | (c) Skip — discard proposals and exit without changes"
+Print the (annotated) proposal table. Then call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "Apply proposals?"
+- (a) label: `Apply non-conflicting` — description: write all `→ rule` and `→ agent/skill update` changes except ⚠ flagged proposals
+- (b) label: `Review first` — description: show a diff of each proposed change before writing
+- (c) label: `Skip` — description: discard proposals and exit without changes
 
 If the user selects (a), apply changes:
 
@@ -398,12 +400,12 @@ Rate each on: impact (H/M/L) · fit (H/M/L) · duplication risk (none/low/high) 
 
 **E12: Adoption brainstorm table**
 
-| Candidate | Group | Adopt as-is | Tweak | Discuss | Skip | Local target | Rationale |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| ... | A/B | X |
-| `.claude/...` | ... |
+Exactly one of Adopt/Tweak/Discuss/Skip per item. "Local target" = specific file or directory.
 
-Exactly one of Adopt/Tweak/Discuss/Skip per row. "Local target" = specific file or directory.
+- `source/hooks/task-log.js` — Group A · **Adopt as-is** · Local target: `.claude/hooks/task-log.js` · No local equivalent; identical purpose
+- `source/skills/audit/SKILL.md` — Group A · **Tweak** · Local target: `.claude/skills/audit/SKILL.md` · Adapt trigger keyword to local naming
+- `source/agents/doc-scribe.md` — Group B · **Discuss** · Local target: — · Overlaps existing agent; scope TBD
+- `source/skills/old-util/SKILL.md` — Group B · **Skip** · Local target: — · Covered by local equivalent
 
 **Install-as-is recommendation**
 
@@ -415,13 +417,12 @@ After scoring, apply this judgement:
 
 **E13: Gate — AskUserQuestion**
 
-Present source report + adoption table + install-as-is recommendation (when applicable). Then invoke `AskUserQuestion` tool with:
-
-Options:
-- "(a) Apply Group A candidates (adopt-as-is and tweak items only)"
-- "(b) Install external source as standalone plugin [include only when install-as-is recommended]"
-- "(c) Review first — walk through each candidate interactively"
-- "(d) Skip — exit without changes"
+Present source report + adoption table + install-as-is recommendation (when applicable). Then call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "Apply external source candidates?"
+- (a) label: `Apply Group A candidates` — description: adopt-as-is and tweak items only
+- (b) label: `Install as standalone plugin` — description: install external source as standalone plugin (include only when install-as-is recommended)
+- (c) label: `Review first` — description: walk through each candidate interactively
+- (d) label: `Skip` — description: exit without changes
 
 **E14: Apply**
 

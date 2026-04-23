@@ -179,8 +179,8 @@ Extract names inline from Glob results — strip `.claude/agents/` prefix and `.
 3. Choose model based on role complexity:
 
    - `opusplan` — plan-gated roles (solution-architect, oss:shepherd, foundry:self-mentor)
-   - `opus` — complex implementation roles (foundry:sw-engineer, qa-specialist, research:scientist, perf-optimizer)
-   - `sonnet` — focused execution roles (data-steward, web-explorer, doc-scribe)
+   - `opus` — complex implementation roles (foundry:sw-engineer, foundry:qa-specialist, research:scientist, foundry:perf-optimizer)
+   - `sonnet` — focused execution roles (research:data-steward, foundry:web-explorer, foundry:doc-scribe)
    - `haiku` — high-frequency diagnostics roles (linting-expert, oss:ci-guardian)
 
 4. Spawn **foundry:self-mentor** subagent to generate and write agent file:

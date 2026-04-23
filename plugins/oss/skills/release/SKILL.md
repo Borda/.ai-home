@@ -4,6 +4,7 @@ description: 'Prepare release communication and check release readiness. Modes â
 argument-hint: <mode> [range] | migration <from> <to> | prepare <version> | audit [version]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate, Agent
 model: opus
+effort: high
 ---
 
 <objective>

@@ -48,6 +48,20 @@ Track open-loop ideas, deferred questions, diverging threads — without losing 
 - status `deleted` if orphaned / no longer relevant
 - keep `in_progress` only if genuinely continuing
 
+## Step 0: Validate and dispatch mode
+
+Extract the first word of `$ARGUMENTS` as `MODE`.
+
+If `MODE` matches one of:
+- `resume` or `pending` → proceed to **Mode: resume**
+- `archive` → proceed to **Mode: archive**
+- `summary` → proceed to **Mode: summary**
+
+Otherwise (empty, unrecognized, or misspelled `$ARGUMENTS`): use `AskUserQuestion`:
+
+> "Which session mode did you want?"
+> Options: (a) `resume` — list all open parked items, (b) `archive <name>` — close a parked item by name, (c) `summary` — compact digest of this session's work
+
 ## Mode: resume (list pending items)
 
 ### Step 1: Resolve the memory directory

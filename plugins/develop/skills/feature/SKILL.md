@@ -1,7 +1,7 @@
 ---
 name: feature
 description: TDD-first feature development — crystallise API as a demo test, drive implementation to pass it, run quality stack and progressive review loop.
-argument-hint: <goal>
+argument-hint: <goal> [--no-challenge]
 effort: high
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion, WebFetch
 disable-model-invocation: true
@@ -45,7 +45,7 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 - status `deleted` if orphaned / no longer relevant
 - keep `in_progress` only if genuinely continuing
 
-**Task tracking**: immediately after Step 1 (scope known), create TaskCreate entries for all steps before any other work. Mark each step in_progress when starting, completed when done.
+**Task tracking**: immediately after Step 1 (scope known), TaskCreate all steps before any other work. Mark each step in_progress when starting, completed when done.
 
 ## Project Detection
 
@@ -56,6 +56,10 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4, 5), append `step: N — completed` to this file. On skill start, check for an existing `.developments/*/checkpoint.md` — if found, offer to resume from the last completed step.
 
 # Feature Mode
+
+## Flag parsing
+
+**Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
 
 ## Step 1: Understand purpose and scope
 
@@ -138,6 +142,19 @@ Skip if feature calls no external library APIs — no new framework features, no
    B) Match existing code (works but not idiomatic for this version)
    → Which approach?
    ```
+
+## Challenger gate
+
+**Skip if `CHALLENGE_ENABLED=false`.**
+
+Spawn `foundry:challenger` with the scope analysis from Step 1 (purpose, scope, risks, approach):
+
+> "Review the implementation approach and scope identified in Step 1. Challenge across all 5 dimensions: Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep. Apply mandatory refutation step."
+
+Parse result:
+- **Blockers found** → STOP. Present findings. Do not proceed to Step 2 until user resolves each blocker or explicitly accepts the risk.
+- **Concerns only** → surface as advisory section before demo test; continue.
+- **No findings / all refuted** → proceed.
 
 ## Step 2: Write a demo use-case
 

@@ -75,6 +75,7 @@ Modes evaluated for calibration but deferred — significant barriers. `/audit` 
 - `/brainstorm` — creative ideation; no deterministic ground truth
 - `/investigate` — open-ended diagnosis; output varies completely by symptom
 - `/session` — session lifecycle management; no quality signal to measure
+- `/foundry:session` — session lifecycle management — no quality signal to measure; output fully context-dependent
 - `/calibrate` itself — meta-calibration circular
 - `/research:run` — sustained iteration loop with live metric commands and git state
 - `/research:run --resume` — continuation of run; same barriers as run

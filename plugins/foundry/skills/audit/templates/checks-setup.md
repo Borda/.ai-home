@@ -456,3 +456,60 @@ fi
 ```
 
 All three sub-checks produce only **low** findings — auto-fixed under `/audit fix all`. Fix: remove duplicate section, drop version pin, delete absorbed feedback file.
+
+______________________________________________________________________
+
+## Check 30 — Config token overhead
+
+Rules files in `.claude/rules/` load **entirely at session start**, regardless of relevance. Agents and skills are lazy-loaded (zero cost until invoked). This check measures always-loaded byte count and flags oversized components.
+
+```bash
+# timeout: 5000
+RED='\033[1;31m'; YEL='\033[1;33m'; GRN='\033[0;32m'; NC='\033[0m'
+printf "${GRN}--- Check 30: Config token overhead ---${NC}
+"
+
+PROJECT_CLAUDE=$(wc -c < CLAUDE.md 2>/dev/null || echo 0)
+RULES_TOTAL=$(find .claude/rules -name "*.md" -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -c || echo 0)
+GLOBAL_CLAUDE=$(cat ~/.claude/CLAUDE.md ~/.claude/*.md 2>/dev/null | wc -c || echo 0)
+TOTAL=$((PROJECT_CLAUDE + RULES_TOTAL + GLOBAL_CLAUDE))
+
+printf "  Project CLAUDE.md:  %d bytes
+" "$PROJECT_CLAUDE"
+printf "  Rules dir total:    %d bytes
+" "$RULES_TOTAL"
+printf "  Global ~/.claude/:  %d bytes
+" "$GLOBAL_CLAUDE"
+printf "  Total always-loaded: %d bytes (~%d tokens)
+" "$TOTAL" "$((TOTAL / 4))"
+
+# 30b — single oversized rules file
+if [ -d .claude/rules ]; then
+    find .claude/rules -name "*.md" | while read -r f; do
+        sz=$(wc -c < "$f")
+        if [ "$sz" -gt 10240 ]; then
+            printf "${RED}! FAIL Check 30b — rules file %s is %d bytes (> 10 KB)
+" "$f" "$sz"
+        elif [ "$sz" -gt 5120 ]; then
+            printf "${YEL}⚠ WARN Check 30b — rules file %s is %d bytes (> 5 KB)
+" "$f" "$sz"
+        fi
+    done
+fi
+
+# 30a — total overhead
+if [ "$TOTAL" -gt 102400 ]; then
+    printf "${RED}! FAIL Check 30a — total always-loaded config %d bytes (> 100 KB)
+" "$TOTAL"
+elif [ "$TOTAL" -gt 51200 ]; then
+    printf "${YEL}⚠ WARN Check 30a — total always-loaded config %d bytes (> 50 KB)
+" "$TOTAL"
+else
+    printf "${GRN}✓ OK Check 30 — config overhead %d bytes (~%d tokens)
+" "$TOTAL" "$((TOTAL / 4))"
+fi
+```
+
+Severity: > 100 KB total or > 10 KB single file = **medium**; 50–100 KB total or 5–10 KB single file = **low**. **Report only** — fix = split or remove content from rules files; never auto-collapse.
+
+Note: agents/ and skills/ are lazy-loaded — never flag them for token overhead.

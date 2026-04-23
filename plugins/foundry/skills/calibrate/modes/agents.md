@@ -20,6 +20,7 @@ Problem domain by agent:
 - `solution-architect` → design issues: leaky abstractions, circular dependencies, missing Architecture Decision Record (ADR), backward-compat violations without deprecation path
 - `web-explorer` → content quality: broken or unverified Uniform Resource Locators (URLs), outdated docs, incomplete extraction from fetched pages
 - `oss:shepherd` → Open Source Software (OSS) governance: incorrect Semantic Versioning (SemVer) decision, missing CHANGELOG entry, bad deprecation path, wrong release checklist item
+- `challenger` → plan/architecture challenges: missed assumptions, missing edge cases, unjustified blocker classification, skipped refutation step
 
 All agents support `ceiling` difficulty tier. Ceiling patterns by domain: `sw-engineer` → adversarial (idiomatic-looking but subtly wrong), concurrency bugs; `qa-specialist` → incomplete detectability (coverage gaps only visible at runtime); `perf-optimizer` → deep cross-function control flow; `research:data-steward` → adversarial (split contamination disguised as correct preprocessing); `solution-architect` → deep dependency tracing. Agents where ceiling infeasible (e.g., `linting-expert` — violations always statically detectable): generators may substitute hard problem.
 

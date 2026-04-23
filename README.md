@@ -21,7 +21,7 @@ Personal AI coding assistant configuration for Python/ML OSS development. Versio
 
 ## 🎯 Why
 
-Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 12 specialist agents and 20+ slash-command skill workflows across four focused plugins, in a version-controlled, continuously benchmarked setup optimized for:
+Managing AI coding workflows for Python/ML OSS is complex — you need domain-aware agents, not generic chat. This config packages 13 specialist agents and 20+ slash-command skill workflows across four focused plugins, in a version-controlled, continuously benchmarked setup optimized for:
 
 - Python/ML OSS libraries requiring SemVer discipline and deprecation cycles
 - ML training and inference codebases needing GPU profiling and data pipeline validation
@@ -115,7 +115,7 @@ AI-Rig/
 │   ├── foundry/            # Base plugin: agents, hooks, audit/manage/calibrate/brainstorm/…
 │   │   ├── .claude-plugin/
 │   │   │   └── plugin.json # plugin manifest
-│   │   ├── agents/         # 8 foundry agents (canonical source)
+│   │   ├── agents/         # 9 foundry agents (canonical source)
 │   │   ├── skills/         # foundry skills (canonical source)
 │   │   ├── rules/          # rule files (canonical source; symlinked from .claude/rules/)
 │   │   ├── CLAUDE.md       # workflow rules (symlinked from .claude/CLAUDE.md)
@@ -153,20 +153,21 @@ AI-Rig/
 
 Specialist roles with deep domain knowledge — requested by name, or auto-selected by Claude Code and Codex CLI.
 
-| Agent                  | Claude [plugins] | Codex | Purpose                                                       |
-| ---------------------- | ---------------- | ----- | ------------------------------------------------------------- |
-| **doc-scribe**         | 🟠 foundry       | ✓     | Google/Napoleon docstrings, Sphinx/mkdocs, API references     |
-| **linting-expert**     | 🟠 foundry       | ✓     | ruff, mypy, pre-commit, type annotations                      |
-| **perf-optimizer**     | 🟠 foundry       | —     | Profile-first CPU/GPU/memory/I/O, torch.compile               |
-| **qa-specialist**      | 🟠 foundry       | ✓     | pytest, hypothesis, mutation testing, ML test patterns        |
-| **self-mentor**        | 🟠 foundry       | ✓     | Config quality review, duplication detection, cross-ref audit |
-| **solution-architect** | 🟠 foundry       | ✓     | System design, ADRs, API surface, migration plans             |
-| **sw-engineer**        | 🟠 foundry       | ✓     | Architecture, implementation, SOLID principles, type safety   |
-| **web-explorer**       | 🟠 foundry       | ✓     | API version comparison, migration guides, PyPI tracking       |
-| **ci-guardian**        | 🟢 oss           | ✓     | GitHub Actions, test matrices, flaky test detection, caching  |
-| **shepherd**           | 🟢 oss           | ✓     | Issue triage, PR review, SemVer, releases, trusted publishing |
-| **data-steward**       | 🟣 research      | ✓     | Dataset versioning, split validation, leakage detection       |
-| **scientist**          | 🟣 research      | —     | Paper analysis, hypothesis generation, experiment design      |
+| Agent                  | Claude [plugins] | Codex | Purpose                                                                                                             |
+| ---------------------- | ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------- |
+| **doc-scribe**         | 🟠 foundry       | ✓     | Google/Napoleon docstrings, Sphinx/mkdocs, API references                                                           |
+| **linting-expert**     | 🟠 foundry       | ✓     | ruff, mypy, pre-commit, type annotations                                                                            |
+| **perf-optimizer**     | 🟠 foundry       | —     | Profile-first CPU/GPU/memory/I/O, torch.compile                                                                     |
+| **qa-specialist**      | 🟠 foundry       | ✓     | pytest, hypothesis, mutation testing, ML test patterns                                                              |
+| **self-mentor**        | 🟠 foundry       | ✓     | Config quality review, duplication detection, cross-ref audit                                                       |
+| **solution-architect** | 🟠 foundry       | ✓     | System design, ADRs, API surface, migration plans                                                                   |
+| **sw-engineer**        | 🟠 foundry       | ✓     | Architecture, implementation, SOLID principles, type safety                                                         |
+| **web-explorer**       | 🟠 foundry       | ✓     | API version comparison, migration guides, PyPI tracking                                                             |
+| **challenger**         | 🟠 foundry       | —     | Adversarial plan/architecture/code review; default-on in all develop skills + oss:review (`--no-challenge` to skip) |
+| **ci-guardian**        | 🟢 oss           | ✓     | GitHub Actions, test matrices, flaky test detection, caching                                                        |
+| **shepherd**           | 🟢 oss           | ✓     | Issue triage, PR review, SemVer, releases, trusted publishing                                                       |
+| **data-steward**       | 🟣 research      | ✓     | Dataset versioning, split validation, leakage detection                                                             |
+| **scientist**          | 🟣 research      | —     | Paper analysis, hypothesis generation, experiment design                                                            |
 
 ## 🤖 Claude Code
 

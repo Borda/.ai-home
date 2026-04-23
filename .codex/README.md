@@ -113,12 +113,12 @@ codex --profile deep-review "full security audit of src/api/"
 codex --profile fast-edit "fix the typo in the docstring"
 ```
 
-| Profile       | What changes                                                        | When to use                                                  |
-| ------------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `cautious`    | `approval_policy = "untrusted"`                                     | Unfamiliar codebases, production systems, destructive ops    |
+| Profile       | What changes                                                         | When to use                                                  |
+| ------------- | -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `cautious`    | `approval_policy = "untrusted"`                                      | Unfamiliar codebases, production systems, destructive ops    |
 | `fast-edit`   | `model = "gpt-5.4-mini"`, medium reasoning, low verbosity, 2 threads | Narrow mechanical edits where speed > depth                  |
-| `fresh-docs`  | `web_search = "live"`, concise summaries                            | Questions about volatile docs, library versions, API changes |
-| `deep-review` | `model = "gpt-5.4-mini"`, `xhigh` reasoning, live web search        | Broad/high-risk changes needing maximum review depth         |
+| `fresh-docs`  | `web_search = "live"`, concise summaries                             | Questions about volatile docs, library versions, API changes |
+| `deep-review` | `model = "gpt-5.4-mini"`, `xhigh` reasoning, live web search         | Broad/high-risk changes needing maximum review depth         |
 
 ## 🧭 Skills In Codex
 

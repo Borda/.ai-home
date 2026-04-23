@@ -1,6 +1,6 @@
 # 🏭 foundry — Claude Code Plugin
 
-OSS Claude Code config: 8 specialist agents, 8 skills, event-driven hooks, and a self-improvement loop for professional AI-assisted development.
+OSS Claude Code config: 9 specialist agents, 8 skills, event-driven hooks, and a self-improvement loop for professional AI-assisted development.
 
 > For OSS workflows, also install the `oss` plugin (`/oss:review`, `/oss:release`, ...). For development workflows, install `develop` (`/develop:feature`, `/develop:fix`, ...). For ML research, install `research` (`/research:run`, `/research:topic`, ...).
 
@@ -31,6 +31,7 @@ ______________________________________________________________________
   - [foundry:doc-scribe](#foundrydoc-scribe)
   - [foundry:web-explorer](#foundryweb-explorer)
   - [foundry:self-mentor](#foundryself-mentor)
+  - [foundry:challenger](#foundrychallenger)
 - [Agent relationships](#agent-relationships)
 - [Rules installed](#rules-installed)
 - [Configuration](#configuration)
@@ -46,7 +47,7 @@ ______________________________________________________________________
 
 ## 🤔 What is foundry?
 
-foundry is the base infrastructure plugin for Claude Code on Python and ML OSS projects. It gives Claude Code a team of eight non-overlapping specialist agents — each with deep, calibrated domain knowledge — paired with skills for managing their lifecycle, benchmarking their accuracy, and feeding corrections back into their instructions.
+foundry is the base infrastructure plugin for Claude Code on Python and ML OSS projects. It gives Claude Code a team of nine non-overlapping specialist agents — each with deep, calibrated domain knowledge — paired with skills for managing their lifecycle, benchmarking their accuracy, and feeding corrections back into their instructions.
 
 Without foundry, Claude Code is a generalist. It helps with code but does not know your release conventions, does not enforce routing to the right specialist, and has no mechanism to measure or improve its own accuracy over time. foundry packages all of that infrastructure in a single installable plugin.
 
@@ -169,7 +170,7 @@ Full-sweep quality audit of `.claude/` configuration and all `plugins/*/` agent 
 
 `fix` and `upgrade` are mutually exclusive — never combine them.
 
-**What the sweep checks (29 checks)**:
+**What the sweep checks (30 checks)**:
 
 - Inventory drift: MEMORY.md roster vs files on disk
 - Broken cross-references between agents and skills
@@ -181,6 +182,7 @@ Full-sweep quality audit of `.claude/` configuration and all `plugins/*/` agent 
 - Claude Code docs freshness (spawns `foundry:web-explorer` to fetch live docs)
 - Plugin integration correctness (codex plugin, foundry plugin)
 - File length, heading hierarchy, LLM context minimality
+- Config token overhead: total always-loaded config >100 KB, single rules file >10 KB (rules/ loads at session start; agents/skills are lazy-loaded)
 
 Outputs a structured report. With a fix level: delegates fixes to sub-agents (never edits inline), then re-audits modified files to confirm fixes held. Convergence loop runs up to 5 passes.
 
@@ -208,7 +210,7 @@ Benchmarks agents and skills against synthetic problems with defined ground trut
 
 **Modes**:
 
-- `agents` — all 8 specialist agents
+- `agents` — all 9 specialist agents
 - `skills` — `/foundry:audit` and `/oss:review`
 - `routing` — measures orchestrator dispatch accuracy for synthetic task prompts
 - `communication` — team protocol compliance, file-handoff protocol violations
@@ -381,7 +383,7 @@ ______________________________________________________________________
 
 **Role**: QA specialist for writing, reviewing, and fixing tests.
 
-**Use for**: writing new pytest tests, analyzing coverage gaps, building edge-case matrices, fixing failing tests, integration test design. Automatically includes OWASP Top 10 security perspective when used in agent teams.
+**Use for**: writing new pytest tests, analyzing coverage gaps, building edge-case matrices, fixing failing tests, integration test design. Automatically includes OWASP Top 10 security perspective when used in agent teams. Includes anti-hallucination assertion protocol for code reviews: occurrence thresholds (>10 established / 3–10 emerging / \<3 skip), conditional context loading by diff content type, and structured uncertainty markers.
 
 **Model**: `opus`
 
@@ -461,6 +463,20 @@ You will generally not invoke this agent directly. `/foundry:audit` spawns it in
 
 ______________________________________________________________________
 
+### foundry:challenger
+
+**Role**: adversarial reviewer for implementation plans, architecture proposals, and significant code reviews.
+
+**Use for**: red-teaming a plan before committing to it, challenging architectural decisions before they ship, adversarial code review on security-sensitive or irreversible operations. Attacks across 5 dimensions (Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep) then applies a mandatory refutation step to eliminate false positives.
+
+**Model**: `opusplan` (plan-gated Opus)
+
+**Not for**: designing plans or ADRs (use `foundry:solution-architect`), writing tests (use `foundry:qa-specialist`), config file quality review (use `foundry:self-mentor`).
+
+Read-only — never writes or edits files. Runs by default in all `/develop:*` skills and `/oss:review` — skip with `--no-challenge`.
+
+______________________________________________________________________
+
 ## 🔗 Agent relationships
 
 Agents form a directed pipeline, not a flat pool:
@@ -468,10 +484,11 @@ Agents form a directed pipeline, not a flat pool:
 - `foundry:linting-expert` is always **downstream** of `foundry:sw-engineer` — never lints code that has not been implemented
 - `foundry:doc-scribe` is always **downstream** — documents finalized code, never shapes design
 - `foundry:qa-specialist` runs **parallel** to `foundry:sw-engineer` during review, or downstream after implementation
+- `foundry:challenger` is **pre-implementation** — challenges plans and proposals before any code is written; use before `foundry:sw-engineer`
 - `foundry:self-mentor` is **orthogonal** — audits `.claude/` config files, not user code
 - `foundry:web-explorer` **feeds** `research:scientist` — fetches current docs and papers; scientist interprets
 
-**Model tiering**: reasoning agents (`foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`) use `opus`; plan-gated roles (`foundry:solution-architect`, `foundry:self-mentor`) use `opusplan`; execution agents (`foundry:doc-scribe`, `foundry:web-explorer`) use `sonnet`; high-frequency diagnostics (`foundry:linting-expert`) use `haiku`.
+**Model tiering**: reasoning agents (`foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`) use `opus`; plan-gated roles (`foundry:solution-architect`, `foundry:self-mentor`, `foundry:challenger`) use `opusplan`; execution agents (`foundry:doc-scribe`, `foundry:web-explorer`) use `sonnet`; high-frequency diagnostics (`foundry:linting-expert`) use `haiku`.
 
 ______________________________________________________________________
 
@@ -573,7 +590,7 @@ plugins/foundry/
 │   ├── plugin.json              version + metadata
 │   ├── permissions-allow.json   allow-list merged by /foundry:init
 │   └── permissions-deny.json    deny-list merged by /foundry:init
-├── agents/                      8 specialist agent files
+├── agents/                      9 specialist agent files
 ├── skills/                      8 skill directories (audit, brainstorm, calibrate, distill,
 │                                    init, investigate, manage, session)
 ├── rules/                       10 rule files symlinked to ~/.claude/rules/ by /foundry:init

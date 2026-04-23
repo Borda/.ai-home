@@ -6,7 +6,8 @@ paths:
 
 ## Public GitHub — Read-Only
 
-Claude and all agents (subagents, skills, teammates) **read-only** on public GitHub. Hard system-level constraint, not suggestion.
+Claude and all agents (subagents, skills, teammates) **read-only** on public GitHub.
+Hard constraint — not suggestion.
 
 ### Permitted (read)
 
@@ -20,7 +21,8 @@ Claude and all agents (subagents, skills, teammates) **read-only** on public Git
 
 ### Forbidden (write) — enforced via deny list
 
-Any command that creates, edits, posts, closes, deletes, or mutates state on any public/external GitHub repo **permanently forbidden**, including:
+Any write command on any public/external GitHub repo
+**permanently forbidden**, including:
 
 - `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close`, `gh issue delete`
 - `gh pr create`, `gh pr comment`, `gh pr edit`, `gh pr merge`, `gh pr close`, `gh pr review`
@@ -28,8 +30,12 @@ Any command that creates, edits, posts, closes, deletes, or mutates state on any
 - `gh repo fork`, `gh repo create`
 - `gh gist create`, `gh gist edit`, `gh gist delete`
 - `gh api repos/*` with `--method POST/PATCH/PUT/DELETE` (removed from allow list — prompts for approval)
-- `curl -X POST`, `curl --request POST`, `curl -X PATCH`, `curl --request PATCH`, `curl -X PUT`, `curl --request PUT` — all curl write methods denied globally; curl read-only (GET only)
+- All curl write methods denied globally; curl read-only (GET only)
+  - `curl -X POST`, `curl --request POST`, `curl -X PATCH`, `curl --request PATCH`, `curl -X PUT`, `curl --request PUT`
 
 ### When user says "write/file/post/submit X to GitHub"
 
-Interpret as: **draft X for user review**. Show draft in terminal. Ask explicit confirmation via `AskUserQuestion` before external action. Never delegate to agent assuming it will ask.
+Interpret as: **draft X for user review**.
+- Show draft in terminal
+- Ask explicit confirmation via `AskUserQuestion` before external action
+- Never delegate to agent assuming it will ask

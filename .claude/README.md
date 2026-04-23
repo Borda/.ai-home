@@ -104,6 +104,7 @@ plugins/foundry/           ← source of truth
    ║  doc-scribe        │  session    ║
    ║  web-explorer      │  distill    ║
    ║  self-mentor       │             ║
+   ║  challenger        │             ║
    ╚════════════════════╨═════════════╝
                 :
                 :····························:····························:
@@ -167,6 +168,7 @@ MCP servers are defined in `.mcp.json` at the repo root — copy to home: `cp .m
 | **🟠 doc-scribe**         | Documentation                                 | Google/Napoleon docstrings (no type duplication), Sphinx/mkdocs, API references                                  |
 | **🟠 web-explorer**       | Web and docs research                         | API version comparison, migration guides, PyPI tracking, ecosystem compat                                        |
 | **🟠 self-mentor**        | Config quality reviewer                       | Agent/skill auditing, duplication detection, cross-ref validation, line budgets                                  |
+| **🟠 challenger**         | Adversarial plan/arch/code reviewer           | 5-dimension attack + mandatory refutation step; read-only; use before sw-engineer starts                         |
 | **🟢 shepherd**           | Project lifecycle management                  | Issue triage, PR review, SemVer, pyDeprecate, trusted publishing                                                 |
 | **🟢 ci-guardian**        | CI/CD reliability                             | GitHub Actions, reusable workflows, trusted publishing, flaky test detection                                     |
 | **🟣 scientist**          | ML research and implementation                | Paper analysis, experiment design, LLM evaluation, inference optimization                                        |
@@ -183,9 +185,10 @@ Key relationships:
 - `doc-scribe` is always downstream — documents finalized code; never shapes design
 - `self-mentor` is orthogonal — audits config files, not user code; spawned by `/audit` and `/brainstorm`
 - `web-explorer` feeds `scientist` — fetches current docs/papers; scientist interprets and designs experiments
+- `challenger` is **pre-implementation** — adversarially reviews plans and proposals before implementation starts; use before `sw-engineer`
 - `shepherd` is the external interface — PR replies, releases, contributor communication; no code implementation
 
-**Model tiering**: reasoning agents (`sw-engineer`, `qa-specialist`, `perf-optimizer`, `scientist`) default to `opus`; plan-gated agents (`solution-architect`, `shepherd`, `self-mentor`) use `opusplan` (plan-gated Opus — pays for reasoning only when the task warrants it); execution agents (`doc-scribe`, `linting-expert`, `ci-guardian`, `data-steward`, `web-explorer`) default to `sonnet`.
+**Model tiering**: reasoning agents (`sw-engineer`, `qa-specialist`, `perf-optimizer`, `scientist`) default to `opus`; plan-gated agents (`solution-architect`, `shepherd`, `self-mentor`, `challenger`) use `opusplan` (plan-gated Opus — pays for reasoning only when the task warrants it); execution agents (`doc-scribe`, `linting-expert`, `ci-guardian`, `data-steward`, `web-explorer`) default to `sonnet`.
 
 ## ⚡ Skills
 

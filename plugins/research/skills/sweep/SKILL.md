@@ -100,7 +100,7 @@ Repeat up to `MAX_REFINE` times:
 | --- | --- |
 | `approved` | Print `sweep: plan approved (REFINE_ITER/MAX_REFINE iteration(s)) ✓` → proceed to S5 |
 | `blocked` | Print `sweep: judge → BLOCKED ✗`; show all critical findings from the report; print follow-up hint; stop |
-| `unresolved` | Print `sweep: judge unresolved after MAX_REFINE iterations ✗`; show remaining Required Changes from the last report; **ask user** with options: `(a) proceed to run anyway (b) fix manually then re-run (c) abort` — if `a`, proceed to S5; if `b` or `c`, print follow-up hint and stop |
+| `unresolved` | Print `sweep: judge unresolved after MAX_REFINE iterations ✗`; show remaining Required Changes from the last report; call `AskUserQuestion` tool — do NOT write options as plain text: question "Unresolved — how to proceed?", (a) label `proceed to run anyway`, (b) label `fix manually then re-run`, (c) label `abort` — if `a`, proceed to S5; if `b` or `c`, print follow-up hint and stop |
 
 Follow-up hint (blocked or unresolved):
 

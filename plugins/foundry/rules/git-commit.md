@@ -6,9 +6,12 @@ paths:
 
 ## Commit Message Format
 
-- First line: short TLDR subject in imperative mood, ≤50 chars — name up to 3 most significant changes/additions/removals only (prefer user-visible impact as tie-breaker when significance comparable)
+- First line: short TLDR subject in imperative mood, ≤50 chars — name up to 3 most significant changes/additions/removals only
+  - Tie-breaker: prefer user-visible impact when significance comparable
 
-- Blank line, then bullet list — one bullet per logical change; include extended description of top changes plus all other notable changes; skip typos, linting, whitespace-only edits; if all changes skip-worthy, omit bullet list entirely and use subject-only commit. Subject-only commit still include co-author block separated by blank line and ---:
+- Blank line, then bullet list — one bullet per logical change; include extended description of top changes plus all other notable changes
+  - Skip: typos, linting, whitespace-only edits
+  - All changes skip-worthy → omit bullet list; use subject-only commit — still include co-author block separated by blank line and `---`:
 
   ```markdown
   Fix typo in config key name
@@ -17,19 +20,21 @@ paths:
   Co-authored-by: Claude Code <noreply@anthropic.com>
   ```
 
-- No line wrapping anywhere in the message body — bullets, prose lines, all stay on single long lines; never break at any column width
+- No line wrapping — bullets, prose lines stay on single long lines; never break at column width
 
 ## Gathering Diff Context
 
-Before writing commit message, always run these three commands in parallel:
+Before writing commit, run these three in parallel:
 
 - `git status` — identify staged new files (`A` prefix) and unstaged changes
-- `git diff HEAD` — **not** bare `git diff`; bare `git diff` shows only unstaged changes and misses staged new files entirely; `git diff HEAD` captures both staged and unstaged changes vs HEAD
+- `git diff HEAD` — **not** bare `git diff`; bare `git diff` shows only unstaged changes, misses staged new files; `git diff HEAD` captures staged and unstaged vs HEAD
 - `git log --oneline -5` — reference repo's existing commit style
 
 **Truncated diff — mandatory follow-up**: when `git diff HEAD` output large and Bash tool saves to file (showing only 2 KB preview), **read saved file completely before writing commit**. Don't write from preview alone — most significant changes often past truncation point. Also run `git diff --stat HEAD` (always fits in context) for complete file-by-file change map; use stat output to identify which files changed most and whether any missed in preview.
 
-**Ranking rule — diff first, recency last**: rank significance across full diff before writing title. Conversational recency bias must not dominate. Title must reflect most significant change in diff, not most recent one.
+**Ranking rule — diff first, recency last**: rank significance across full diff before writing title.
+- Conversational recency bias must not dominate
+- Title must reflect most significant change in diff, not most recent one
 
 **New files are always significant**: any file marked `A` in `git status` must be explicitly mentioned in commit bullet list, regardless of line count. New files represent added capability, not just changed lines.
 
@@ -49,9 +54,11 @@ Co-authored-by: Claude Code <noreply@anthropic.com>
 - Claude: `Co-authored-by: Claude Code <noreply@anthropic.com>`
 - Codex (if contributed anything — code, review, diagnosis, analysis, architectural guidance, or "here's what needs fixing and why"): `Co-authored-by: OpenAI Codex <codex@openai.com>`
 
-**Codex intellectual contributions count**: Codex earns trailer whenever it shaped outcome — even if Claude wrote final code. Examples: Codex identified root cause, Codex suggested approach, Codex returned review comment that led to change. Test: "would this commit exist in current form without Codex's input?" — if yes, include trailer.
+**Codex intellectual contributions count**: Codex earns trailer whenever it shaped outcome — even if Claude wrote final code.
+- Examples: Codex identified root cause, Codex suggested approach, Codex returned review comment that led to change
+- Test: "would this commit exist in current form without Codex's input?" — if yes, include trailer
 
-Co-author trailer added to every commit produced by Claude Code — not conditional on user explicitly mentioning Claude's involvement.
+Co-author trailer on every Claude Code commit — not conditional on user mentioning involvement.
 
 **Skill commit templates — trailers not optional**: when skill or workflow step provides `git commit -m "..."` template (heredoc or one-liner), template is **message body scaffold only**. `---` separator and co-author block must always be appended regardless of whether template shows them:
 

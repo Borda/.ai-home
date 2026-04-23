@@ -1,7 +1,7 @@
 ---
 name: fix
 description: Reproduce-first bug resolution — capture bug in failing regression test, apply minimal fix, run quality stack and review loop.
-argument-hint: <symptom or issue # (plain 123 or #123)>
+argument-hint: <symptom or issue # (plain 123 or #123)> [--no-challenge]
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
@@ -72,6 +72,10 @@ Diagnosis file format (`.plans/active/debug_<slug>.md`):
 - Suspect Files — files to focus on
 - Evidence — signals that confirmed the hypothesis
 
+## Flag parsing
+
+**Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
+
 ## Step 1: Understand the problem
 
 Gather all available context about bug:
@@ -124,6 +128,19 @@ If root cause not definitively established after analysis, surface assumptions b
 > 2. [assumption about affected scope] -> Correct me now or I'll proceed with these.
 
 **Scope gate**: if root cause spans 3+ modules, flag complexity smell. Use `AskUserQuestion` to present scope concern before proceeding, with options: "Narrow scope (Recommended)" / "Proceed anyway".
+
+## Challenger gate
+
+**Skip if `CHALLENGE_ENABLED=false`.**
+
+Spawn `foundry:challenger` with the root cause analysis from Step 1 (root cause, blast radius, assumptions, approach):
+
+> "Review the root cause analysis and proposed fix approach. Challenge across all 5 dimensions: Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep. Apply mandatory refutation step."
+
+Parse result:
+- **Blockers found** → STOP. Present findings. Do not proceed to Step 2 until user resolves each blocker or explicitly accepts the risk.
+- **Concerns only** → surface as advisory; continue.
+- **No findings / all refuted** → proceed.
 
 ## Step 2: Reproduce the bug
 

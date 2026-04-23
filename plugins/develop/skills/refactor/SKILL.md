@@ -1,7 +1,7 @@
 ---
 name: refactor
 description: Test-first refactoring — audit coverage, add characterization tests, apply changes with safety net, run quality stack and review loop.
-argument-hint: <target file or directory> <goal>
+argument-hint: <target file or directory> <goal> [--no-challenge]
 effort: high
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
@@ -62,6 +62,10 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 
 # Refactor Mode
 
+## Flag parsing
+
+**Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
+
 ## Step 1: Scope and understand
 
 Read target code, build mental model before touching anything.
@@ -109,6 +113,19 @@ Spawn **foundry:sw-engineer** agent to analyze code and identify:
 - **Complexity smell**: directory or cross-module scope — flag it; consider team mode
 
 **Scope gate**: if target is directory-wide scope (10+ files) regardless of goal, flag complexity smell. Use `AskUserQuestion` with options: "Narrow scope (Recommended)" / "Proceed anyway".
+
+## Challenger gate
+
+**Skip if `CHALLENGE_ENABLED=false`.**
+
+Spawn `foundry:challenger` with the scope analysis from Step 1 (affected files, dependencies, coupling, risks):
+
+> "Review the refactoring scope and approach. Challenge across all 5 dimensions: Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep. Apply mandatory refutation step."
+
+Parse result:
+- **Blockers found** → STOP. Present findings. Do not proceed to Step 2 until user resolves each blocker or explicitly accepts the risk.
+- **Concerns only** → surface as advisory before coverage audit; continue.
+- **No findings / all refuted** → proceed.
 
 ## Step 2: Audit test coverage
 

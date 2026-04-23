@@ -24,7 +24,7 @@ NOT for: running experiments (use `/research:run`); designing hypotheses (use `r
 ```bash
 # Locate research plugin shared dir — installed first, local workspace fallback
 _RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
-[ -z "_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
+[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
 ```
 
 Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:solution-architect`.

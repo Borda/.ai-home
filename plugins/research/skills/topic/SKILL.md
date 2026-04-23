@@ -2,7 +2,7 @@
 name: topic
 description: Research State of the Art (SOTA) literature for an Artificial Intelligence / Machine Learning (AI/ML) topic, method, or architecture. Finds relevant papers, builds a comparison table, recommends the best implementation strategy for the current codebase, and optionally produces a phased implementation plan mapped to the codebase. Delegates deep analysis to the research:scientist agent and codebase mapping to foundry:solution-architect.
 argument-hint: <topic> [--team]
-allowed-tools: Read, Write, Grep, Glob, Agent, WebSearch, WebFetch, TaskCreate, TaskUpdate
+allowed-tools: Read, Write, Grep, Glob, Agent, WebSearch, WebFetch, TaskCreate, TaskUpdate, AskUserQuestion
 context: fork
 effort: high
 model: opus
@@ -33,6 +33,18 @@ HARD_CUTOFF: 900   # 15 min — if researcher does not return, surface partial r
 </constants>
 
 <workflow>
+
+<!-- Agent Resolution: canonical table at plugins/research/skills/_shared/agent-resolution.md -->
+
+## Agent Resolution
+
+```bash
+# Locate research plugin shared dir — installed first, local workspace fallback
+_RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
+```
+
+Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:solution-architect`.
 
 **Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
 
@@ -276,6 +288,14 @@ Confidence:  [score] — [key gaps]
 → saved to .temp/output-research-plan-[date].md
 ---
 ```
+
+## Follow-up gate
+
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "What next?"
+- (a) label: `/research:plan` — description: design a research program from these findings
+- (b) label: `/develop:feature` — description: implement based on findings
+- (c) label: `skip` — description: no action
 
 </workflow>
 

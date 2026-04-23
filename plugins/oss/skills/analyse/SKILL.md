@@ -2,7 +2,7 @@
 name: analyse
 description: Analyze GitHub issues, Pull Requests (PRs), Discussions, and repo health for an Open Source Software (OSS) project. For any specific item, casts a wide net — finds and lists all related open and closed issues/PRs/discussions, explicitly flags duplicates. Also summarizes long threads, assesses PR readiness, extracts reproduction steps, and generates repo health stats. Uses gh Command Line Interface (CLI) for GitHub Application Programming Interface (API) access. Complements shepherd agent.
 argument-hint: <N|health|ecosystem|path/to/report.md> [--reply]
-allowed-tools: Read, Bash, Write, Agent
+allowed-tools: Read, Bash, Write, Agent, AskUserQuestion
 context: fork
 model: opus
 effort: high
@@ -33,6 +33,16 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 </constants>
 
 <workflow>
+
+<!-- Agent Resolution: canonical table at plugins/oss/skills/_shared/agent-resolution.md -->
+
+## Agent Resolution
+
+```bash
+# Locate oss plugin shared dir — installed first, local workspace fallback
+_OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+```
 
 ## Step 1: Flag parsing
 
@@ -70,7 +80,7 @@ Skip when `REPLY_MODE=false` and `DIRECT_PATH_MODE=false`.
 
 **Direct report path** (`DIRECT_PATH_MODE=true` — checked first):
 
-- `REPLY_MODE=false` → print `Error: --reply is required when passing a .md report path` and stop.
+- `REPLY_MODE=false` → use `AskUserQuestion`: "A report path was passed without `--reply`. Did you mean `/analyse <path.md> --reply`?" Options: (a) "Yes — continue with `--reply` mode" → set `REPLY_MODE=true` and proceed; (b) "No — analyse a thread instead" → print usage hint (`/analyse <N> | health | ecosystem`) and stop.
 - `REPLY_MODE=true` and file missing (`[ ! -f "$REPORT_FILE" ]`) → print `Error: report not found: $REPORT_FILE` and stop.
 - `REPLY_MODE=true` and file exists → print `[direct] using $REPORT_FILE` → skip to Step 7. Don't run auto-detection fast-path below.
 
@@ -152,7 +162,7 @@ else
 		--jq '.data.repository.discussion.title' 2>/dev/null) # timeout: 6000
 	[ -n "$DISC" ] && TYPE="discussion" || TYPE="unknown"
 fi
-# unknown → print "Item #N not found" and stop
+# unknown → use AskUserQuestion: "Item #$CLEAN_ARGS was not found on GitHub. What did you want to analyse?" Options: (a) "A different issue or PR number" → ask for the correct number, (b) "Repo health overview" → re-run as `health` mode, (c) "Stop" → print usage hint and stop
 ```
 
 ## Step 5: Mode dispatch
@@ -171,7 +181,20 @@ Read `plugins/oss/skills/analyse/modes/<mode>.md` and execute all steps defined 
 
 `REPLY_MODE=true`: response incomplete until Step 7 done and reply file written. No Confidence block here — proceed to Step 7.
 
-`REPLY_MODE=false`: skip Step 7, end with Confidence block now.
+`REPLY_MODE=false` — do NOT proceed to Step 7. Execute both sub-steps below:
+
+### 6a — Follow-up gate
+
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "What next?"
+- (a) label: `/develop:fix` — description: diagnose and fix the reported issue
+- (b) label: `/develop:feature` — description: implement as new feature
+- (c) label: `draft reply` — description: run `/oss:analyse $CLEAN_ARGS --reply` to shepherd a contributor-facing reply
+- (d) label: `skip` — description: no action
+
+### 6b — Confidence block
+
+End with `## Confidence` block per CLAUDE.md output standards.
 
 ## Step 7: Draft contributor reply (only when --reply, thread mode only)
 

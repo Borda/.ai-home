@@ -18,8 +18,8 @@ NOT for: GitHub PR review (use `/oss:review <PR#>`); GitHub thread analysis or P
 
 <inputs>
 
-- **$ARGUMENTS**: optional file path or directory to review.
-  - Integer (positive number): print `For PR review use /oss:review <N>` and stop.
+- **$ARGUMENTS**: optional file path or directory to review. Supports `--no-challenge` flag to skip adversarial review (challenger runs by default).
+  - Integer (positive number): use `AskUserQuestion`: "Looks like you passed a PR/issue number. Did you mean to run `/oss:review $ARGUMENTS` to review that PR?" Options: (a) "Yes — launch `/oss:review $ARGUMENTS`" → invoke the oss:review skill with the number; (b) "No — review local code at a path instead" → ask for the path to review
   - Path given: review those files
   - Omitted: review current git diff (`git diff HEAD` — staged + unstaged vs HEAD)
   - **Scope**: reviews Python source only. Non-Python file (YAML, JSON, shell script, etc.) → state out of scope, suggest appropriate tool. No findings.
@@ -27,6 +27,7 @@ NOT for: GitHub PR review (use `/oss:review <PR#>`); GitHub thread analysis or P
 </inputs>
 
 <constants>
+CHALLENGE_ENABLED=true  # set to false via --no-challenge
 <!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 parallel agent spawns -->
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
@@ -55,7 +56,7 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 - `deleted` if orphaned / no longer relevant
 - keep `in_progress` only if genuinely continuing
 
-**Task tracking**: per CLAUDE.md, TaskCreate for each major phase. Mark in_progress/completed throughout. On loop retry or scope change, create new task.
+**Task tracking**: TaskCreate for each major phase. Mark in_progress/completed throughout. Loop retry or scope change → new task.
 
 ## Step 1: Identify scope
 
@@ -222,6 +223,8 @@ Read review checklist (Read tool → `$REVIEW_CHECKLIST`) — apply CRITICAL/HIG
 
 **Agent 6 — foundry:solution-architect (optional, for changes touching public API boundaries)**: Target touches `__init__.py` exports, adds/modifies Protocols or ABCs, changes module structure, or introduces new public classes → evaluate API design quality, coupling impact, backward compatibility. Skip for internal implementation changes.
 
+**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the diff. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"blockers":0,"concerns":1},"file":"$RUN_DIR/challenger.md","confidence":0.88}`.
+
 **Health monitoring**: Agent calls are synchronous — the framework awaits each response natively. No Bash checkpoint polling is possible during an active Agent call. The `$HARD_CUTOFF` and `$EXTENSION` constants document the intended timeout behavior for the framework, not for active polling.
 
 If an agent does not return within `$HARD_CUTOFF` seconds: use the Read tool on `$RUN_DIR/<agent-name>.md` to surface any partial results written so far. Mark timed-out agents with ⏱ in the final report. Grant one `$EXTENSION` if the output file tail explains the delay. Never silently omit timed-out agents.
@@ -321,7 +324,14 @@ Read `.claude/skills/_shared/codex-delegation.md`, apply delegation criteria def
 
 Print `### Codex Delegation` section to terminal only when tasks actually delegated — omit entirely if nothing delegated.
 
-End response with `## Confidence` block per CLAUDE.md output standards.
+**Follow-up gate (NEVER SKIP)** — Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "What next?"
+- (a) label: `/develop:fix` — description: fix identified issues
+- (b) label: `/develop:refactor` — description: refactor to address structural findings
+- (c) label: `walk through findings` — description: go through each finding interactively
+- (d) label: `skip` — description: no action
+
+**Confidence block (NEVER SKIP):** end response with `## Confidence` block per CLAUDE.md output standards.
 
 </workflow>
 

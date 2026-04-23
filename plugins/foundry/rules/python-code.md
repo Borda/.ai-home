@@ -6,18 +6,20 @@ paths:
 
 ## Docstring Style
 
-- **Always Google style (Napoleon)** — no exceptions unless user explicitly requests otherwise
+- **Google style (Napoleon)** — no exceptions unless user explicitly requests otherwise
 - Never switch to NumPy style based on project type, existing code, or own judgement
-- Every public function/class/module needs docstring; at least one `Examples` section per public function — omit only when user **explicitly says skip examples** (e.g., "no examples needed", "skip the Examples section"); brevity request or "minimal" docstring does NOT qualify
+- Every public function/class/module needs docstring; at least one `Examples` section per public function
+  - Omit only when user **explicitly says skip examples** (e.g., "no examples needed", "skip the Examples section")
+  - Brevity request or "minimal" docstring does NOT qualify
 
 ## Deprecation
 
 **Version check first**: before generating any deprecation code:
 
-- In agentic/tool context: execute `python3 -c "import deprecate; print(deprecate.__version__)"` via Bash
+- Agentic/tool context: `python3 -c "import deprecate; print(deprecate.__version__)"` via Bash
 - In conversation context: output command for user to run and wait for confirmation before proceeding
 
-If installed version differs from what Claude knows, read `help(deprecate)` or project CHANGELOG before generating code — do not assume Claude knows latest API. Do **not** upgrade pyDeprecate in projects on older version working fine.
+If installed version differs, read `help(deprecate)` or project CHANGELOG before generating code — do not assume Claude knows latest API. Do **not** upgrade pyDeprecate in projects on older version working fine.
 
 **Never use `warnings.warn` for deprecation** — use `pyDeprecate` exclusively. Import from `deprecate`, not `pyDeprecate`:
 
@@ -62,7 +64,7 @@ from deprecate import deprecated_class
 class OldClass: ...
 ```
 
-`deprecated_class` wraps class in transparent proxy — per installed docs, attribute access, method calls, `isinstance()`, and instantiation all forward to `NewClass` with `FutureWarning`.
+`deprecated_class` wraps class in transparent proxy — attribute access, method calls, `isinstance()`, and instantiation all forward to `NewClass` with `FutureWarning`.
 
 **Version conflict resolution**: If installed pyDeprecate below v0.6.0 and upgrading prohibited (stable project, pinned deps), do NOT use `deprecated_class` — instead apply `@deprecated` to thin subclass wrapper:
 

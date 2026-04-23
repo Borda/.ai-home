@@ -6,13 +6,13 @@ paths:
 
 ## Core Principle
 
-**Never work on partial result set.** Paginated APIs return subset by default — always request full dataset before drawing conclusions, counting, filtering, or ranking.
+**Never work on partial result set.** Paginated APIs return subset by default — request full dataset before drawing conclusions, counting, filtering, or ranking.
 
-Silent truncation (30 of 300 items) worse than error — produces confidently wrong answer.
+Silent truncation (30 of 300 items) worse than error — produces wrong answer.
 
 ## GitHub CLI (`gh`)
 
-Default page size 30. Always override:
+Default page size 30. Override:
 
 ```bash
 # List commands — raise the limit explicitly
@@ -33,14 +33,16 @@ Rules:
 - `--limit 30` (default) never acceptable for analysis tasks — set at least 10× higher than expected
 - Counting ("how many open issues") → use `--paginate` or high `--limit`; verify count plausible
 - `gh api` without `--paginate` returns one page only — always add `--paginate`
-- `--limit` requirement applies with `--json` + `--jq` too — 30-item cap not lifted by `--json`; pair with `--limit 1000` or higher
+- `--limit` requirement applies with `--json` + `--jq` too — 30-item cap not lifted by `--json`
+  - Pair with `--limit 1000` or higher
 
 ## REST APIs (curl / WebFetch)
 
 - Check response for pagination signals: `Link` header (GitHub-style), `next_cursor`, `next_page_token`, `has_more`, `total_count`
 - `total_count` > items returned → partial result; fetch remaining pages
 - Loop until no next-page signal; never stop after one response
-- No pagination signals + round item count (10, 20, 25, 50, 100…) → likely default page size; verify by requesting page 2; if page 2 returns items, first response was truncated
+- No pagination signals + round item count (10, 20, 25, 50, 100…) → likely default page size
+  - Verify: request page 2; if page 2 returns items, first response was truncated
 
 ## GraphQL APIs
 

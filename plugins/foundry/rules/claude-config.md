@@ -6,12 +6,13 @@ paths:
 
 ## Path Rules
 
-- No hardcoded absolute user paths (`/Users/<name>/` or `/home/<name>/`) — use `.claude/`, `~/`, or `git rev-parse --show-toplevel`
+- No hardcoded absolute user paths — use `.claude/`, `~/`, or `git rev-parse --show-toplevel`
 - **Artifact dirs** belong at project root, not inside `.claude/` — see `artifact-lifecycle.md`
 
 ## Bash Timeouts
 
-Every Bash call in skill or agent workflow must include explicit `timeout` — **3× expected P90 duration**. Never rely on default 120 s cap; fail fast, let caller retry.
+Every Bash call must include explicit `timeout` — **3× expected P90 duration**.
+Never rely on default 120 s cap; fail fast, let caller retry.
 
 | Operation class | Expected P90 | 3× timeout |
 | --- | --- | --- |
@@ -26,7 +27,7 @@ Every Bash call in skill or agent workflow must include explicit `timeout` — *
 
 Rules:
 
-- When in doubt, use 3× fastest plausible time — not worst case
+- Use 3× fastest plausible time — not worst case
 - Timed-out fast op = signal to investigate; frozen session is not
 - `timeout: 120000` only for test suites or builds, never network calls
 
@@ -46,6 +47,9 @@ uv run pytest tests/
 cd /path || uv run pytest tests/
 ```
 
-**Why**: Claude Code's permission matcher checks only **first token** of Bash command. Any compound using `&&`, `;`, or `||` presents `cd` as first token — matches no allow entry — even when `Bash(uv run pytest:*)`, `Bash(python3:*)`, or similar rules in allow list. Applies to every command, not just worktrees.
+**Why**: Claude Code's permission matcher checks only **first token** of Bash command.
+- Compound using `&&`, `;`, or `||` presents `cd` as first token — matches no allow entry
+- Even when `Bash(uv run pytest:*)`, `Bash(python3:*)`, or similar rules in allow list
+- Applies to every command, not just worktrees
 
-Working directory persists between Bash calls — two sequential calls always equivalent to compound form.
+Working directory persists between Bash calls — two sequential calls equivalent.

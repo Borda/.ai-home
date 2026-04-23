@@ -3,6 +3,7 @@ name: resolve
 description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (1) PR intelligence — reads the full thread, linked issues, and PR body to synthesize contribution motivation and classify every comment into action items; (2) conflict resolution — checks out the PR branch (fork-aware via gh pr checkout), merges BASE into it, and resolves conflicts semantically using the contributor's intent as the priority lens; (3) implements each action item as a separate attributed commit via Codex, then pushes back to the contributor's fork. Supports three source modes: pr (live GitHub comments only), report (latest /review report findings as action items, no GitHub re-fetch), and pr + report (both sources aggregated and deduplicated in one pass). Also accepts bare comment text for single-comment dispatch."
 argument-hint: <PR number or URL> [report] | report | <review comment text>
 disable-model-invocation: true
+effort: high
 allowed-tools: Read, Edit, Bash, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 ---
 
@@ -42,7 +43,7 @@ Bare comment text → skip to Codex dispatch (Step 12).
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
-[ -z "_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 ```
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`.
@@ -279,16 +280,16 @@ Report : not used
 Building action items…
 ```
 
-Print action item table:
+Print action item table — **MUST render as markdown table; never use key-value list, prose, or separator-delimited format regardless of cell length**. Status codes: `pending` · `✓ resolved` · `⊘ skipped` · `⊘ no action`. Verbose reason → Notes column:
 
 ```markdown
 ### Action Items — PR #<number>
 
-| # | Type | Author | Status | Summary | File:Line |
-|---|------|--------|--------|---------|-----------|
-| 1 | [req] | @reviewer | pending | rename param `x` to `count` | src/foo.py:42 |
-| 2 | [suggest] | @maintainer | pending | add docstring | — |
-| 3 | [question] | @reviewer | pending | why not use X instead? | — |
+| # | Type | Author | Status | Summary | File:Line | Notes |
+|---|------|--------|--------|---------|-----------|-------|
+| 1 | [req] | @reviewer | pending | rename param `x` to `count` | src/foo.py:42 | — |
+| 2 | [suggest] | @maintainer | pending | add docstring | — | — |
+| 3 | [question] | @reviewer | pending | why not use X instead? | — | — |
 ```
 
 > **Guard**: `[req]` items > 15 → print list, `AskUserQuestion` for subset (up to 4 grouped options, first = "(Recommended)") before continuing.
@@ -344,13 +345,13 @@ For each item in `ACTION_ITEMS` create task:
 
 ```text
 TaskCreate(
-  subject="[<type>] <summary> — PR #<number>",
+  subject="<type> <summary> — PR #<number>",
   description="Author: @<author> | File: <file:line or '—'> | <full_comment_text>",
   activeForm="Implementing: <summary>"
 )
 ```
 
-- `<type>` — item's type code: `req`, `suggest`, `question`, `done`, `info`, `self-review`, `report-req`, `report-suggest`, etc.
+- `<type>` — full type string as-is (include brackets): `[req]`, `[suggest]`, `[question]`, `[gh][req]`, `[gh][suggest]`, `[gh][question]`, `[report][req]`, `[report][suggest]`, etc.
 - `<summary>` — item's `summary` field (truncate to 80 chars if needed)
 - Skip `[done]`/`[info]` items — no task needed.
 
@@ -702,11 +703,11 @@ Then print:
 
 ### Action Items
 
-| # | Type | Author | Status | Summary | File:Line |
-|---|------|--------|--------|---------|-----------|
-| 1 | [req] | @reviewer | ✓ resolved | rename param x → count | src/foo.py:42 |
-| 2 | [suggest] | @maintainer | ✓ resolved | add docstring | — |
-| 3 | [question] | @reviewer | ⊘ answered inline — existing approach is correct per linked issue #42 | why not use X? | — |
+| # | Type | Author | Status | Summary | File:Line | Notes |
+|---|------|--------|--------|---------|-----------|-------|
+| 1 | [req] | @reviewer | ✓ resolved | rename param x → count | src/foo.py:42 | — |
+| 2 | [suggest] | @maintainer | ✓ resolved | add docstring | — | — |
+| 3 | [question] | @reviewer | ⊘ skipped | why not use X? | — | existing approach correct per linked issue #42 |
 
 ### Lint + QA
 <linting-expert summary: N fixes applied | or "no violations"> / <foundry:qa-specialist summary: N blocking fixed, N warnings | or "clean">

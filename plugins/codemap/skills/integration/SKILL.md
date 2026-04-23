@@ -34,7 +34,7 @@ Parse `$ARGUMENTS` (case-insensitive):
 
 - Starts with `check` or empty → run **check mode** (Steps C1–C5)
 - Starts with `init` → run **init mode** (Steps I0–I6 (I5 has sub-steps I5a, I5b))
-- Anything else → print: `Usage: /codemap:integration check | init [--approve]` and stop.
+- Anything else → use `AskUserQuestion`: "Unrecognized command `$ARGUMENTS`. Which operation did you want?" Options: (a) `check` — validate existing integration spec against codebase, (b) `init` — scaffold a new integration spec, (c) `init --approve` — scaffold and approve without interactive review
 
 ______________________________________________________________________
 

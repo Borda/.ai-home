@@ -6,7 +6,7 @@ paths:
 
 ## Confidence Block (required on all analysis tasks)
 
-Every agent completing analysis task **must** end with:
+Every analysis agent **must** end with:
 
 ```markdown
 ## Confidence
@@ -18,7 +18,7 @@ Every agent completing analysis task **must** end with:
 - Pass 1: [what gap was addressed — must name the gap, not just say "re-checked"]
 ```
 
-> **Never skip this block** — missing Confidence block = rule violation regardless of length.
+> **Never skip** — missing Confidence block = rule violation.
 
 - Omit **Refinements** if 0 passes (don't write "0 passes") — omit individual **Gaps** bullets if none, but keep **Gaps** header
 - **Score**, **Gaps**, **Refinements** = peer top-level fields — never nest Refinements under Gaps; blank line before **Refinements** required
@@ -40,7 +40,7 @@ Confidence < 0.9 and `codex` plugin available → spawn `Agent(subagent_type="co
 
 ## Link Verification
 
-**Never add URL to any file without all three steps:**
+**Never add URL without all three steps:**
 
 1. **Fetch** — call WebFetch (or equivalent); URL must return non-error (not 4xx/5xx)
 
@@ -48,7 +48,7 @@ Confidence < 0.9 and `codex` plugin available → spawn `Agent(subagent_type="co
 
 3. **Match** — confirm content matches intended description; no match = don't add link
 
-4. **Independent** — every URL needs own Fetch+Read+Match pass; verified URL on same domain doesn't exempt others. Skipping any step, including inferring validity from URL structure or HTTP status alone, is violation.
+4. **Independent** — every URL needs own Fetch+Read+Match pass; verified URL on same domain doesn't exempt others; skipping any step (including inferring validity from URL structure or HTTP status alone) is violation
 
 - Applies to: agent files, skill files, CLAUDE.md, any markdown
 
@@ -57,10 +57,23 @@ Confidence < 0.9 and `codex` plugin available → spawn `Agent(subagent_type="co
 - **Long output** (multi-item analysis, 5+ findings — including lists of 5+ items: module names, issues, files —, or prose >~10 lines) → two mandatory steps in order:
 
 1. Call **Write tool** to create `.temp/output-<slug>-<branch>-<YYYY-MM-DD>.md` where `<branch>` is `$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` (new file — never overwrite; append counter suffix if slug exists, e.g. `-2.md`); file gets **full content**
-2. Print to terminal only: compact summary — verdict · 2–3 sentences · critical points · confidence score · `→ <filepath>`; **don't repeat full content in terminal**
+2. Print to terminal in this order:
+   1. **Header** — plain ASCII verdict line; no Unicode box-drawing chars (`─`, `═`, `│`, `┌` etc.); use `·` as separator: `verdict: NEEDS_WORK · findings: 8 · critical: 0 · high: 2 · medium: 4 · low: 2 · confidence: 0.88`
+   2. **Report path** — `→ <filepath>`
+   3. **Executive summary** — prose: 2–3 sentence overview + each critical/high finding listed individually; omit medium/low detail unless ≤2 total findings
+   4. **Follow-up gate** — invoke `AskUserQuestion` as final step; skip when running as background agent or inside another skill's pipeline
 
 - **Short inline status** (single result, pass/fail, one-sentence finding) → terminal only; do **not** create file
 - Prose paragraphs: no hard line breaks at column width
+- **Follow-up gate options**: skill-defined; minimum: (a) primary action · (b) skip. Canonical examples by skill:
+  - `oss:review N` → (a) `/oss:resolve N` (fix this PR) · (b) `/oss:resolve` (resolve from full report) · (c) walk through findings · (d) skip
+  - `develop:review` → (a) `/develop:fix` · (b) `/develop:refactor` · (c) walk through findings · (d) skip
+  - `oss:analyse N` → (a) `/develop:fix` · (b) `/develop:feature` · (c) `/oss:review N` · (d) draft reply · (e) skip
+  - `develop:debug` → (a) `/develop:fix --diagnosis <file>` · (b) skip
+  - `develop:plan` → (a) `/develop:feature --plan <file>` · (b) `/develop:fix --plan <file>` · (c) skip
+  - `research:topic` → (a) `/research:plan` · (b) `/develop:feature` · (c) skip
+  - `foundry:audit` → (a) `/foundry:init` (sync clean config) · (b) fix all findings · (c) skip
+  - `foundry:distill` → (a) `/manage create` (scaffold suggestion) · (b) edit existing · (c) skip
 
 ## Reporting Findings
 

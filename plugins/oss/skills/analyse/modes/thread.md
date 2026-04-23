@@ -11,7 +11,7 @@ All three = GitHub conversation threads — same analysis structure, different A
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
-[ -z "_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 ```
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`.

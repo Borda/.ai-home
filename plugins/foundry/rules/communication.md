@@ -6,7 +6,7 @@ paths:
 
 ## Re: Anchor
 
-Start every reply with bold anchor line summarising what was asked, then response on next line.
+Start every reply with bold anchor summarising request, then response on next line.
 
 Example (actual template — copy structure, replace bracketed text):
 
@@ -36,7 +36,7 @@ Rules:
 
 ## Artifact Framing
 
-- **Verbal summary as skeleton**: when user provides verbal summary before requesting written artifact, that summary = output skeleton — mirror their order, abstraction level, named examples verbatim; no added info user didn't mention — no elaboration, no expansion; source material (README, code) may only fill explicit gaps user left open; preserve quotable phrases from source exactly, no paraphrasing.
+- **Verbal summary as skeleton**: when user provides verbal summary before requesting written artifact, that summary = output skeleton — mirror their order, abstraction level, named examples verbatim; no added info user didn't mention; source material (README, code) may only fill explicit gaps user left open; preserve quotable phrases from source exactly, no paraphrasing
 - **Format-label register**: translate format label to implied register before writing:
   - *Slack message* — no headers, 2–4 short paragraphs, casual voice, inline links, one quotable block max
   - *PR description* — sections with headers, tables ok, technical register

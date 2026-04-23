@@ -1,8 +1,8 @@
 ---
 name: review
 description: Multi-agent code review of GitHub Pull Requests covering architecture, tests, performance, docs, lint, security, and API design.
-argument-hint: '[PR number|path/to/report.md] [--reply]'
-allowed-tools: Read, Write, Edit, Bash, Grep, Agent, TaskCreate, TaskUpdate
+argument-hint: '[PR number|path/to/report.md] [--reply] [--no-challenge]'
+allowed-tools: Read, Write, Edit, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 context: fork
 model: opus
 effort: high
@@ -25,6 +25,7 @@ Spawn specialized sub-agents in parallel. Consolidate findings into structured f
 </inputs>
 
 <constants>
+CHALLENGE_ENABLED=true  # set to false via --no-challenge
 <!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 parallel agent spawns -->
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
@@ -40,7 +41,7 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
-[ -z "_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 ```
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`, `foundry:doc-scribe`, `foundry:linting-expert`, `foundry:solution-architect`.
@@ -51,7 +52,7 @@ Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 - `deleted` if orphaned / irrelevant
 - `in_progress` only if genuinely continuing
 
-**Task tracking**: Per CLAUDE.md, TaskCreate for each major phase. Mark in_progress/completed throughout. Loop retry or scope change → new task.
+**Task tracking**: TaskCreate for each major phase. Mark in_progress/completed throughout. Loop retry or scope change → new task.
 
 ## Step 1: Identify scope and context (run in parallel for PR mode)
 
@@ -140,7 +141,7 @@ Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`
 
 If `DIRECT_PATH_MODE=true`:
 
-- `REPLY_MODE=false` → print `Error: --reply is required when passing a .md report path` and stop.
+- `REPLY_MODE=false` → use `AskUserQuestion`: "A report path was passed without `--reply`. Did you mean `/review <path.md> --reply`?" Options: (a) "Yes — continue with `--reply` mode" → set `REPLY_MODE=true` and proceed; (b) "No — review a PR instead" → print usage hint (`/review <N> | path/to/dir`) and stop.
 - `REPLY_MODE=true` and `[ ! -f "$REVIEW_FILE" ]` → print `Error: report not found: $REVIEW_FILE` and stop.
 - `REPLY_MODE=true` and file exists → print `[direct] using $REVIEW_FILE` → **skip to Step 9**. Skip Steps 2–8.
 
@@ -222,6 +223,8 @@ Read `plugins/oss/skills/review/checklist.md` — apply CRITICAL/HIGH patterns a
 
 **Agent 6 — foundry:solution-architect (optional, PRs touching public API boundaries)**: Diff touches `__init__.py` exports, adds/modifies Protocols/ABCs, changes module structure, or new public classes → evaluate API design, coupling, backward compat. Skip if internal only.
 
+**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/foundry--challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"blockers":0,"concerns":1},"file":"$RUN_DIR/foundry--challenger.md","confidence":0.88}`.
+
 **Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively; no Bash checkpoint polling. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
 
 ## Step 4: Post-agent checks (run in parallel)
@@ -278,7 +281,7 @@ Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | t
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
-> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `sw-engineer.md`, `qa-specialist.md`, `perf-optimizer.md`, `doc-scribe.md`, `linting-expert.md`, `solution-architect.md`, and `codex.md` if present — skip any that are missing). Read `plugins/oss/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps).
+> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `codex.md` if present — skip any that are missing). Read `plugins/oss/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps).
 >
 > **Filtering rules:**
 > - Precision gate: only include findings with a concrete, actionable location (function, line range, or variable name).
@@ -394,7 +397,21 @@ Print `### Codex Delegation` only when tasks delegated — omit if nothing deleg
 
 `REPLY_MODE=true`: response incomplete until Step 9 done and reply file written. No Confidence block — proceed to Step 9.
 
-`REPLY_MODE=false`: skip Step 9, end with Confidence block.
+`REPLY_MODE=false` — do NOT proceed to Step 9. Execute both sub-steps below:
+
+### 8a — Follow-up gate
+
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+- question: "What next?"
+- (a) label: `/oss:resolve $CLEAN_ARGS` — description: fix this PR
+- (b) label: `/oss:resolve report` — description: resolve from full report
+- (c) label: `/oss:resolve $CLEAN_ARGS report` — description: fix PR + resolve from report
+- (d) label: `walk through findings` — description: go through each finding interactively
+- (e) label: `skip` — description: no action
+
+### 8b — Confidence block
+
+End with `## Confidence` block per CLAUDE.md output standards.
 
 ## Step 9: Draft contributor reply (only when --reply)
 

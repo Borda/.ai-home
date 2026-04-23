@@ -6,7 +6,8 @@ paths:
 
 ## Canonical artifact layout
 
-All runtime artifacts live at **project root**, not inside `.claude/`. Skill output dirs use dot-prefix (`.reports/`, `.temp/`, `.plans/`, etc.) — signals ephemeral.
+Runtime artifacts live at **project root**, not inside `.claude/`.
+Skill output dirs use dot-prefix (`.reports/`, `.temp/`, `.plans/`, etc.) — signals ephemeral.
 
 ```text
 .plans/
@@ -27,11 +28,11 @@ All runtime artifacts live at **project root**, not inside `.claude/`. Skill out
 .temp/                   ← quality-gates prose output (cross-cutting)
 ```
 
-All dot-prefixed artifact dirs gitignored — ephemeral, TTL-managed.
+Dot-prefixed artifact dirs gitignored — ephemeral, TTL-managed.
 
 ## Run directory naming
 
-Every skill creates timestamped subdir under canonical base dir:
+Each skill creates timestamped subdir under canonical base dir:
 
 ```bash
 RUN_DIR=".reports/<skill>/$(date -u +%Y-%m-%dT%H-%M-%SZ)" # for .reports/<skill>/ skills
@@ -39,9 +40,11 @@ RUN_DIR=".reports/<skill>/$(date -u +%Y-%m-%dT%H-%M-%SZ)" # for .reports/<skill>
 mkdir -p "$RUN_DIR"
 ```
 
-Format: `YYYY-MM-DDTHH-MM-SSZ` (UTC, dashes throughout, filesystem-safe). Example: `.reports/calibrate/2026-03-27T20-06-22Z/`.
+Format: `YYYY-MM-DDTHH-MM-SSZ` (UTC, dashes throughout, filesystem-safe).
+Example: `.reports/calibrate/2026-03-27T20-06-22Z/`.
 
-Completed run always has `result.jsonl`. Incomplete runs (crashed, timed out) lack it — TTL hook skips them (intentional: keeps for debugging).
+Completed run always has `result.jsonl`.
+Incomplete runs (crashed, timed out) lack it — TTL hook skips them (keeps for debugging).
 
 ## TTL policy
 
@@ -55,4 +58,4 @@ Completed run always has `result.jsonl`. Incomplete runs (crashed, timed out) la
 | `.notes/` | manual | human-maintained |
 | `releases/<version>/` | manual | release artefacts; archive or delete after shipping |
 
-Log file TTL and SessionEnd cleanup hook script in `foundry-config.md` (foundry-infrastructure only).
+Log file TTL and SessionEnd cleanup hook in `foundry-config.md` (foundry-infrastructure only).

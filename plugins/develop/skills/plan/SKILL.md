@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Analysis-only planning — classify and scope a task without writing code; outputs a structured plan to .plans/active/.
-argument-hint: <goal>
+argument-hint: <goal> [--no-challenge]
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion, WebFetch
 disable-model-invocation: true
@@ -48,6 +48,10 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 | "I can scope this during implementation — no need to plan first" | Scope discovered during implementation inflates PRs and obscures intent. Plan mode exists to prevent exactly this. |
 
 # Plan Mode
+
+## Flag parsing
+
+**Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
 
 ## Step 1: Classify and scope
 
@@ -166,6 +170,19 @@ For each escalated item:
 - **Recommendation**: which option and why
 
 Do not escalate: items resolvable from codebase, items that are risks (not blockers), items already addressed in plan.
+
+## Challenger gate
+
+**Skip if `CHALLENGE_ENABLED=false`.**
+
+Spawn `foundry:challenger` to adversarially review the written plan before the user commits to it:
+
+> "Read `<PLAN_FILE>`. Challenge the plan across all 5 dimensions: Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep. Apply mandatory refutation step per your instructions."
+
+Parse result:
+- **Blockers found** → STOP. Present findings. Do not print the `/develop` handoff until user resolves each blocker or explicitly accepts the risk. Update `<PLAN_FILE>` with blocker annotations.
+- **Concerns only** → append `### Challenger concerns` to `<PLAN_FILE>` as advisory; continue to Final output.
+- **No findings / all refuted** → proceed.
 
 ## Final output
 
