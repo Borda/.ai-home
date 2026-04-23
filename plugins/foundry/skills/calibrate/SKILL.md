@@ -243,7 +243,7 @@ TIMESTAMP=$(basename "$LATEST")
 
 For each target in target list, check whether `.reports/calibrate/<TIMESTAMP>/<target>/proposal.md` exists. Collect targets with proposal (`found`) and without (`missing`).
 
-Print `⚠ No proposal found for <target> — run /calibrate <target> [fast|full] first` for each missing target.
+For each **missing** target: do not stop — auto-trigger a `fast` benchmark inline. Print `→ No prior run for <target> — running fast benchmark now…`, then execute Steps 2–5 for that target with `fast` mode using a fresh timestamp, and add to `found` list once proposals are written. This ensures `apply` alone always produces results rather than a dead-end error.
 
 **Print run's report before applying**: for each found target, read and print `.reports/calibrate/<TIMESTAMP>/<target>/report.md` verbatim so user sees benchmark basis before any file changes.
 

@@ -1,7 +1,7 @@
 ---
 name: distill
 description: One-time snapshot that extracts patterns from work history and accumulated lessons, then distills them into concrete improvements — new agent/skill suggestions, roster quality review, memory pruning, or consolidating lessons and feedback into rules and agent/skill updates.
-argument-hint: '[review | prune | lessons | "<recurring task description>"]'
+argument-hint: '[review | prune | lessons | "external <url-or-path>" | "<recurring task description>"]'
 disable-model-invocation: true
 allowed-tools: Read, Edit, Bash, Glob, Grep, Write, AskUserQuestion, Agent
 effort: high
@@ -20,6 +20,7 @@ Analyze how Claude Code is being used in this project and surface concrete impro
   - `review` — review the existing agent/skill roster for quality and gaps without suggesting new additions.
   - `prune` — evaluate the project memory file for stale, redundant, or verbose entries and apply a trimmed version.
   - `lessons` — read `.notes/lessons.md` and memory feedback files, then distill recurring patterns into proposed rule files, agent instruction updates, and skill workflow changes.
+  - `external <source>` — analyse an external plugin, skill, or agentic resource and produce a structured adoption proposal. `<source>` is a URL, file path, or local directory.
   - Description of a recurring task — use the description as context when generating suggestions (e.g. "I keep doing X manually").
 
 </inputs>
@@ -277,9 +278,23 @@ ______________________________________________________________________
 
 **Step L4: Apply (with confirmation)**
 
-Print the proposal table. Then invoke `AskUserQuestion` tool with:
+**Conflict pre-check** — before presenting the question, run in parallel for every `→ rule` and `→ agent/skill update` proposal:
 
-Options: "(a) Apply — write all `→ rule` and `→ agent/skill update` changes now | (b) Review first — show a diff of each proposed change before writing | (c) Skip — discard proposals and exit without changes"
+1. **Existing content grep**: use Grep to search the target file (if it already exists) for the section heading or key phrase the delta would insert near. A hit = potential collision with existing content.
+2. **Cross-proposal collision**: if two proposals both target the same file and same section heading, mark both ⚠ CONFLICT.
+
+Annotate each conflicting proposal row with ⚠. If any conflicts found, print above the question:
+
+```text
+⚠ Conflicts detected:
+  - Proposal #N conflicts with existing content in <file>:<section> — both modify <topic>
+  - Proposals #N and #M both target <file>:<section>
+Review conflicts manually or select (b) to inspect each change before writing.
+```
+
+Print the (annotated) proposal table. Then invoke `AskUserQuestion` tool with:
+
+Options: "(a) Apply non-conflicting — write all `→ rule` and `→ agent/skill update` changes except ⚠ flagged proposals | (b) Review first — show a diff of each proposed change before writing | (c) Skip — discard proposals and exit without changes"
 
 If the user selects (a), apply changes:
 
@@ -302,6 +317,14 @@ Applied N changes — <date>
 
 3. Remind the user: "Run `/foundry:init` to propagate rule changes to `~/.claude/`"
 
+4. **Git diff gate** — run after all writes complete:
+
+```bash
+git diff HEAD -- <space-separated list of changed files>  # timeout: 5000
+```
+
+Print the diff. If anything unexpected appears, revert individual files before proceeding: `git checkout HEAD -- <file>`. This is the final safety net — changes are recoverable until committed.
+
 **Step L5: Self-mentor review** — after applying changes, dispatch self-mentor to audit the created and modified config files:
 
 ```text
@@ -311,6 +334,103 @@ Agent(subagent_type="foundry:self-mentor", prompt="Review the following Claude c
 Surface self-mentor findings as an advisory block in terminal output. Do not block on self-mentor findings — they are quality recommendations, not release gates.
 
 End your response with a `## Confidence` block per CLAUDE.md output standards.
+
+## Mode: External Distillation (external)
+
+Analyse an external plugin, skill, or agentic resource and produce a structured adoption proposal for the local Claude Code setup.
+
+**E1: Classify and plan**
+
+Identify source type:
+- URL → `WebFetch` (skim landing page + follow key links: README, docs, manifests, agent/skill files)
+- File path → `Read`
+- Directory → `Glob` `*.md`, `*.js`, `*.json` then prioritise: manifests, README, agent/skill/rule/hook files
+
+**E2: Fast read — structure and intent**
+
+Skim headings, frontmatter, filenames, top-level examples. Extract: purpose, target user, top-level architecture, routing logic. ≤ 2 reads per top-level file.
+
+**E3: Slow read — full content**
+
+Read all agent/skill/rule/hook files end to end. For large sources prioritise: prompts, rules, validation gates, templates, docs. Use Glob + Read in parallel.
+
+**E4: Extract mental model**
+
+Record in working notes: source intent, architecture, routing, safety model, expected outputs, key design decisions.
+
+**E5: Identify standout implementation details**
+
+Use Grep for: hooks, validation gates, must/never constraints, fallback paths, scoring rubrics, unusual prompt patterns. Flag anything absent in local setup.
+
+**E6: Source report**
+
+Produce inline:
+
+```text
+## Source Report — <source>
+Intent:       [one line]
+Architecture: [one line]
+Notable hacks: [bullets]
+Risks / unclear assumptions: [bullets]
+Candidate artifacts: [comma list]
+```
+
+**E7: Read live local setup**
+
+Run in parallel:
+- Glob + Read on `.claude/agents/*.md`, `.claude/skills/**/SKILL.md`, `.claude/rules/*.md`
+- Glob on `plugins/*/` for installed plugins
+
+**E8: Build local capability map**
+
+Group local agents/skills/rules by responsibility, trigger conditions, gates, output formats. Note coverage gaps.
+
+**E9–E10: Compare and split**
+
+For each candidate from E6, compare against local capability map. Assign to group:
+
+- **Group A — Align + improve**: maps onto existing local agent/skill/rule, improves it without structural change
+- **Group B — Differentiated highlights**: novel pattern or design philosophy, doesn't map natively — interesting but requires larger structural work or conflicts with existing design
+
+**E11: Score candidates**
+
+Rate each on: impact (H/M/L) · fit (H/M/L) · duplication risk (none/low/high) · effort (S/M/L) · safety risk.
+
+**E12: Adoption brainstorm table**
+
+| Candidate | Group | Adopt as-is | Tweak | Discuss | Skip | Local target | Rationale |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ... | A/B | X |
+| `.claude/...` | ... |
+
+Exactly one of Adopt/Tweak/Discuss/Skip per row. "Local target" = specific file or directory.
+
+**Install-as-is recommendation**
+
+After scoring, apply this judgement:
+
+- **Recommend install-as-is** when: (a) Group A has ≤ 2 candidates AND source has coherent standalone design, OR (b) cumulative edit effort is L (large) for ≥ 3 candidates
+- If recommending: state justification — what the source provides that local setup lacks, why cherry-picking would dilute the value
+- Present as an explicit option in E13 (option b); omit if not recommended
+
+**E13: Gate — AskUserQuestion**
+
+Present source report + adoption table + install-as-is recommendation (when applicable). Then invoke `AskUserQuestion` tool with:
+
+Options:
+- "(a) Apply Group A candidates (adopt-as-is and tweak items only)"
+- "(b) Install external source as standalone plugin [include only when install-as-is recommended]"
+- "(c) Review first — walk through each candidate interactively"
+- "(d) Skip — exit without changes"
+
+**E14: Apply**
+
+- Option (a): reuse existing distill apply path — conflict pre-check + AskUserQuestion gate + Edit + git diff safety net (per Step L4). Limit edits to confirmed Group A targets only.
+- Option (b): print install command or path; do not apply automatically — plugin installation requires user action.
+
+**E15: Verify and report**
+
+Print changed files. Run `git diff HEAD -- <files>` and show output. Surface unresolved Group B items as open questions for future distill runs. End with `## Confidence` block per CLAUDE.md output standards.
 
 </workflow>
 
@@ -331,6 +451,11 @@ End your response with a `## Confidence` block per CLAUDE.md output standards.
   - Skills using `--team` or team-mode heuristics more/less than expected → flag over/under-use relative to the decision matrix in `CLAUDE.md § Agent Teams`
   - Security findings appearing in reviews for non-auth code → suggests qa-specialist teammate scope is too broad; narrow it
   - Model tier mismatches (e.g., heavy analysis assigned to `sonnet` teammates) → flag for tier adjustment
+
+- **`external` mode calibration**: two concrete GT fixture cases defined in `calibrate/modes/skills.md`:
+  - **caveman plugin** — narrow, self-contained communication mode, no local structural overlap → GT: install-as-is recommended, Group A empty or thin
+  - **Karpathy autoresearch** — research automation tool, strong overlap with `research:` plugin structure → GT: Group A candidates map to research plugin, digest recommended, install-as-is not triggered
+  - Ground truth = static snapshot of each tool's agent/skill/rule files (no live fetch needed); score adoption-table lane assignments against GT outcomes
 
 - Follow-up chains:
 

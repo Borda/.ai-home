@@ -307,17 +307,21 @@ ______________________________________________________________________
 
 ### `/foundry:distill`
 
-Extracts patterns from work history and corrections, then distills them into durable improvements — new agent or skill suggestions, roster quality review, memory pruning, or promoting lessons into rules and agent instruction updates.
+Extracts patterns from work history and corrections, then distills them into durable improvements — new agent or skill suggestions, roster quality review, memory pruning, promoting lessons into rules, or analysing external plugins and agentic resources for adoption.
 
 ```text
-/foundry:distill                         # analyze project patterns, suggest new agents/skills
-/foundry:distill review                  # review existing roster for quality and gaps (no new suggestions)
-/foundry:distill prune                   # trim stale/redundant entries from project MEMORY.md
-/foundry:distill lessons                 # promote patterns from .notes/lessons.md into rules/agents/skills
-/foundry:distill "I keep doing X manually"   # use description as context for suggestions
+/foundry:distill                              # analyze project patterns, suggest new agents/skills
+/foundry:distill review                       # review existing roster for quality and gaps (no new suggestions)
+/foundry:distill prune                        # trim stale/redundant entries from project MEMORY.md
+/foundry:distill lessons                      # promote patterns from .notes/lessons.md into rules/agents/skills
+/foundry:distill "external https://..."       # analyse external plugin/skill/agent resource, produce adoption proposal
+/foundry:distill "external ./path/to/plugin"  # same — local path or directory
+/foundry:distill "I keep doing X manually"    # use description as context for suggestions
 ```
 
-`lessons` mode is the primary post-correction consolidation path. It reads `.notes/lessons.md` and `feedback_*.md` memory files, clusters them by domain, classifies each entry as `-> rule`, `-> agent update`, `-> skill update`, `-> already covered`, or `-> too narrow`, generates proposals, and asks for confirmation before applying anything.
+**`lessons` mode** is the primary post-correction consolidation path. It reads `.notes/lessons.md` and `feedback_*.md` memory files, clusters them by domain, classifies each entry as `→ rule`, `→ agent update`, `→ skill update`, `→ already covered`, or `→ too narrow`, then generates proposals. Before applying, it runs a conflict pre-check — greps each target file for the section the delta would land in and flags cross-proposal collisions with ⚠. Confirmed changes are applied and followed by a `git diff` gate so you can inspect or revert before committing.
+
+**`external` mode** does a fast + slow read of the source (URL, file, or directory), extracts the mental model and standout implementation details, compares against the live local setup, then splits candidates into two groups: *Align + improve* (maps cleanly onto existing agents/skills/rules) and *Differentiated highlights* (novel, structurally different — interesting but larger work). Each candidate is scored and assigned to an adoption lane: adopt-as-is / tweak / discuss / skip. When Group A is thin or cumulative edit effort is large, it recommends installing the source as a standalone plugin with justification, rather than cherry-picking. Nothing is written until you confirm.
 
 After applying: run `/foundry:init` to propagate new rule files to `~/.claude/`.
 

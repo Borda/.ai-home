@@ -17,7 +17,7 @@ paths:
   Co-authored-by: Claude Code <noreply@anthropic.com>
   ```
 
-- No line wrapping — each bullet single long line
+- No line wrapping anywhere in the message body — bullets, prose lines, all stay on single long lines; never break at any column width
 
 ## Gathering Diff Context
 
