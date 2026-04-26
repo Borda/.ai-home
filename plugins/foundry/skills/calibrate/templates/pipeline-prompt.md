@@ -83,7 +83,7 @@ Rules:
 - Distribution for N_CLAUDE in-scope problems: fast (N_CLAUDE=1): 1 medium or high — no extreme in fast mode; when N_CLAUDE=1, use medium or high; full (N_CLAUDE=5): exactly 1 problem at each tier — trivial, low, medium, high, extreme
 - Extreme problems may have 1–3 known issues (fewer fine if issue inherently hard to detect)
 - Each non-extreme in-scope problem has 2–5 known issues; no runtime-only-detectable issues
-- **Include exactly 1 out-of-scope problem** (difficulty: `"scope"`): input clearly outside agent's domain (e.g., for `foundry:linting-expert`, natural-language question; for `oss:ci-guardian`, plain Python data script). Set `ground_truth: []`. Correct response declines, redirects, or reports no findings. Any findings = false positives (scope failure).
+- **Include exactly 1 out-of-scope problem** (difficulty: `"scope"`): input clearly outside agent's domain (e.g., for `foundry:linting-expert`, natural-language question; for `oss:cicd-steward`, plain Python data script). Set `ground_truth: []`. Correct response declines, redirects, or reports no findings. Any findings = false positives (scope failure).
 - Return valid JSON array only (no prose)
 
 Write to `.reports/calibrate/<TIMESTAMP>/<TARGET>/problems-claude.json`.

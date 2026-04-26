@@ -1,18 +1,14 @@
-**Re: Compress thread analysis mode markdown to caveman format**
-
 # Mode: Thread Analysis (Issue, Discussion, or PR)
 
 All three = GitHub conversation threads — same analysis structure, different API fetch. `TYPE` set by auto-detection in SKILL.md (`issue`, `discussion`, or `pr`). `NUMBER` = item number (strip `discussion ` prefix if present).
+
+<workflow>
 
 <!-- Agent Resolution: canonical table at plugins/oss/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
 
-```bash
-# Locate oss plugin shared dir — installed first, local workspace fallback
-_OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
-[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
-```
+<!-- `_OSS_SHARED` and `FOUNDRY_SHARED` set by parent analyse/SKILL.md — available in this context -->
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`.
 
@@ -25,15 +21,15 @@ On cache miss, run all fetches in parallel:
 
 if [ "$TYPE" = "issue" ]; then
 
-    gh issue view $NUMBER --json number,title,body,labels,comments,createdAt,author,state
-    gh issue view $NUMBER --comments
+    gh issue view $NUMBER --json number,title,body,labels,comments,createdAt,author,state  # timeout: 6000
+    gh issue view $NUMBER --comments  # timeout: 6000
     # After both complete: write cache (see SKILL.md Cache layer write pattern)
 
 elif [ "$TYPE" = "pr" ]; then
 
-    gh pr view $NUMBER --json number,title,body,labels,reviews,statusCheckRollup,files,additions,deletions,commits,author
-    gh pr checks $NUMBER           # never cached — always live
-    gh pr diff $NUMBER --name-only # never cached — always live
+    gh pr view $NUMBER --json number,title,body,labels,reviews,statusCheckRollup,files,additions,deletions,commits,author  # timeout: 6000
+    gh pr checks $NUMBER           # never cached — always live  # timeout: 15000
+    gh pr diff $NUMBER --name-only # never cached — always live  # timeout: 6000
     # After pr view completes: write cache (see SKILL.md Cache layer write pattern)
 
 else # discussion
@@ -46,12 +42,17 @@ else # discussion
           author { login }
           category { name }
           answer { body author { login } createdAt }
-          comments(first: 50) { nodes { body author { login } createdAt } }
+          comments(first: 50) {
+            pageInfo { hasNextPage endCursor }
+            nodes { body author { login } createdAt }
+          }
           labels(first: 10) { nodes { name } }
         }
       }
     }' -f owner='{owner}' -f repo='{repo}' -F number=$NUMBER
     # If query returns null → print "⚠ Discussions not enabled or #N not found" and stop
+    # Pagination: if comments.pageInfo.hasNextPage is true, paginate using `after: "<endCursor>"` until hasNextPage is false.
+    # Cap at 200 total comments; if thread exceeds 200, note in Summary: "⚠ Thread has >200 comments — analysis based on first 200."
     # After complete: write cache (see SKILL.md Cache layer write pattern)
 
 fi
@@ -59,13 +60,13 @@ fi
 # Wide-net: same for all types — all related items open AND closed
 TITLE=$(...) # extract from fetched item above
 
-gh issue list --state all --search "$TITLE" --json number,title,state,labels --limit 50 |
+gh issue list --state all --search "$TITLE" --json number,title,state,labels --limit 50 |  # timeout: 15000
 jq --argjson self $NUMBER '[.[] | select(.number != $self)]'
 
-gh pr list --state all --search "$TITLE" --json number,title,state --limit 30 |
+gh pr list --state all --search "$TITLE" --json number,title,state --limit 30 |  # timeout: 15000
 jq --argjson self $NUMBER '[.[] | select(.number != $self)]'
 
-gh api graphql -f query='
+gh api graphql -f query='  # timeout: 15000
   query($owner:String!,$repo:String!){
     repository(owner:$owner,name:$repo){
       discussions(first:100,orderBy:{field:UPDATED_AT,direction:DESC}){
@@ -244,6 +245,17 @@ _Legend: ✅ present · ⚠️ partial · ❌ missing · 🔵 N/A_
 
 Run `mkdir -p .reports/analyse/thread` then write full report to `.reports/analyse/thread/output-analyse-thread-$NUMBER-$(date +%Y-%m-%d).md` using Write tool — **do not print full analysis to terminal**.
 
-Read compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use **Issue Summary** template. Replace `[skill-specific path]` with `.reports/analyse/thread/output-analyse-thread-$NUMBER-$(date +%Y-%m-%d).md`, ensure block opens with `---` on own line, entity line follows next line, `→ saved to <path>` line present at end, block closes with `---` on own line after it. After printing to terminal, also prepend same compact block to top of report file using Edit tool — insert at line 1 so file begins with compact summary followed by blank line, then existing `## Thread #[number]:` content.
+Read compact terminal summary template from `$FOUNDRY_SHARED/terminal-summaries.md`. File absent → warn: "foundry:init required — printing plain terminal output instead." Use **Issue Summary** template. Replace `[skill-specific path]` with `.reports/analyse/thread/output-analyse-thread-$NUMBER-$(date +%Y-%m-%d).md`, ensure block opens with `---` on own line, entity line follows next line, `→ saved to <path>` line present at end, block closes with `---` on own line after it. After printing to terminal, also prepend same compact block to top of report file using Edit tool — insert at line 1 so file begins with compact summary followed by blank line, then existing `## Thread #[number]:` content.
 
 **⛔ DO NOT STOP — `REPLY_MODE=true`**: Skip Confidence block here — emitted in SKILL.md Step 6 after reply, or as last step of SKILL.md if not in reply mode. Proceed **immediately** to "Draft contributor reply" section in SKILL.md (Step 7). Response not complete until shepherd spawned and reply file written.
+
+</workflow>
+
+<notes>
+
+- **Cache check**: `$CACHE_FILE` keyed per item number — always set by parent SKILL.md before mode file executes; never fetch if cache hit
+- **Discussion pagination cap**: 200-comment limit is a safety rail; threads >200 comments are exceptional; always note cap in Summary if hit
+- **Sensitive pattern scan**: flag presence only, never include actual values in report — GDPR/PII risk; if `"credentials"` flagged, add advisory to Suggested Response
+- **Reproduction agent**: choose `qa-specialist` for pytest patterns, `sw-engineer` for all others; do not spawn if `HAS_REPRO=false`
+
+</notes>

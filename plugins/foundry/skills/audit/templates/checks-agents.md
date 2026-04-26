@@ -10,8 +10,8 @@ Three capability tiers:
 | --- | --- | --- |
 | Plan-gated | `opusplan` | solution-architect, oss:shepherd, curator |
 | Implementation | `opus` | sw-engineer, qa-specialist, research:scientist, perf-optimizer |
-| Diagnostics / writing | `sonnet` | web-explorer, doc-scribe, research:data-steward |
-| High-freq diagnostics | `haiku` | linting-expert, oss:ci-guardian |
+| Diagnostics / writing | `sonnet` | web-explorer, doc-scribe, research:data-steward, oss:cicd-steward |
+| High-freq diagnostics | `haiku` | linting-expert |
 
 Extract declared models:
 

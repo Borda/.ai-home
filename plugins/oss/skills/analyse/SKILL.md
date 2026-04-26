@@ -41,7 +41,12 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
+# If glob expands to zero matches, ls exits non-zero but head exits 0 — pipe exit code is head's.
+# Correctness is preserved by the fallback guard below (not by $?).
 [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+
+FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED=".claude/skills/_shared"
 ```
 
 ## Step 1: Flag parsing
@@ -86,24 +91,22 @@ Skip when `REPLY_MODE=false` and `DIRECT_PATH_MODE=false`.
 
 Remaining fast-path logic (TODAY, REPORT_FILE auto-construction, drift check) only runs when `DIRECT_PATH_MODE=false`.
 
-When `REPLY_MODE=true`, check if fresh report already exists before any API calls — if yes and item has no new activity, skip to Step 7:
+When `REPLY_MODE=true`, check if fresh report already exists before any API calls:
 
 ```bash
 REPORT_FILE=".reports/analyse/thread/output-analyse-thread-$CLEAN_ARGS-$TODAY.md"
 DRIFT=false
 FAST_PATH=false
+FAST_PATH_TENTATIVE=false
 
 if [ -f "$REPORT_FILE" ]; then
-    REPORT_MTIME=$(stat -f %m "$REPORT_FILE" 2>/dev/null || stat -c %Y "$REPORT_FILE")                                   # timeout: 5000
-    UPDATED_AT=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" --jq '.updated_at' 2>/dev/null)                        # timeout: 6000
-    UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null) # timeout: 5000
-    [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
-    [ "$DRIFT" = "false" ] && FAST_PATH=true
+    REPORT_MTIME=$(stat -f %m "$REPORT_FILE" 2>/dev/null || stat -c %Y "$REPORT_FILE")  # timeout: 5000
+    FAST_PATH_TENTATIVE=true  # drift check deferred to Step 4 — type must be known first
 fi
 ```
 
-- `FAST_PATH=true` → print `[resume] reusing existing report for #$CLEAN_ARGS` and jump to Step 7. Skip Steps 3–6.
-- `FAST_PATH=false` (report missing or drift detected) → continue to Step 3.
+- `FAST_PATH_TENTATIVE=true` → continue to Steps 3–4 for type detection and type-aware drift check. If no new activity confirmed there: `FAST_PATH=true` → print `[resume] reusing existing report for #$CLEAN_ARGS` → jump to Step 7.
+- `FAST_PATH_TENTATIVE=false` (report missing) → continue to Step 3.
 
 ## Step 3: Cache layer (numeric arguments only)
 
@@ -117,10 +120,28 @@ mkdir -p "$CACHE_DIR" # timeout: 5000
 
 **Cache hit** — if `$CACHE_FILE` exists:
 
-- Read `type`, `item`, `comments` fields from JSON
+- Read `type`, `item`, `comments` fields from JSON; `TYPE` is now known
 - Skip all primary `gh` item fetches in `modes/thread.md`
 - Print `[cache] #$CLEAN_ARGS ($TODAY)` as one-line status note
 - Still run wide-net searches (dynamic — never cached)
+- `FAST_PATH_TENTATIVE=true`: run lightweight drift check now that `TYPE` is known, then skip Step 4 type-detection API calls:
+
+```bash
+# Cache hit + FAST_PATH_TENTATIVE: check current GitHub state (cache data is stale)
+if [ "$TYPE" = "discussion" ]; then
+    UPDATED_AT=$(gh api graphql \
+        -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){discussion(number:$number){updatedAt}}}' \
+        -f owner='{owner}' -f repo='{repo}' -F number=$CLEAN_ARGS \
+        --jq '.data.repository.discussion.updatedAt' 2>/dev/null)  # timeout: 6000
+else
+    UPDATED_AT=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" --jq '.updated_at' 2>/dev/null)  # timeout: 6000
+fi
+UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+[ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
+[ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
+```
+
+`FAST_PATH=true` → skip to Step 7. `DRIFT=true` → continue (full re-analysis from cached data).
 
 **Cache miss** — after fetching in `modes/thread.md`, write:
 
@@ -135,7 +156,7 @@ jq -n \
     >"$CACHE_FILE" # timeout: 5000
 ```
 
-**Stale cache** — file for same number but earlier date ignored. Old files left in place — small, provide audit history. Prune files older than 30 days: `find .cache/gh -mtime +30 -delete`
+**Stale cache** — file for same number but earlier date ignored. Old files left in place — small, provide audit history. Prune files older than 30 days: `find .cache/gh -mtime +30 -delete` # safe to delete — cache is regenerable; no confirmation needed
 
 Cache applies to: issue/PR/discussion primary fetch and comments. Cache does NOT apply to: `gh issue list`, `gh pr list`, `gh pr checks`, `gh pr diff`, discussion list queries, health/ecosystem modes.
 
@@ -150,19 +171,39 @@ Cache miss:
 ITEM=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" 2>/dev/null) # timeout: 6000
 
 if [ -n "$ITEM" ]; then
-	TYPE=$(echo "$ITEM" | jq -r 'if .pull_request then "pr" else "issue" end') # timeout: 5000
+    TYPE=$(echo "$ITEM" | jq -r 'if .pull_request then "pr" else "issue" end')  # timeout: 5000
+    # Drift check — updated_at already in $ITEM; no extra API call
+    if [ "$FAST_PATH_TENTATIVE" = "true" ]; then
+        UPDATED_AT=$(echo "$ITEM" | jq -r '.updated_at' 2>/dev/null)
+        UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+        [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
+        [ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
+    fi
 else
-	# 4b: try discussions via GraphQL
-	DISC=$(gh api graphql -f query='
+    # 4b: try discussions via GraphQL — fetch updatedAt in same query; no extra call for drift check
+    DISC_JSON=$(gh api graphql -f query='
     query($owner:String!,$repo:String!,$number:Int!){
       repository(owner:$owner,name:$repo){
-        discussion(number:$number){ title }
+        discussion(number:$number){ title updatedAt }
       }
-    }' -f owner='{owner}' -f repo='{repo}' -F number=$CLEAN_ARGS \
-		--jq '.data.repository.discussion.title' 2>/dev/null) # timeout: 6000
-	[ -n "$DISC" ] && TYPE="discussion" || TYPE="unknown"
+    }' -f owner='{owner}' -f repo='{repo}' -F number=$CLEAN_ARGS 2>/dev/null)  # timeout: 6000
+    DISC_TITLE=$(echo "$DISC_JSON" | jq -r '.data.repository.discussion.title // empty' 2>/dev/null)
+    if [ -n "$DISC_TITLE" ]; then
+        TYPE="discussion"
+        # Drift check — updatedAt from same GraphQL response; no extra API call
+        if [ "$FAST_PATH_TENTATIVE" = "true" ]; then
+            UPDATED_AT=$(echo "$DISC_JSON" | jq -r '.data.repository.discussion.updatedAt' 2>/dev/null)
+            UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+            [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
+            [ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
+        fi
+    else
+        TYPE="unknown"
+    fi
 fi
 # unknown → use AskUserQuestion: "Item #$CLEAN_ARGS was not found on GitHub. What did you want to analyse?" Options: (a) "A different issue or PR number" → ask for the correct number, (b) "Repo health overview" → re-run as `health` mode, (c) "Stop" → print usage hint and stop
+
+# FAST_PATH=true (set above): jump to Step 7. FAST_PATH=false: continue to Step 5.
 ```
 
 ## Step 5: Mode dispatch
@@ -185,12 +226,20 @@ Read `plugins/oss/skills/analyse/modes/<mode>.md` and execute all steps defined 
 
 ### 6a — Follow-up gate
 
-Call `AskUserQuestion` tool — do NOT write options as plain text first. Map options directly into the tool call arguments:
+Call `AskUserQuestion` tool — do NOT write options as plain text first. Options depend on mode:
+
+**Thread mode** (`$CLEAN_ARGS` is a number):
 - question: "What next?"
 - (a) label: `/develop:fix` — description: diagnose and fix the reported issue
 - (b) label: `/develop:feature` — description: implement as new feature
 - (c) label: `draft reply` — description: run `/oss:analyse $CLEAN_ARGS --reply` to shepherd a contributor-facing reply
 - (d) label: `skip` — description: no action
+
+**Health / ecosystem mode** (`$CLEAN_ARGS` is `health` or `ecosystem`):
+- question: "What next?"
+- (a) label: `/oss:analyse <N> --reply` — description: draft a reply for a specific thread
+- (b) label: `/oss:review <N>` — description: full code review for a specific PR
+- (c) label: `skip` — description: no action
 
 ### 6b — Confidence block
 
@@ -226,6 +275,7 @@ End response with `## Confidence` block per CLAUDE.md — always **absolute last
 - For closed items, note resolution so history is useful
 - Don't post responses without explicit user instruction — only draft them
 - **Forked context**: skill runs with `context: fork` — no access to current conversation history. All required context must be in skill argument or prompt.
+- **`--reply` drafts only** — shepherd produces a draft file; it does NOT auto-post to GitHub. User posts manually. Write access to the repo is not required to use `--reply`; it is required only if user subsequently posts the draft via `gh issue comment` or `gh pr comment`.
 - Follow-up chains:
   - Issue with confirmed bug → `/develop:fix` to diagnose, reproduce with test, apply targeted fix
   - Issue is feature request → `/develop:feature` for TDD-first implementation

@@ -68,7 +68,7 @@ Status code always first. Task ID (`T#`) always precedes file shortcode.
 | `SW` | sw-engineer | `PO` | perf-optimizer |
 | `SA` | solution-architect | `AR` | research:scientist |
 | `QA` | qa-specialist | `DS` | doc-scribe |
-| `LE` | linting-expert | `CG` | ci-guardian |
+| `LE` | linting-expert | `CG` | cicd-steward |
 | `DT` | data-steward | `WE` | web-explorer |
 | `OM` | shepherd | `SM` | curator |
 

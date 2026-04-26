@@ -1,8 +1,8 @@
-**Re: Compress markdown to caveman format**
-
 # Comment Dispatch — oss:resolve independent entry point
 
 Reached when `$ARGUMENTS` = bare comment text (not PR number or URL). File read + executed by `/oss:resolve` Step 12.
+
+<workflow>
 
 ## Step 12: Comment dispatch + Codex review loop
 
@@ -70,7 +70,14 @@ if REVIEW_PASS == 5 and ISSUES_FOUND > 0:
 
 ### 12c: Lint and QA gate
 
-If code changed: apply the **Step 9 lint and QA gate pattern** from the main resolve workflow — same parallel spawn of `foundry:linting-expert` + `foundry:qa-specialist`, commit lint fixes, surface blocking QA issues. Use `$RUN_DIR/linting-expert-step12c.md` and `$RUN_DIR/qa-specialist-step12c.md` as output paths. Revoke commit authorization after gate completes.
+If code changed:
+
+```bash
+RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # timeout: 5000
+mkdir -p "$RUN_DIR"                                          # timeout: 5000
+```
+
+Apply the **Step 9 lint and QA gate pattern** from the main resolve workflow — same parallel spawn of `foundry:linting-expert` + `foundry:qa-specialist`, commit lint fixes, surface blocking QA issues. Use `$RUN_DIR/linting-expert-step12c.md` and `$RUN_DIR/qa-specialist-step12c.md` as output paths. Revoke commit authorization after gate completes.
 
 Mark task `completed`:
 
@@ -98,3 +105,5 @@ Then print:
 **Gaps**: [e.g. Codex partial completion, ambiguous comment intent]
 **Refinements**: N passes. — omit if 0 passes
 ```
+
+</workflow>

@@ -123,7 +123,7 @@ AI-Rig/
 │   │   ├── permissions-guide.md # allow-entry reference (symlinked from .claude/permissions-guide.md)
 │   │   └── hooks/
 │   │       └── hooks.json  # task tracking, quality gates, preprocessing
-│   ├── oss/                # OSS plugin: shepherd, ci-guardian + analyse/review/resolve/release
+│   ├── oss/                # OSS plugin: shepherd, cicd-steward + analyse/review/resolve/release
 │   ├── develop/            # Develop plugin: feature/fix/refactor/plan/debug
 │   └── research/           # Research plugin: scientist, data-steward + topic/plan/judge/run/sweep
 ├── .claude/                # Claude Code source of truth
@@ -165,7 +165,7 @@ Specialist roles with deep domain knowledge — requested by name, or auto-selec
 | **web-explorer**       | 🟠 foundry       | ✓     | API version comparison, migration guides, PyPI tracking                                                                                                                               |
 | **challenger**         | 🟠 foundry       | —     | Adversarial plan/architecture/code review; default-on in all develop skills + oss:review (`--no-challenge` to skip)                                                                   |
 | **creator**            | 🟠 foundry       | —     | Blog posts, Marp slide decks, social threads, talk abstracts — four-beat narrative arc (Problem→Journey→Insight→Action) calibrated to audience; reads `/foundry:create` outline files |
-| **ci-guardian**        | 🟢 oss           | ✓     | GitHub Actions, test matrices, flaky test detection, caching                                                                                                                          |
+| **cicd-steward**       | 🟢 oss           | ✓     | GitHub Actions, test matrices, flaky test detection, caching                                                                                                                          |
 | **shepherd**           | 🟢 oss           | ✓     | Issue triage, PR review, SemVer, releases, trusted publishing                                                                                                                         |
 | **data-steward**       | 🟣 research      | ✓     | Dataset versioning, split validation, leakage detection                                                                                                                               |
 | **scientist**          | 🟣 research      | —     | Paper analysis, hypothesis generation, experiment design                                                                                                                              |

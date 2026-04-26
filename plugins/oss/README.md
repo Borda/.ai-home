@@ -20,7 +20,7 @@ ______________________________________________________________________
   - [/oss:release](#ossrelease)
 - [Agents reference](#agents-reference)
   - [oss:shepherd](#ossshepherd)
-  - [oss:ci-guardian](#ossci-guardian)
+  - [oss:cicd-steward](#osscicd-steward)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing / feedback](#contributing--feedback)
@@ -113,7 +113,7 @@ ______________________________________________________________________
 /oss:review 55 --reply
 
 # Apply all review feedback in one pass
-/oss:resolve 55 pr report
+/oss:resolve 55 report
 
 # Cut a release
 /oss:release prepare v2.1.0
@@ -123,7 +123,7 @@ ______________________________________________________________________
 
 ## 🔧 Skills reference
 
-### /oss:analyse
+### /analyse
 
 Analyse GitHub threads and repo health. Accepts an issue or PR number, the keyword `health`, the keyword `ecosystem`, or a path to a saved report file.
 
@@ -160,7 +160,7 @@ GitHub API responses are cached in `.cache/gh/` by number and date (30-day TTL) 
 
 ______________________________________________________________________
 
-### /oss:review
+### /review
 
 Tiered parallel review of a GitHub PR. Input is always a PR number.
 
@@ -220,7 +220,7 @@ Without `foundry`, Tier 2 falls back to general-purpose agents with role descrip
 
 ______________________________________________________________________
 
-### /oss:resolve
+### /resolve
 
 Apply review findings to the codebase. Reads from live PR comments, a saved review report, or both — deduplicates, resolves conflicts, and implements fixes.
 
@@ -229,20 +229,20 @@ Apply review findings to the codebase. Reads from live PR comments, a saved revi
 **Invocation:**
 
 ```text
-/oss:resolve 55 pr             # apply fixes from live GitHub PR comments
-/oss:resolve 55 report         # apply fixes from the saved /oss:review report
-/oss:resolve 55 pr report      # both sources — Codex deduplicates across inputs
+/oss:resolve 55                # pr mode — apply fixes from live GitHub PR comments
+/oss:resolve report            # report mode — apply fixes from the saved /oss:review report
+/oss:resolve 55 report         # pr + report mode — both sources, deduplicated
 /oss:resolve                   # review-handoff mode — picks up from the last /oss:review run
 ```
 
 **Source modes:**
 
-| Mode        | Source                            | When to use                                                        |
-| ----------- | --------------------------------- | ------------------------------------------------------------------ |
-| `pr`        | Live GitHub PR comments           | Apply feedback posted directly on GitHub                           |
-| `report`    | Saved `/oss:review` findings file | Apply findings from your last review run                           |
-| `pr report` | Both, aggregated                  | Full close — deduplicates across both inputs                       |
-| _(no args)_ | Review-handoff                    | Continues directly from the last `/oss:review` run in this session |
+| Arguments        | Mode           | Source                            | When to use                                                        |
+| ---------------- | -------------- | --------------------------------- | ------------------------------------------------------------------ |
+| `55` (PR number) | pr             | Live GitHub PR comments           | Apply feedback posted directly on GitHub                           |
+| `report`         | report         | Saved `/oss:review` findings file | Apply findings from your last review run                           |
+| `55 report`      | pr + report    | Both, aggregated                  | Full close — deduplicates across both inputs                       |
+| _(none)_         | review-handoff | Review-handoff                    | Continues directly from the last `/oss:review` run in this session |
 
 **How it works:**
 
@@ -264,7 +264,7 @@ Every resolve cycle closes with parallel `foundry:linting-expert` + `foundry:qa-
 
 ______________________________________________________________________
 
-### /oss:release
+### /release
 
 SemVer-disciplined release pipeline. Six modes covering every step from generating notes to auditing readiness.
 
@@ -273,24 +273,48 @@ SemVer-disciplined release pipeline. Six modes covering every step from generati
 **Invocation:**
 
 ```text
-/oss:release notes v1.2.0..HEAD     # generate release notes from a git range
-/oss:release changelog v2.1.0       # write or update CHANGELOG.md entry
-/oss:release summary v2.1.0         # short summary for GitHub release body
-/oss:release migration v2.1.0       # generate migration guide for breaking changes
-/oss:release prepare v2.1.0         # full pipeline: notes + changelog + migration + audit
-/oss:release audit                  # readiness check before tagging
+/oss:release notes v1.2->HEAD                       # release notes from range
+/oss:release notes --changelog                      # notes + CHANGELOG.md entry
+/oss:release notes --summary                        # notes + internal summary
+/oss:release notes v1.2->v2.0 --migration           # notes + migration guide
+/oss:release notes --changelog --summary --migration  # all four outputs
+/oss:release prepare v2.1.0                         # full pipeline: audit → all artifacts
+/oss:release audit                                  # readiness check before tagging
 ```
 
-**Modes:**
+Range notation: `v1->v2` (e.g. `v1.2->v2.0`). Omit range → defaults to `last-tag..HEAD`.
 
-| Mode        | What it produces                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------- |
-| `notes`     | Human-readable release notes from git log in the specified range                            |
-| `changelog` | CHANGELOG.md entry following Keep a Changelog format                                        |
-| `summary`   | Short paragraph for the GitHub release body                                                 |
-| `migration` | Step-by-step migration guide for breaking API changes                                       |
-| `prepare`   | Runs notes + changelog + migration + audit in sequence; writes to `releases/<version>/`     |
-| `audit`     | Readiness checklist: tests green, changelog present, version bumped, no uncommitted changes |
+**Modes and flags:**
+
+| Mode / Flag   | What it produces                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `notes`       | Release notes (`PUBLIC-NOTES.md`); add flags for extra outputs                              |
+| `--changelog` | CHANGELOG.md entry (no shepherd review)                                                     |
+| `--summary`   | Internal summary saved to `.temp/`                                                          |
+| `--migration` | Migration guide for breaking changes saved to `.temp/` (shepherd review)                    |
+| `prepare`     | Full pipeline: audit → all four artifacts in `releases/<version>/`                          |
+| `audit`       | Readiness checklist: tests green, changelog present, version bumped, no uncommitted changes |
+
+**What each mode does:**
+
+| Primitive             | `notes`       | `prepare` | `audit` |
+| --------------------- | ------------- | --------- | ------- |
+| Read git log + PRs    | full          | diff      | full    |
+| Classify changes      | ✓             | ✓         | -       |
+| Explore codebase      | full          | diff      | full    |
+| Shepherd voice review | ✓             | ✓         | -       |
+| PUBLIC-NOTES.md       | write         | write     | -       |
+| CHANGELOG.md          | `--changelog` | write     | -       |
+| SUMMARY.md            | `--summary`   | write     | -       |
+| MIGRATION.md          | `--migration` | write¹    | -       |
+| Working tree          | -             | ✓         | ✓       |
+| CI status             | -             | ✓         | ✓       |
+| Open issues / PRs     | -             | ✓         | ✓       |
+| Docs alignment        | -             | diff      | full    |
+| Version consistency   | -             | ✓         | ✓       |
+| CVEs                  | -             | ✓         | ✓       |
+
+Flag mark = output produced only when that flag is passed. ¹ Full guide when breaking changes detected; single-line stub otherwise.
 
 **SemVer enforcement:**
 
@@ -308,7 +332,7 @@ Added → Breaking Changes → Changed → Deprecated → Removed → Fixed
 
 **Deprecation tracking:** Uses `pyDeprecate` for the deprecation lifecycle. Migration guides include a before/after table with argument mapping for all renamed or removed parameters.
 
-**All public-facing text** (release notes, changelog entries, migration guides) passes through `oss:shepherd` for voice review before being written to disk.
+**Shepherd review** applies to release notes and migration guides. CHANGELOG entries and summaries are written directly without review.
 
 **Output location:** `releases/<version>/` for `prepare` mode; `.temp/` for individual modes.
 
@@ -316,7 +340,7 @@ ______________________________________________________________________
 
 ## 🤖 Agents reference
 
-### oss:shepherd
+### shepherd
 
 **Role:** The public voice of your project. Shepherd owns all external-facing communication — PR replies, issue responses, release notes, changelog entries, and migration guides. It never writes implementation code.
 
@@ -342,7 +366,7 @@ use shepherd to write a migration guide for the v3.0 breaking changes
 **What shepherd does NOT do:**
 
 - Inline docstrings or API reference docs → use `foundry:doc-scribe`
-- CI pipeline configuration → use `oss:ci-guardian`
+- CI pipeline configuration or GitHub Actions YAML structure for publish/release workflows → use `oss:cicd-steward`
 - Implementation code of any kind
 
 **Voice principles:**
@@ -354,21 +378,21 @@ use shepherd to write a migration guide for the v3.0 breaking changes
 
 ______________________________________________________________________
 
-### oss:ci-guardian
+### cicd-steward
 
 **Role:** GitHub Actions health specialist. Owns CI configuration quality: workflow topology, runner strategy, caching, branch protections, and flaky test detection.
 
 **Model:** Haiku (fast iteration on workflow YAML)
 
-**When to use ci-guardian directly:**
+**When to use cicd-steward directly:**
 
 ```bash
-use ci-guardian to reduce the build time in .github/workflows/ci.yml
-use ci-guardian to diagnose the failing test matrix on PR #72
-use ci-guardian to add SHA pinning to all actions in the workflow
+use cicd-steward to reduce the build time in .github/workflows/ci.yml
+use cicd-steward to diagnose the failing test matrix on PR #72
+use cicd-steward to add SHA pinning to all actions in the workflow
 ```
 
-**What ci-guardian does:**
+**What cicd-steward does:**
 
 - Diagnoses CI failures by failure type (linting, type errors, test failures, import errors, timeouts, OOM)
 - Audits GitHub Actions workflow files for antipatterns (unpinned actions, missing concurrency groups, broken caching, wrong parallelism)
@@ -377,7 +401,7 @@ use ci-guardian to add SHA pinning to all actions in the workflow
 - Detects and quarantines flaky tests (target: 0% flakiness)
 - Configures test matrices, reusable workflows, nightly upstream CI, and performance regression benchmarks
 
-**SHA pinning enforcement** (ci-guardian flags these as primary findings):
+**SHA pinning enforcement** (cicd-steward flags these as primary findings):
 
 | Severity  | Pattern              | Example                                                           |
 | --------- | -------------------- | ----------------------------------------------------------------- |
@@ -387,10 +411,10 @@ use ci-guardian to add SHA pinning to all actions in the workflow
 
 Short SHAs (fewer than 40 hex characters) are treated as unpinned — they can collide and are not cryptographically safe.
 
-**What ci-guardian does NOT do:**
+**What cicd-steward does NOT do:**
 
 - ruff/mypy rule selection or pre-commit configuration → use `foundry:linting-expert`
-- PyPI release workflow or Trusted Publishing setup → use `oss:shepherd`
+- PyPI release management, release notes, CHANGELOG entries, or contributor communication → use `oss:shepherd`
 
 **Health targets:**
 

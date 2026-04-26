@@ -226,7 +226,7 @@ Codemap injection candidates for: $PROJ
   Status  Skill/Agent          Tier    Notes
   ──────────────────────────────────────────────────────────────────
   a)      develop:refactor     MEDIUM  restructures code; reads module deps for target
-  b)      oss:ci-guardian      MEDIUM  diagnoses failures; reads code structure for context
+  b)      oss:cicd-steward     MEDIUM  diagnoses failures; reads code structure for context
   —       foundry:doc-scribe   LOW     writes docstrings; skip
   —       oss:release          SKIP    release artifact; no code traversal
 ```

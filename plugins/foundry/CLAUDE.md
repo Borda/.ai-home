@@ -74,7 +74,7 @@ Operations in `settings.json` are pre-approved — execute directly. Operation n
 
 Teams always user-invoked:
 
-- **Models**: lead = session model; reasoning teammates (foundry:sw-engineer, foundry:qa-specialist, foundry:perf-optimizer, research:scientist) = `opus`; execution teammates (foundry:doc-scribe, foundry:linting-expert, oss:ci-guardian, research:data-steward, foundry:web-explorer) = `sonnet`; max 3–5
+- **Models**: lead = session model; reasoning teammates (foundry:sw-engineer, foundry:qa-specialist, foundry:perf-optimizer, research:scientist) = `opus`; execution teammates (foundry:doc-scribe, foundry:linting-expert, oss:cicd-steward, research:data-steward, foundry:web-explorer) = `sonnet`; max 3–5
 - **Protocol**: every spawn prompt must include `Read ~/.claude/TEAM_PROTOCOL.md and use AgentSpeak v2`; preserve file paths, errors, test results, task IDs; discard verbose output
 - **Security**: `foundry:qa-specialist` auto-includes OWASP Top 10 — no separate security agent
 - **File-based handoff applies in teams**: teammates writing parallel analysis still follow §2 file-handoff protocol — compact JSON envelope back to lead, full output to file

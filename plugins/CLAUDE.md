@@ -65,6 +65,13 @@ Per-plugin version in `.claude-plugin/plugin.json`. Space: `0.X.Y`.
 
 **Example**: start `0.2.0`, session: wording fix + feature add → commit as `0.3.0` (not `0.2.1`).
 
+**Pre-bump checklist** — run before writing any version change to disk:
+
+1. Read HEAD baseline: `git show HEAD:<plugin-path>/.claude-plugin/plugin.json | grep version`
+2. Classify highest-magnitude change in session (`X` or `Y`) — do NOT read on-disk version; disk may already differ from HEAD
+3. Calculate new version from HEAD baseline: `X` → bump minor, reset patch to `0`; `Y` → bump patch only
+4. Write calculated version to `<plugin-path>/.claude-plugin/plugin.json` — if on-disk version already equals or exceeds calculated, skip write
+
 ## Edit Quality Gate
 
 Before any edit, delete, or addition to plugin files — self-challenge:

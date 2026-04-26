@@ -40,6 +40,7 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
+# ls exit code lost through pipe; fallback guard below covers empty result
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
 [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 ```
@@ -68,6 +69,15 @@ fi
 ```
 
 ```bash
+# Parse --no-challenge flag
+if [[ "$CLEAN_ARGS" == *"--no-challenge"* ]]; then
+    CHALLENGE_ENABLED=false
+    CLEAN_ARGS="${CLEAN_ARGS//--no-challenge/}"
+    CLEAN_ARGS="${CLEAN_ARGS#"${CLEAN_ARGS%%[![:space:]]*}"}"
+fi
+```
+
+```bash
 # Strip leading '#' so both '123' and '#123' work
 CLEAN_ARGS="${CLEAN_ARGS#\#}"
 ```
@@ -82,10 +92,10 @@ fi
 
 ```bash
 # $CLEAN_ARGS must be a PR number — run all four in parallel:
-gh pr diff $CLEAN_ARGS --name-only                     # files changed in PR                    # timeout: 6000
-gh pr view $CLEAN_ARGS                                 # PR description and metadata             # timeout: 6000
-gh pr checks $CLEAN_ARGS                               # CI status — don't review if CI is red  # timeout: 15000
-gh pr view $CLEAN_ARGS --json reviews,labels,milestone # timeout: 6000
+CHANGED_FILES=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null)  # cache for reuse in codemap block # timeout: 6000
+gh pr view $CLEAN_ARGS                                            # PR description and metadata       # timeout: 6000
+gh pr checks $CLEAN_ARGS                                          # CI status — don't review if CI is red # timeout: 15000
+gh pr view $CLEAN_ARGS --json reviews,labels,milestone            # timeout: 6000
 ```
 
 CI red → report without full review.
@@ -109,8 +119,8 @@ Use classification to skip optional agents:
 ```bash
 PROJ=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null) || PROJ=$(basename "$PWD")
 if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; then
-    # Use file list from the gh pr diff already fetched above
-    CHANGED_MODS=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null | grep '\.py$' | sed 's|^src/||;s|\.py$||;s|/|.|g' | grep -v '__init__$')  # timeout: 6000
+    # Reuse $CHANGED_FILES cached from the gh pr diff call above — no redundant fetch
+    CHANGED_MODS=$(echo "$CHANGED_FILES" | grep '\.py$' | sed 's|^src/||;s|\.py$||;s|/|.|g' | grep -v '__init__$')
     scan-query central --top 5 2>/dev/null  # timeout: 5000
     for mod in $CHANGED_MODS; do scan-query rdeps "$mod" 2>/dev/null; done  # timeout: 5000
 fi
@@ -127,7 +137,7 @@ Agent 1 uses this to prioritize: high `rdep_count` modules warrant deeper scruti
 
 Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract to `ISSUE_NUMS`. Cap 3.
 
-`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **at Step 2, after `$RUN_DIR` is initialized** (parallel with Codex co-review). Each issue agent:
+`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **concurrently in Step 2, alongside Codex co-review** (both run after `$RUN_DIR` is initialized — issue agents and Codex are parallel, not sequential). Each issue agent:
 
 - Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
 - Fetch comments: `gh issue view <N> --comments`
@@ -172,11 +182,17 @@ After Codex writes `$RUN_DIR/codex.md`, extract seed list (≤10 items, `[{"loc"
 
 ## Step 3: Spawn sub-agents in parallel
 
-**File-based handoff**: read `.claude/skills/_shared/file-handoff-protocol.md`. File absent → warn the user: "file-handoff protocol not found — verify foundry plugin installed (`claude plugin list`); continuing without it." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
+```bash
+# find exit code lost through pipe; fallback guard below covers empty result
+REVIEW_SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/review" -type d 2>/dev/null | head -1)"
+[ -z "$REVIEW_SKILL_DIR" ] && REVIEW_SKILL_DIR="plugins/oss/skills/review"
+```
 
-<!-- Note: $RUN_DIR must be pre-expanded before inserting into spawn prompts — replace with the literal path string computed in Step 2 setup. -->
+**File-based handoff**: read `$FOUNDRY_SHARED/file-handoff-protocol.md`. File absent → warn the user: "file-handoff protocol not found — verify foundry plugin installed (`claude plugin list`); continuing without it." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
 
-Replace `$RUN_DIR` below with actual path from Step 2.
+<!-- IMPORTANT: expand $RUN_DIR to its literal string value (from Step 2) before inserting into every spawn prompt below. If $RUN_DIR is passed as a shell variable reference inside a quoted Agent prompt string, agents receive the literal text "$RUN_DIR" as a path — the write will fail or produce a file with that name. Always substitute the actual path (e.g. ".reports/review/2026-04-26T08-30-40Z") before spawning. -->
+
+**IMPORTANT**: Replace `$RUN_DIR` below with the actual literal path computed in Step 2 before inserting into any Agent spawn prompt.
 
 Launch agents simultaneously. Security augmentation folded into Agent 1. Agent 6 optional. Every agent prompt must end with:
 
@@ -195,7 +211,7 @@ Flag rules:
 - Caught=Yes + Action=`pass` or bare `except` → **MEDIUM** (swallowed error)
 - Cap 15 rows. New/changed paths only.
 
-Read `plugins/oss/skills/review/checklist.md` — apply CRITICAL/HIGH patterns as severity anchors. Respect suppressions.
+Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severity anchors. Respect suppressions.
 
 `ISSUE_NUMS` non-empty: read `$RUN_DIR/issue-*.md`. Evaluate whether changes address root cause, not just symptom. PR addresses symptom only → `[blocking] HIGH — root cause misalignment`. PR description diverges from issue problem → `HIGH — PR/issue scope divergence`.
 
@@ -223,7 +239,7 @@ Read `plugins/oss/skills/review/checklist.md` — apply CRITICAL/HIGH patterns a
 
 **Agent 6 — foundry:solution-architect (optional, PRs touching public API boundaries)**: Diff touches `__init__.py` exports, adds/modifies Protocols/ABCs, changes module structure, or new public classes → evaluate API design, coupling, backward compat. Skip if internal only.
 
-**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/foundry--challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"blockers":0,"concerns":1},"file":"$RUN_DIR/foundry--challenger.md","confidence":0.88}`.
+**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/foundry--challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"critical":0,"high":1,"medium":1,"low":0},"file":"$RUN_DIR/foundry--challenger.md","confidence":0.88}`. Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
 
 **Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively; no Bash checkpoint polling. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
 
@@ -260,7 +276,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -A2 "deprecate
 git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- pyproject.toml requirements*.txt # timeout: 3000
 
 # Check for secrets accidentally committed
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -iE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}" # timeout: 3000
+git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -iE "(password|secret|api_key|token|private_key|auth_token)\s*[=:]\s*['\"]?[A-Za-z0-9+/._-]{8,}['\"]?" # timeout: 3000
 
 # Check for API stability: are public APIs being removed without deprecation?
 git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- "src/**/__init__.py" # timeout: 3000
@@ -271,7 +287,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANG
 
 ## Step 5: Cross-validate critical/blocking findings
 
-Read and follow `.claude/skills/_shared/cross-validation-protocol.md`. File absent → warn the user: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
+Locate cross-validation protocol: `FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED=".claude/skills/_shared"`. Read `$FOUNDRY_SHARED/cross-validation-protocol.md` and follow it. File absent → warn the user: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
 
 **Skill-specific**: same agent type that raised finding = verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer critical finding).
 
@@ -281,7 +297,7 @@ Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | t
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
-> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `codex.md` if present — skip any that are missing). Read `plugins/oss/skills/review/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps).
+> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `codex.md` if present — skip any that are missing). Read `$REVIEW_SKILL_DIR/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Read `.claude/skills/_shared/cross-validation-protocol.md` and apply cross-validation to all critical/blocking findings before including them (file absent → skip cross-validation, note in output). For `foundry--challenger.md`: map severity keys Blockers → critical/high, Concerns → medium, Nitpicks → low when aggregating counts.
 >
 > **Filtering rules:**
 > - Precision gate: only include findings with a concrete, actionable location (function, line range, or variable name).
@@ -364,9 +380,9 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 
 After parsing confidence: agent < 0.7 → prepend **⚠ LOW CONFIDENCE** to findings section, state gap explicitly. Never drop uncertain findings.
 
-<!-- Extended Fields live in .claude/skills/_shared/terminal-summaries.md -->
+<!-- Extended Fields live in $FOUNDRY_SHARED/terminal-summaries.md (foundry plugin shared dir, resolved in Step 5) -->
 
-Read `.claude/skills/_shared/terminal-summaries.md`. File absent → warn the user: "foundry:init required: `.claude/skills/_shared/terminal-summaries.md` not found; install foundry plugin and run `foundry:init` to activate terminal summary templates. Printing plain terminal output instead." Then print a plain summary without the template. When file is present — use **PR Summary** template with **Extended Fields (review only)**. Replace `[entity-line]` with `Review — [target]`, `[skill-specific path]` with `.temp/output-review-$BRANCH-$DATE.md`. Terminal block structure: opening `---` on own line, entity line next (never `---Review...`), `→ saved to .temp/output-review-$BRANCH-$DATE.md` after `Confidence:`, closing `---` after `→ saved to`. Print to terminal.
+Read `$FOUNDRY_SHARED/terminal-summaries.md`. File absent → warn the user: "foundry:init required: `terminal-summaries.md` not found — verify foundry plugin installed (`claude plugin list`) and run `foundry:init`; printing plain terminal output instead." Then print a plain summary without the template. When file is present — use **PR Summary** template with **Extended Fields (review only)**. Replace `[entity-line]` with `Review — [target]`, `[skill-specific path]` with `.temp/output-review-$BRANCH-$DATE.md`. Terminal block structure: opening `---` on own line, entity line next (never `---Review...`), `→ saved to .temp/output-review-$BRANCH-$DATE.md` after `Confidence:`, closing `---` after `→ saved to`. Print to terminal.
 
 After printing, also prepend compact block to report file top via Edit — line 1, followed by blank line, then `## Code Review: [target]`.
 
@@ -385,7 +401,7 @@ After consolidating, identify tasks Codex can implement — not style violations
 - Architectural issues, logic errors, security vulnerabilities, or behavioural changes
 - Any task where you cannot write a precise description without guessing
 
-Read `.claude/skills/_shared/codex-delegation.md`. File absent → warn the user: "codex-delegation criteria not found — verify foundry plugin installed (`claude plugin list`); skipping Step 7 delegation." Then skip Step 7.
+Read `$FOUNDRY_SHARED/codex-delegation.md`. File absent → warn the user: "codex-delegation criteria not found — verify foundry plugin installed (`claude plugin list`); skipping Step 7 delegation." Then skip Step 7.
 
 Example prompt: `"Add a test for StreamReader.read_chunk() in tests/test_reader.py — the method should raise ValueError when called after close(), currently no test covers this path."`
 

@@ -344,7 +344,7 @@ Not code implementation, experiment design, or ML paper deep-dives — hand off 
 - **ML papers, hypothesis generation, experiment design** → `research:scientist`
 - **Dependency upgrade decisions, deprecation lifecycle** → `oss:shepherd`
 - **CV/tensor documentation** → `foundry:doc-scribe` for writing, `foundry:web-explorer` for sourcing from external refs
-- **Docs build failures** → `oss:ci-guardian` for CI failure; `foundry:web-explorer` for fetching upstream docs
+- **Docs build failures** → `oss:cicd-steward` for CI failure; `foundry:web-explorer` for fetching upstream docs
 
 **Incoming handoffs**: called by `/research:topic` (Step 2a parallel codebase check), `/foundry:audit` (Claude Code docs freshness check),
 `/foundry:manage` (agent/skill frontmatter schema validation).

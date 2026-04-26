@@ -1,6 +1,6 @@
-**Re: Compress markdown to caveman format**
-
 # Mode: Repo Health Overview
+
+<workflow>
 
 Run all five `gh` commands parallel — independent API calls:
 
@@ -8,19 +8,19 @@ Run all five `gh` commands parallel — independent API calls:
 # --- run these in parallel ---
 
 # Open issues: count, age, labels (for triage stats and stale detection)
-gh issue list --state open --json number,title,createdAt,updatedAt,labels --limit 200
+gh issue list --state open --json number,title,createdAt,updatedAt,labels --limit 200  # timeout: 30000
 
 # Open PRs with review and CI status
-gh pr list --state open --json number,title,createdAt,reviews,statusCheckRollup
+gh pr list --state open --json number,title,createdAt,reviews,statusCheckRollup  # timeout: 15000
 
 # All issues open+closed (for duplicate clustering)
-gh issue list --state all --json number,title,state,labels,createdAt --limit 200
+gh issue list --state all --json number,title,state,labels,createdAt --limit 200  # timeout: 30000
 
 # All PRs open+closed (for duplicate clustering — same bug may have a related PR)
-gh pr list --state all --json number,title,state,createdAt --limit 100
+gh pr list --state all --json number,title,state,createdAt --limit 100  # timeout: 30000
 
 # All discussions open+closed (for duplicate clustering — questions/proposals may duplicate issues)
-gh api graphql -f query='
+gh api graphql -f query='  # timeout: 15000
   query($owner:String!,$repo:String!){
     repository(owner:$owner,name:$repo){
       discussions(first:100,orderBy:{field:UPDATED_AT,direction:DESC}){
@@ -72,4 +72,14 @@ _(Repeat for each group. If no duplicate groups found: "No obvious duplicates de
 
 Run `mkdir -p .reports/analyse/health` then write full report to `.reports/analyse/health/output-analyse-health-$(date +%Y-%m-%d).md` via Write tool — **do not print full analysis to terminal**.
 
-Read compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use **Repo Health Summary** template. Replace `[skill-specific path]` with `.reports/analyse/health/output-analyse-health-$(date +%Y-%m-%d).md`. Output must begin with `---` on own line, entity line next, `→ saved to <path>` at end, close with `---` on own line. After printing, prepend same compact block to top of report via Edit tool — insert at line 1 so file begins with compact summary, blank line, then existing `## Repo Health:` content.
+Read compact terminal summary template from `$FOUNDRY_SHARED/terminal-summaries.md`. File absent → warn: "foundry:init required — printing plain terminal output instead." Use **Repo Health Summary** template. Replace `[skill-specific path]` with `.reports/analyse/health/output-analyse-health-$(date +%Y-%m-%d).md`. Output must begin with `---` on own line, entity line next, `→ saved to <path>` at end, close with `---` on own line. After printing, prepend same compact block to top of report via Edit tool — insert at line 1 so file begins with compact summary, blank line, then existing `## Repo Health:` content.
+
+</workflow>
+
+<notes>
+
+- **--limit caps**: `--limit 200` on issue list covers most repos; repos with >200 open issues need `--paginate` — warn in report if limit hit (response length ≈ limit)
+- **Duplicate clustering**: flag as DUPLICATE only when root is the same problem (identical error/feature ask/root cause); flag as RELATED when same component, distinct problems — don't conflate
+- **Discussions API**: GraphQL `discussions` query returns only `first:100` — sufficient for health snapshot; full pagination not needed here
+
+</notes>

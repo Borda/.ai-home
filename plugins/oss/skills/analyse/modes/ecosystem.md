@@ -1,6 +1,6 @@
-**Re: Compress markdown to caveman format**
-
 # Mode: Ecosystem Impact (for library maintainers)
+
+<workflow>
 
 Replace `mypackage` in commands below with actual package name (e.g. from `gh repo view --json name --jq .name`).
 
@@ -27,7 +27,10 @@ Produce:
 - [repo]: uses [specific API being changed]
 
 ### Breaking Risk
-- [High/Medium/Low] — [N] known consumers of changed API
+- **High** — ≥5 known consumers of changed API, OR any consumer in a major package (>10k weekly downloads on PyPI)
+- **Medium** — 2–4 known consumers, OR API changed without deprecation cycle
+- **Low** — ≤1 consumer, OR purely additive change (no removal/signature change)
+- **Risk**: [High/Medium/Low] — [N] known consumers; [apply threshold above]
 - Migration path: [available / needs documentation]
 
 ### Recommended Communication
@@ -36,4 +39,15 @@ Produce:
 
 Run `mkdir -p .reports/analyse/ecosystem` then write full report to `.reports/analyse/ecosystem/output-analyse-ecosystem-$(date +%Y-%m-%d).md` using Write tool — **do not print full analysis to terminal**.
 
-Read compact terminal summary template from `.claude/skills/_shared/terminal-summaries.md` — use **Ecosystem Impact Summary** template. Replace `[skill-specific path]` with `.reports/analyse/ecosystem/output-analyse-ecosystem-$(date +%Y-%m-%d).md`. Output opens with `---` on own line, entity line on next line, `→ saved to <path>` at end, closes with `---` on own line. After terminal print, prepend same compact block to top of report file via Edit tool — insert at line 1 so file begins with compact summary, blank line, then existing `## Ecosystem Impact:` content.
+Read compact terminal summary template from `$FOUNDRY_SHARED/terminal-summaries.md`. File absent → warn: "foundry:init required — printing plain terminal output instead." Use **Ecosystem Impact Summary** template. Replace `[skill-specific path]` with `.reports/analyse/ecosystem/output-analyse-ecosystem-$(date +%Y-%m-%d).md`. Output opens with `---` on own line, entity line on next line, `→ saved to <path>` at end, closes with `---` on own line. After terminal print, prepend same compact block to top of report file via Edit tool — insert at line 1 so file begins with compact summary, blank line, then existing `## Ecosystem Impact:` content.
+
+</workflow>
+
+<notes>
+
+- **GitHub search rate limit**: `gh api search/code` is rate-limited ~30 req/min; `--paginate` may trigger secondary rate limiting on large result sets — add `sleep 2` between pages if needed
+- **PyPI download counts**: johnnydep not installed by default; skip if unavailable; alternative: check libraries.io API for reverse deps
+- **Risk threshold calibration**: thresholds (5 consumers = High) are guidelines for OSS Python libs; adjust for internal/enterprise repos where even 1 consumer may be critical
+- **conda-forge**: feedstock search returns repo names (`conda-forge/mypackage-feedstock`), not actual dependent packages — treat as 1 known consumer per feedstock found
+
+</notes>

@@ -1,7 +1,7 @@
 ---
 name: release
-description: 'Prepare release communication and check release readiness. Modes — notes (writes PUBLIC-NOTES.md), changelog (prepends CHANGELOG.md), summary (internal brief), migration (breaking-changes guide), prepare (full pipeline: audit → notes + changelog + summary + migration if breaking changes), audit (pre-release readiness check: blockers, docs alignment, version consistency, Common Vulnerabilities and Exposures (CVEs)). Use whenever the user says "prepare release", "write changelog", "what changed since v1.x", "prepare v2.0", "write release notes", "am I ready to release", "check release readiness", or wants to announce a version to users.'
-argument-hint: <mode> [range] | migration <from> <to> | prepare <version> | audit [version]
+description: 'Prepare release communication and check release readiness. Main mode: notes with optional flags --changelog, --summary, --migration; range as v1->v2. Other modes: prepare (full pipeline: audit → all artifacts), audit (pre-release readiness check: blockers, docs alignment, version consistency, CVEs). Use whenever the user says "prepare release", "write changelog", "what changed since v1.x", "prepare v2.0", "write release notes", "am I ready to release", "check release readiness", or wants to announce a version to users.'
+argument-hint: [notes] [v1->v2] [--changelog] [--summary] [--migration] | prepare <version> | audit [version]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate, Agent
 model: opus
 effort: high
@@ -15,18 +15,19 @@ Prepare release communication from what changed. Output adapts to audience — u
 
 <inputs>
 
-Mode comes **first**; range or version follows:
+Mode comes **first**; range or flags follow:
 
 | Invocation | Arguments | Writes to disk |
 | --- | --- | --- |
-| `/release notes [range]` | optional git range (default: last-tag..HEAD) | `PUBLIC-NOTES.md` |
-| `/release changelog [range]` | optional git range | Prepends `CHANGELOG.md` |
-| `/release summary [range]` | optional git range | `.temp/output-release-summary-<branch>-<date>.md` |
-| `/release migration <from> <to>` | two version tags, e.g. `v1.2 v2.0` | Terminal only |
+| `/release [notes] [range]` | optional range (default: last-tag..HEAD); use `v1->v2` for explicit range | `PUBLIC-NOTES.md` |
+| `/release notes [range] --changelog` | optional range + flag | `PUBLIC-NOTES.md` + prepends `CHANGELOG.md` |
+| `/release notes [range] --summary` | optional range + flag | `PUBLIC-NOTES.md` + `.temp/output-release-summary-<branch>-<date>.md` |
+| `/release notes [range] --migration` | optional range + flag | `PUBLIC-NOTES.md` + `.temp/output-release-migration-<branch>-<date>.md` |
+| `/release notes [range] --changelog --summary --migration` | all flags | All four outputs |
 | `/release prepare <version>` | version to stamp, e.g. `v1.3.0` | All artifacts: audit → `PUBLIC-NOTES.md` + `CHANGELOG.md` + summary + migration if breaking |
 | `/release audit [version]` | optional target version | Terminal readiness report |
 
-No mode given → defaults to `notes`. `prepare` = full pipeline — runs audit first, then all artifacts; use when cutting release, not drafting.
+Range notation: `v1->v2` (e.g. `v1.2->v2.0`) — converted internally to git range. No mode given → defaults to `notes`. Flags add outputs alongside notes. `prepare` = full pipeline — runs audit first, then all artifacts; use when cutting release, not drafting.
 
 </inputs>
 
@@ -52,9 +53,32 @@ read FIRST REST <<<"$ARGUMENTS"
 | --- | --- | --- |
 | `prepare` | prepare | Skip to **Mode: prepare** |
 | `audit` | audit | Skip to **Mode: audit** |
-| `migration` | migration | `read MIGRATION_FROM MIGRATION_TO <<< "$REST"`, set `RANGE="$MIGRATION_FROM..$MIGRATION_TO"`, continue Steps 1–5 with migration format |
-| `notes`, `changelog`, `summary` | as named | Set `RANGE="$REST"` (empty = default); continue Steps 1–5 |
-| *(none or bare range)* | notes | Set `RANGE="$ARGUMENTS"`; continue Steps 1–5 |
+| `notes` | notes | Parse flags and range from `$REST`; continue Steps 1–5 |
+| *(none or bare range)* | notes | `RANGE="$ARGUMENTS"`, no flags; continue Steps 1–5 |
+
+After matching `notes`, parse flags from `$REST`:
+
+```bash
+DO_CHANGELOG=false; DO_SUMMARY=false; DO_MIGRATION=false; RANGE=""
+for arg in $REST; do
+  case "$arg" in
+    --changelog)  DO_CHANGELOG=true ;;
+    --summary)    DO_SUMMARY=true ;;
+    --migration)  DO_MIGRATION=true ;;
+    *)            RANGE="$arg" ;;
+  esac
+done
+# Convert v1->v2 shorthand to git range notation
+RANGE="${RANGE/->/../}"
+```
+
+## Shared setup
+
+```bash
+# Resolve skill directory — used by all modes for templates and guidelines
+SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/release" -type d 2>/dev/null | head -1)"  # timeout: 5000
+[ -z "$SKILL_DIR" ] && SKILL_DIR="plugins/oss/skills/release"
+```
 
 ## Step 1: Gather changes
 
@@ -62,6 +86,10 @@ read FIRST REST <<<"$ARGUMENTS"
 # Use $RANGE from Mode Detection, or fall back to last-tag..HEAD
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
 RANGE="${RANGE:-$LAST_TAG..HEAD}"
+[ -z "$RANGE" ] && echo "Error: could not determine commit range" && exit 1
+
+# No-tags guard: warn when no real release tags exist (LAST_TAG = initial commit)
+git describe --tags --abbrev=0 2>/dev/null || echo "⚠ No release tags found — analyzing full history from initial commit. Consider tagging your first release."
 
 # One-liner overview (navigation index)
 git log $RANGE --oneline --no-merges # timeout: 3000
@@ -119,9 +147,8 @@ Skip for trivial changes (typos, dep bumps, CI config).
 Pre-flight — verify all templates present before proceeding:
 
 ```bash
-# Resolve skill directory portably — works in developer repo and after plugin install
-SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/release" -type d 2>/dev/null | head -1)"
-[ -z "$SKILL_DIR" ] && SKILL_DIR="plugins/oss/skills/release"
+# $SKILL_DIR resolved in Shared setup block above
+[ -z "$SKILL_DIR" ] && echo "Error: could not locate release skill directory" && exit 1
 for tmpl in PUBLIC-NOTES.tmpl.md CHANGELOG.tmpl.md SUMMARY.tmpl.md MIGRATION.tmpl.md; do # timeout: 5000
     [ -f "$SKILL_DIR/templates/$tmpl" ] || {
         echo "Missing template: $tmpl — aborting"
@@ -135,10 +162,10 @@ Before writing, fetch last 2–3 releases to check project-specific formatting c
 ```bash
 gh release list --limit 3                                                  # timeout: 30000
 LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName') # timeout: 30000
-gh release view "$LATEST_TAG"                                              # timeout: 15000
+[ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ] && echo "No releases found — using template defaults" || gh release view "$LATEST_TAG"  # timeout: 15000
 ```
 
-Existing releases deviate from templates → match their style. Templates below = default; project conventions take precedence.
+Existing releases deviate from templates → match their style. Templates below = default; project conventions take precedence. `gh release list` returns empty → skip style-matching step; proceed with template defaults.
 
 ### Notes — user-facing, public (`notes`)
 
@@ -148,11 +175,11 @@ For `notes` mode: first produce CHANGELOG-format classification (Step 2 output).
 
 Read PUBLIC-NOTES template from $SKILL_DIR/templates/PUBLIC-NOTES.tmpl.md and use as format.
 
-### CHANGELOG Entry (`changelog`)
+### CHANGELOG Entry (`--changelog` flag)
 
 Read CHANGELOG entry template from $SKILL_DIR/templates/CHANGELOG.tmpl.md and use as format.
 
-### Internal Release Summary (`summary`)
+### Internal Release Summary (`--summary` flag)
 
 Read internal release summary template from $SKILL_DIR/templates/SUMMARY.tmpl.md and use as format.
 
@@ -164,7 +191,7 @@ Read migration guide template from $SKILL_DIR/templates/MIGRATION.tmpl.md and us
 
 Read writing guidelines from $SKILL_DIR/guidelines/writing-rules.md and follow them.
 
-After polishing, for `notes` and `changelog` modes dispatch shepherd for public-facing voice/tone review before writing to disk:
+After polishing, for `notes` base output and `--migration` flag output, dispatch shepherd for public-facing voice/tone review before writing to disk:
 
 ```bash
 # Pre-compute shepherd run dir (file-handoff protocol)
@@ -173,22 +200,31 @@ mkdir -p "$SHEPHERD_DIR"
 # Write the generated draft content to: $SHEPHERD_DIR/draft.md before dispatching
 ```
 
+IMPORTANT: expand `$SHEPHERD_DIR` to its literal computed value before inserting into the spawn prompt — do not pass the variable name literally.
+
 ```text
 Agent(subagent_type="oss:shepherd", prompt="Review the draft release content at <$SHEPHERD_DIR/draft.md> for public-facing voice and tone. Apply shepherd voice guidelines: human and direct, no internal jargon, no staff names, no internal maintenance details. Write the revised content to <$SHEPHERD_DIR/shepherd-revised.md>. Return ONLY: {\"status\":\"done\",\"changes\":N,\"file\":\"<$SHEPHERD_DIR/shepherd-revised.md>\"}")
 ```
 
-Read `$SHEPHERD_DIR/shepherd-revised.md` → use as final content for disk write. For `summary` and `migration` modes, skip shepherd, write directly.
+Read `$SHEPHERD_DIR/shepherd-revised.md` → use as final content for disk write. For `--changelog` and `--summary` flag outputs, skip shepherd, write directly. Shepherd runs once per invocation — combine notes and `--migration` content into single draft if both present.
 
-Write to disk per mode:
+Write to disk:
 
-- **`notes`**: write to `PUBLIC-NOTES.md` at repo root. Notify: `→ written to PUBLIC-NOTES.md`
-- **`changelog`**: prepend entry to `CHANGELOG.md` after `# Changelog` heading (create file with that heading if missing). Notify: `→ prepended to CHANGELOG.md`
-- **`summary`**: extract branch — `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` — save to `.temp/output-release-summary-$BRANCH-$(date +%Y-%m-%d).md`. Notify: `→ saved to .temp/output-release-summary-<branch>-<date>.md`
-- **`migration`**: print to terminal only
+```bash
+BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
+DATE=$(date +%Y-%m-%d)
+```
+
+- **notes** (always): shepherd review → write to `PUBLIC-NOTES.md` at repo root. Notify: `→ written to PUBLIC-NOTES.md`
+- **`--changelog`** (if set): no shepherd → prepend entry to `CHANGELOG.md` after `# Changelog` heading (create file with that heading if missing). Notify: `→ prepended to CHANGELOG.md`
+- **`--summary`** (if set): no shepherd → save to `.temp/output-release-summary-$BRANCH-$DATE.md`. Notify: `→ saved to .temp/output-release-summary-<branch>-<date>.md`
+- **`--migration`** (if set): shepherd review → save to `.temp/output-release-migration-$BRANCH-$DATE.md`. Notify: `→ saved to .temp/output-release-migration-<branch>-<date>.md`
 
 ## Step 6: Publish (after writing notes)
 
 **Human gate** — stop and hand off to user: GitHub release must be created with project-level tooling (e.g. `gh release create`). See project's CLAUDE.md or `oss:shepherd` agent (`<release_checklist>` section) for exact command.
+
+End response with `## Confidence` block per CLAUDE.md output standards.
 
 ## Mode: prepare
 
@@ -202,9 +238,7 @@ VERSION="${REST%% *}"
 DATE=$(date +%Y-%m-%d)
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
 RANGE="$LAST_TAG..HEAD"
-# Resolve skill directory — required by Phase 1 audit and Phase 3 template reads
-SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/release" -type d 2>/dev/null | head -1)"  # timeout: 5000
-[ -z "$SKILL_DIR" ] && SKILL_DIR="plugins/oss/skills/release"
+# $SKILL_DIR resolved in Shared setup block above
 ```
 
 ### Phase 1: Readiness audit
@@ -217,7 +251,7 @@ Run all checks from **Mode: audit** with `$VERSION` as target. Present readiness
 
 ### Phase 2: Gather and classify changes
 
-Run **Steps 1–2** to gather and classify all commits in `$RANGE`.
+Run the change classification logic (see **Step 2: Classify each change** of notes mode) — git history and PR data already gathered in Phase 1; no re-gather, no Step 3 file exploration.
 
 Note whether **Breaking Changes** classified — gates Phase 3d.
 
@@ -232,11 +266,11 @@ Write each artifact in sequence:
 
 **a. `releases/$VERSION/PUBLIC-NOTES.md`** — user-facing notes (Step 3 `notes` format). Shepherd voice review applies per Step 5.
 
-**b. `CHANGELOG.md`** — prepend entry stamped `$VERSION — $DATE` (Step 3 `changelog` format) to root `CHANGELOG.md`. Cumulative file — not versioned per release. Create with `# Changelog` header if missing.
+**b. `CHANGELOG.md`** — prepend entry stamped `$VERSION — $DATE` (Step 3 `changelog` format) to root `CHANGELOG.md`. Cumulative file — not versioned per release. Create with `# Changelog` header if missing. No shepherd review — write directly.
 
 **c. `releases/$VERSION/SUMMARY.md`** — internal summary (Step 3 `summary` format).
 
-**d. `releases/$VERSION/MIGRATION.md`** — always written. Breaking changes classified → use Step 3 `migration` format. No breaking changes → single line: `No breaking changes in this release.`
+**d. `releases/$VERSION/MIGRATION.md`** — always written. Breaking changes classified → use Step 3 `migration` format. No breaking changes → single line: `No breaking changes in this release.` Shepherd voice review applies per Step 5.
 
 ### Output
 
@@ -258,6 +292,12 @@ Write each artifact in sequence:
 2. Bump version in the project manifest
 3. Commit, push, open PR
 4. On merge: create GitHub release from PUBLIC-NOTES.md
+
+## Confidence
+**Score**: [computed from audit Phase 1 completeness and git history coverage]
+**Gaps**: [audit blockers or low-signal areas; note if CVE scan incomplete or docs alignment partial]
+
+**Refinements**: [N passes if self-review ran during audit or classification phases]
 ```
 
 ## Mode: audit
@@ -265,6 +305,20 @@ Write each artifact in sequence:
 **Trigger**: `/release audit [version]`
 
 **Purpose**: Pre-release readiness check — surfaces outstanding work, alignment gaps, and blockers before cutting release.
+
+```bash
+# $SKILL_DIR resolved in Shared setup block above
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+RANGE="${LAST_TAG}..HEAD"
+```
+
+### Phase A: Gather and explore changes
+
+Run **Step 1** commands to gather full git history and PR data for `$RANGE`.
+
+Run **Step 3** to explore top 3–5 most significant changed files (read actual diffs).
+
+### Phase B: Readiness checks
 
 Read and execute all checks from `$SKILL_DIR/templates/audit-checks.md`. Checks cover: version consistency across manifests, docs/CHANGELOG alignment, open blocking issues, dependency CVE scan, unreleased commits since last tag.
 

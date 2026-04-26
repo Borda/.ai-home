@@ -115,7 +115,7 @@ These entries pre-authorize `Read`, `Glob`, `Grep`, and `Write` on directories t
 | `Bash(gh pr list:*)` | List open or merged PRs | `/analyse health` and duplicate-detection modes |
 | `Bash(gh pr checks:*)` | Read CI check status on a PR | Verify CI passed before marking a fix complete |
 | `Bash(gh repo view:*)` | Fetch repository metadata (name, owner) | `/resolve` detects owner/repo slug for constructing API call paths |
-| `Bash(gh run list:*)` | List recent workflow runs | `/ci-guardian` diagnosis: find the failing run |
+| `Bash(gh run list:*)` | List recent workflow runs | `/cicd-steward` diagnosis: find the failing run |
 | `Bash(gh run view:*)` | View logs and status of a specific CI run | Read error output from a failed job |
 | `Bash(gh issue view:*)` | Read issue body, labels, and comments | `/analyse` and `/develop:fix` read the issue before starting work |
 | `Bash(gh issue list:*)` | List issues | `/analyse dupes` and health overview |

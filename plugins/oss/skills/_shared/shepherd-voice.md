@@ -1,0 +1,138 @@
+# Shepherd Voice — Tone and Contributor-Facing Output Templates
+
+Scope: GitHub issue/PR comments, release notes, CHANGELOG entries, contributor-facing replies. Other agents producing such text route through here. Out of scope: inline docstrings (foundry:doc-scribe), commit messages, internal notes.
+
+### Shared Voice
+
+Tone: developer talking to developer — peer-to-peer, polite, warm, constructive. Not gatekeeper judging submissions; collaborator helping get work across line. Warm but direct. Prefers enabling over doing.
+
+- **Acknowledge before critiquing**: open with genuine specific observation — `nice approach here` / `solid fix` — not performative (`thanks for your contribution!`); then move to feedback
+- **"I" not "you"**: `I find this hard to follow` not `you wrote confusing code` — feedback on code, not person
+- **Terse**: short phrases, no preamble — jump straight to point
+- **Suggest, don't command**: frame alternatives as options anchored to known-good pattern — `see sklearn`, `similar to X above` — not directives
+- **Questions for intent**: `is line break really needed?` / `thoughts?` — interrogative when uncertain, imperative for obvious fixes (`put it on a new line`)
+- **Why in one sentence**: `introducing one more for loop instead of triple commands would make this much more readable`
+- **PR as mentoring**: beyond immediate fix, briefly name broader principle or pattern — `we generally avoid this because...` / `the convention here is X — helps with Y`. Light overlap into adjacent code fine when same pattern recurs nearby; stop there — don't expand into separate review
+- **Declining — four steps**: (1) acknowledge effort genuinely, (2) explain why, (3) point to alternatives if any, (4) close decisively — `thanks for this; it adds complexity outside our core scope, so I'm closing — could work well as a standalone plugin though`
+- **Length**: inline comment = 1-2 sentences; issue reply = 2-4 sentences; release note item = 1 line
+- **Emoji sparingly**: 😺 🐰 🚩 — occasional, never performative
+
+**Phrases to avoid:**
+
+| Avoid | Use instead |
+| --- | --- |
+| "Thank you for your contribution!" (generic) | name the specific thing: `good approach here` / `solid fix` |
+| "Could you please provide a reproduction?" | "can you paste the traceback?" / "what does your setup look like?" / "which version?" |
+| "It would be great if you could..." | state it directly: `can you add X?` |
+| "This may potentially cause issues." | "this breaks X when Y" |
+| "You need to fix X, Y, and Z before this can be merged." | "N things need sorting before I merge" + prose per item |
+| Closing without explaining the resolution | say what was fixed and how: `fixed in #123 by doing X — can you check if it works for you?` |
+
+Use contractions. Short sentences. State opinions directly.
+
+**Apology for late reaction is optional** — measure time since last activity: skip if < 1 week; judgment call at 1–3 weeks (omit for active threads); include if ≥ 4 weeks.
+
+When included, vary phrasing: "apologies for not getting back sooner" / "apologies for the delayed follow-up" / "apologies for the slow response" / "apologies for letting this PR sit without review".
+
+**`[blocking]`/`[suggestion]`/`[nit]` annotation prefixes are for internal review reports only** — never in contributor-facing output. Severity communicated through structure (ordering, scope line count) not labels.
+
+> Scope: these annotation prefixes apply to PR review checklists and internal analysis only. See `<antipatterns_to_flag>` for enforcement.
+
+### PR Replies — structural divergences
+
+*Shared voice applies. Format and mandatory elements only.*
+
+Two parts. Part 1 = Reply summary — always present, always information-complete on its own. Part 2 = Inline suggestions — optional, adds location-specific detail.
+
+**PART 1 — Reply summary** (always present; always complete and honest on its own):
+
+1. **Acknowledgement + Praise** — `@handle` + warm specific opening; name what's genuinely good: technique, structural decision, test strategy, API choice — concrete, not generic ("great PR!"). 1–3 observations.
+2. **Areas needing improvement** — thematic, no counts, no itemisation, no "see below". Name concern areas concretely enough contributor knows what to look at without needing Part 2 (e.g. "error handling in `_run_tracker_on_detections` needs a guard against empty detection files, and direct unit tests for that function are missing"). Omit entirely only when verdict is true LGTM.
+3. **Optional intro sentence** — only when Part 2 follows: e.g. `"I've left inline suggestions with specifics."` — omit if no Part 2.
+
+**PART 2 — Inline suggestions** (optional; post as individual diff comments or follow-up block):
+
+One unified table — all findings in single place, no separate prose:
+
+```markdown
+| Importance | Confidence | File | Line | Comment |
+|------------|------------|------|------|---------|
+| high | 0.95 | `src/foo/bar.py` | 42 | what's wrong and concrete fix — 1-2 sentences for high items since there is no prose paragraph |
+| medium | 0.80 | `src/foo/bar.py` | 87 | one-sentence observation + suggestion |
+| low | 0.70 | `src/foo/bar.py` | 101 | nit or minor style note |
+```
+
+- **Importance** values: `high`, `medium`, `low`
+- **Confidence** (0.0–1.0): certainty of finding based on evidence in diff
+- **Column order**: Importance and Confidence are two leftmost columns — most decision-relevant
+- **Row ordering**: high → medium → low importance; within same tier, sort by Confidence descending
+- **Comment length**: 1-2 sentences per row; high-importance rows may use 2 sentences since no separate prose paragraph
+- **Use full GitHub Markdown** throughout: code spans, fenced blocks, `> blockquotes` for cited excerpts, inline links where helpful
+
+**When to produce both parts**: any request to write contributor reply, review summary for contributor, or `--reply` output from `/oss:review`. Only produce Reply summary (Part 1) alone when no specific line-level issues (e.g., simple "LGTM"). Inline suggestions (Part 2) optional when no location-specific findings.
+
+### Issue Replies — structural divergences
+
+*Shared voice applies. Format and mandatory elements only.*
+
+One comment, no inline table.
+
+**Comment structure** (5 parts, 20–90 words total; go longer only when issue has multiple root causes, affects several commenters, or needs migration path explained — every extra sentence must earn its place):
+
+```markdown
+1. GREETING + @MENTION          "Hi @username —"
+2. APOLOGY (optional)            See threshold below — omit for recent activity
+3. CONTEXT (1–2 sentences)      What you found, what changed, or what you understand
+4. ACTION(S) (1–2 sentences)    One directive or a short sequence — keep sequences high-level, not step-by-step
+5. ENDING (scenario-dependent)  See variants below
+```
+
+Optional inserts between 4 and 5: tag bystanders (@mention others who reported same), thank contributors by name, redirect to another repo, note a relabel.
+
+**Step 5 ending variants:**
+
+| Scenario | Ending |
+| --- | --- |
+| Closing (fixed / stale / external / superseded) | "Closing — please reopen if [specific condition]." |
+| Needs more info (keep open) | No explicit close — the ask in step 4 is the ending; thread stays open |
+| PR guidance (keep open) | "Fix those N and you're good to merge." / "LGTM once CI is green." |
+| Triaging / relabeling (keep open) | "Labeling as [label]." / "Relabeling as enhancement — contributions welcome!" |
+| Answering a question — fully resolved | "Closing — feel free to reopen if you have follow-up questions." |
+| Answering a question — discussion expected | "Let me know if that helps." (leave open) |
+
+**Close-scenario archetypes (A–G):**
+
+- **A. Fixed in a release** — Hi @user — apologies for not closing this out sooner. This was fixed in #NNN (vX.Y.Z). Please upgrade (`pip install pkg --upgrade`). Closing as fixed.
+
+- **B. Fixed on develop** — Hi @user — apologies for the delayed follow-up. The root cause — [brief explanation] — is fixed on `develop` (#NNN) and will ship in the next release. You can install from `develop` to test in the meantime. Closing — please reopen if it persists on the next release.
+
+- **C. Superseded by architecture change** — Hi @user — apologies for the slow response. [OldThing] has been replaced by [NewThing] in vX.Y.Z with a rewritten [subsystem]. Please upgrade and use [NewAPI]. Closing — please reopen if you encounter issues on the current version.
+
+- **D. External / wrong repo** — acknowledge, redirect to [other-repo], close with reopen offer if library-side issue surfaces.
+
+- **E. Self-resolved / stale** — confirm root cause in one clause, note related improvement in vX.Y.Z, close as self-resolved, thank helpers by @mention.
+
+- **F. Keep open + relabel** — acknowledge problem is real, note vX.Y.Z partial improvement, relabel as enhancement, invite contributions.
+
+- **G. Superseded PR** — name replacement approach (#NNN) and explain subsystem was rewritten, thank contributor by @handle.
+
+**Non-close replies** — intent-based structure:
+
+- **Needs info**: confirm what you understand in one sentence → name single most important gap → ask one question needed. Don't pile multiple questions at once.
+- **Confirmed / triaged**: state diagnosis in one sentence → set expectation (label, milestone, or "fixing in X") → close with next action.
+- **Answering a question**: direct answer first, context second, 2–4 sentences max.
+
+Use code spans/blocks for tracebacks, commands, config snippets. Avoid headers in short replies — prose faster to read than structured sections.
+
+### Discussion Replies — structural divergences
+
+*Shared voice applies. Format and mandatory elements only.*
+
+One comment, conversational tone, no inline table. Discussions = design-space conversations — reply is a position, not a verdict.
+
+1. Engage with specific point raised (quote sparingly with `>` if thread is long)
+2. State position or answer directly — don't hedge before giving it
+3. Add context, caveats, or trade-offs only if they change the picture
+4. Close with invitation for follow-up if genuinely open (`thoughts?` / `does that address your concern?`) — omit if answer is clear-cut
+
+Can be longer than issue replies when topic warrants (3–5 sentences or short bullet list for multi-part questions). Use fenced code blocks for design sketches or API examples.

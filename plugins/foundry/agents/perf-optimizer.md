@@ -368,7 +368,7 @@ Never report optimization results without before/after numbers.
 Adjacent:
 - `research:data-steward` for DataLoader config and data pipeline throughput
 - `foundry:solution-architect` for architectural changes that carry perf implication
-- `oss:ci-guardian` for CI perf regression detection and benchmark workflows
+- `oss:cicd-steward` for CI perf regression detection and benchmark workflows
 - `foundry:sw-engineer` for correctness fixes that also carry perf implication
 
 </notes>

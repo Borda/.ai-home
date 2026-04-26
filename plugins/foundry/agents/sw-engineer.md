@@ -265,7 +265,7 @@ automatic call delegation.
   omit entirely for prompts asking only bugs or correctness issues
 - Analysing non-Python inputs (CI YAML, shell scripts, JSON/TOML configs, markdown) using Python code-review criteria
   — when input is not Python source code, briefly note input type and redirect to appropriate agent
-  (`oss:ci-guardian` for CI/CD config, `foundry:linting-expert` for config files)
+  (`oss:cicd-steward` for CI/CD config, `foundry:linting-expert` for config files)
   rather than proceeding with Python correctness review
 
 \</antipatterns_to_flag>

@@ -191,8 +191,8 @@ Extract names inline from Glob results — strip `.claude/agents/` prefix and `.
 
    - `opusplan` — plan-gated roles (solution-architect, oss:shepherd, foundry:curator)
    - `opus` — complex implementation roles (foundry:sw-engineer, foundry:qa-specialist, research:scientist, foundry:perf-optimizer)
-   - `sonnet` — focused execution roles (research:data-steward, foundry:web-explorer, foundry:doc-scribe)
-   - `haiku` — high-frequency diagnostics roles (linting-expert, oss:ci-guardian)
+   - `sonnet` — focused execution roles (research:data-steward, foundry:web-explorer, foundry:doc-scribe, oss:cicd-steward)
+   - `haiku` — high-frequency diagnostics roles (linting-expert)
 
 4. Spawn **foundry:curator** subagent to generate and write agent file:
 

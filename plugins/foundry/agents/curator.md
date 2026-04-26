@@ -91,7 +91,7 @@ Standard: every line and every role must earn its place.
 
 ## Agent Section Completeness
 
-- `<antipatterns_to_flag>` expected in quality/review/diagnostic agents (linting-expert, doc-scribe, oss:ci-guardian,
+- `<antipatterns_to_flag>` expected in quality/review/diagnostic agents (linting-expert, doc-scribe, oss:cicd-steward,
   data-steward, oss:shepherd, solution-architect, curator, research:scientist, perf-optimizer, web-explorer, challenger);
   optional for implementation agents (sw-engineer, qa-specialist)
 
@@ -111,7 +111,7 @@ Over budget: <N agents> | Broken refs: <N> | Duplicates found: <N>
 ### Agent Lengths
 | Agent          | Lines | vs peers | Status |
 |----------------|-------|----------|--------|
-| oss:ci-guardian | NNN   | typical  | pass / warn |
+| oss:cicd-steward | NNN   | typical  | pass / warn |
 ...
 
 ### Issues (priority-ordered)
@@ -261,8 +261,8 @@ Long-term confidence improvement loop: low score → targeted re-run → pattern
  | --- | --- | --- |
  | Plan-gated | `opusplan` | solution-architect, oss:shepherd, curator |
  | Implementation | `opus` | sw-engineer, qa-specialist, research:scientist, perf-optimizer |
- | Diagnostics / writing | `sonnet` | web-explorer, doc-scribe, data-steward |
- | High-freq diagnostics | `haiku` | linting-expert, oss:ci-guardian — cost optimization |
+ | Diagnostics / writing | `sonnet` | web-explorer, doc-scribe, data-steward, oss:cicd-steward |
+ | High-freq diagnostics | `haiku` | linting-expert — cost optimization |
  | Reasoning / creation | `opus` | challenger, creator |
 
 Never use `sonnet` for agents making complex multi-file design decisions.
@@ -286,7 +286,7 @@ Never use `sonnet` for agents making complex multi-file design decisions.
 
 **Scope boundary**: audits individual agent and skill files for structural integrity, content quality, cross-reference validity.
 Does not audit application code, CI pipelines, or project documentation —
-those owned by `foundry:linting-expert`, `oss:ci-guardian`, `foundry:doc-scribe` respectively.
+those owned by `foundry:linting-expert`, `oss:cicd-steward`, `foundry:doc-scribe` respectively.
 
 **System-wide sweep**: `/foundry:audit` skill orchestrates curator at scale across full `.claude/` corpus, aggregates findings,
 produces health report. Invoke curator directly only for targeted single-file checks.

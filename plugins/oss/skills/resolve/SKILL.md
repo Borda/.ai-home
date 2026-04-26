@@ -4,7 +4,7 @@ description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (
 argument-hint: <PR number or URL> [report] | report | <review comment text>
 disable-model-invocation: true
 effort: high
-allowed-tools: Read, Edit, Bash, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+allowed-tools: Read, Edit, Bash, Agent, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
 ---
 
 <objective>
@@ -42,6 +42,7 @@ Bare comment text → skip to Codex dispatch (Step 12).
 
 ```bash
 # Locate oss plugin shared dir — installed first, local workspace fallback
+# pipe exit code from ls|head is head's (0); ls failure suppressed by 2>/dev/null; fallback guard below handles empty result
 _OSS_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | head -1)
 [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 ```
@@ -113,7 +114,7 @@ fi
 
 If gh missing or not authenticated: stop (error printed above).
 
-Codex missing: set `CODEX_AVAILABLE=false`, continue — Steps 3–7 work without Codex; Step 8 skipped with notice: `⚠ codex not found — skipping action items. Install: npm install -g @openai/codex`
+Codex missing: set `CODEX_AVAILABLE=false`, continue — Steps 3–7 work without Codex; Step 8 skipped with notice: `⚠ codex not found — skipping action items. Install: /plugin marketplace add openai/codex-plugin-cc && /plugin install codex@openai-codex && /reload-plugins`
 
 ### Review-handoff auto-detect (when $ARGUMENTS is empty)
 
@@ -381,7 +382,7 @@ MERGE_HEAD_FILE="$(git rev-parse --git-dir)/MERGE_HEAD" # timeout: 3000
 test -f "$MERGE_HEAD_FILE" && echo "MERGING" || echo "clean"
 ```
 
-**Case A — MERGING** (`MERGE_HEAD` present — prior `git merge` left markers): work with existing markers. Skip to Step 6, substep 6c.
+**Case A — MERGING** (`MERGE_HEAD` present — prior `git merge` left markers): work with existing markers. Skip to Step 7a.
 
 **Case B — not MERGING**:
 
@@ -437,7 +438,10 @@ More than 20 conflicted files → abort and stop:
 git merge --abort
 ```
 
-Report count + file list; `AskUserQuestion` with options: "Continue (Recommended)" (all conflicted files), "Re-scope" (abort, narrow merge target).
+Report count + file list; `AskUserQuestion` with options:
+- (a) "Retry with base only — merge origin/$BASE_REF in batches (manual)" — re-attempt merge in chunks outside this workflow
+- (b) "Open PR in browser for manual resolution" — `gh pr view <PR#> --web`
+- (c) "Stop — merge aborted" — workflow complete; branch left on $SAVED_BRANCH
 
 ## Step 6: Distill conflict context
 
@@ -555,7 +559,7 @@ Process `[req]` items first, then `[suggest]`. **Each item gets its own commit.*
 For each action item:
 
 ```bash
-# Guard: ensure clean state before each item
+# Guard: ensure clean state before each item — substitute <id> with item.id before executing
 test -z "$(git status --porcelain)" || { echo "⚠ dirty tree before item #<id> — stashing"; git stash push -m "resolve-pre-item-<id>"; }  # timeout: 3000
 
 # Snapshot before
@@ -583,6 +587,7 @@ Code changed → commit:
 # Stage tracked modifications + new files from Codex (never git add -A)
 git add $(git diff HEAD --name-only)                                                     # timeout: 3000
 git ls-files --others --exclude-standard | grep . | xargs git add -- 2>/dev/null || true # grep . filters empty output (macOS-portable; xargs -r is GNU-only); permission matcher sees 'git ls-files' as first token  # timeout: 3000
+# IMPORTANT: replace all <placeholder> tokens below with actual values before committing
 # timeout: 3000 — git commit (local operation); include co-author trailer per git-commit.md
 git commit -m "$(
 	cat <<'EOF'
@@ -608,6 +613,12 @@ Mark item's task completed:
 TaskUpdate(task_id=<item.task_id>, status="completed")
 ```
 
+Clean up stash if dirty-tree guard created one for this item:
+
+```bash
+git stash list --quiet | grep -q "resolve-pre-item" && git stash pop  # timeout: 3000
+```
+
 ## Step 9: Lint and QA gate
 
 ```bash
@@ -615,12 +626,12 @@ RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 mkdir -p "$RUN_DIR" # timeout: 5000
 ```
 
-Spawn both in parallel:
+Spawn both in parallel. **Before spawning, expand `$RUN_DIR` to its resolved value in each prompt string** — agents receive text, not shell context; un-expanded `$RUN_DIR` means literal string in instructions:
 
 ```text
-Agent(subagent_type="foundry:linting-expert", prompt="Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}."
+Agent(subagent_type="foundry:linting-expert", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}.")
 
-Agent(subagent_type="foundry:qa-specialist", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}."
+Agent(subagent_type="foundry:qa-specialist", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}.")
 ```
 
 > **Health monitoring**: synchronous. No response ~15 min → surface partial results from `$RUN_DIR` ⏱.
@@ -640,7 +651,7 @@ EOF
 )"  # timeout: 3000
 ```
 
-- Blocking issues from `foundry:qa-specialist` → fix (via Codex or inline edit), re-run qa-specialist once to confirm; issues after one pass → surface in report, continue (no infinite loop)
+- Blocking issues from `foundry:qa-specialist` → fix (via Codex or inline edit), re-run qa-specialist once to confirm; issues remaining after one fix pass → **stop workflow — do not proceed to Step 10 (push)**; surface all remaining blocking issues in report; print: `⛔ QA gate blocked push — review findings above, fix errors, then re-run /resolve or push manually after fixing.`
 - Warnings (non-blocking) → record in report; do not block push
 
 Revoke commit authorization:
@@ -703,7 +714,7 @@ Then print:
 
 ### Action Items
 
-**MUST render as markdown table; never use key-value list, prose, or separator-delimited format regardless of cell length.**
+<!-- MUST render as markdown table — same schema as Step 3b; statuses now final (✓ resolved / ⊘ skipped / ⊘ no action) -->
 
 | # | Type | Author | Status | Summary | File:Line | Notes |
 |---|------|--------|--------|---------|-----------|-------|
@@ -726,9 +737,23 @@ Then print:
 **Refinements**: N passes. — omit if 0 passes
 ```
 
+Restore original branch after report:
+
+```bash
+if [ -n "$SAVED_BRANCH" ]; then
+    git checkout "$SAVED_BRANCH" 2>/dev/null && echo "→ Restored to $SAVED_BRANCH"  # timeout: 5000
+fi
+```
+
 ## Step 12: Comment dispatch + Codex review loop
 
-Read and execute `plugins/oss/skills/resolve/modes/comment-dispatch.md`.
+```bash
+# pipe exit code from ls|head is head's (0); ls failure suppressed by 2>/dev/null; fallback guard below handles empty result
+_OSS_RESOLVE=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/resolve 2>/dev/null | head -1)
+[ -z "$_OSS_RESOLVE" ] && _OSS_RESOLVE="plugins/oss/skills/resolve"
+```
+
+Read and execute `$_OSS_RESOLVE/modes/comment-dispatch.md`.
 
 </workflow>
 
@@ -744,6 +769,7 @@ Read and execute `plugins/oss/skills/resolve/modes/comment-dispatch.md`.
 - **`[question]` items** — answer inline in resolve report only (never post to PR); reclassify before implementing; never silently implement unanswered question.
 - **Case A (already MERGING)** — prior `git merge` left markers → skip Steps 5 detection + 6 context-distill, jump to Step 7a; no new merge.
 - **Push verification** — confirm via `gh pr view --json commits` before reporting success; exit 0 from `git push` necessary but not sufficient (branch protection can silently reject).
+- **Merge-push sequencing** — `git merge` and `git push` are not atomic; a concurrent push to the same branch between these steps causes a non-fast-forward rejection. If that happens, fetch + pull and retry the push step only — do not re-run the full merge.
 - **`gh pr merge` flags**: `--merge` = preserves all commits; `--squash` = collapses (loses action-item commits); never `--rebase` (rewrites SHAs); default `--merge`.
 - **Escape hatch**: `git merge --abort` = undo all conflict state; `git push --force-with-lease` (never plain `--force`) only when user explicitly requests — if push rejected after local amend.
 - **Codex agent health**: subject to CLAUDE.md §8 — 15-min cutoff, ⏱ on timeout; partial results via `tail -100` on output file.
@@ -756,6 +782,6 @@ Read and execute `plugins/oss/skills/resolve/modes/comment-dispatch.md`.
 - Follow-up chains:
   - After push → never approve/comment on PR; maintainer reviews + clicks Merge.
   - Unanswered `[question]` items → record in resolve report only; do NOT post to PR.
-  - After merge → linked issues close if PR body has `Closes #<issue#>`/`Fixes #<issue#>`; if `CLOSING_ISSUES` found in Step 3b but body lacks keywords, add: `gh pr edit <PR#> --body "$(gh pr view <PR#> --json body -q .body)\n\nCloses #<issue#>"`
+  - After merge → linked issues close if PR body has `Closes #<issue#>`/`Fixes #<issue#>`; if `CLOSING_ISSUES` found in Step 3b but body lacks keywords, surface this gap in the Resolve Report under a `### Closing Keywords` note — do not attempt to edit the PR body. Note: "PR body does not contain `Closes #<issue#>` — linked issue will not auto-close on merge. Add the closing keyword manually via the GitHub PR edit UI."
 
 </notes>

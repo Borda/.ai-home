@@ -55,7 +55,7 @@ git diff $RANGE --name-only
 git diff $RANGE --name-only | grep -iE 'readme|\.md$|docs/' || echo "no docs changed"
 ```
 
-Read `README.md`, verify: install/usage examples match current API, version refs not pinned to old releases, deprecated APIs still present or have deprecation notes. If `docs/` exists, spot-check changed public API sections.
+Read `README.md`, verify: install/usage examples match current API, version refs not pinned to old releases, deprecated APIs still present or have deprecation notes. If `docs/` exists, read all changed public API sections in full.
 
 Check `CHANGELOG.md`: has `[Unreleased]` entry or `$TARGET` section covering `$RANGE` commits?
 
@@ -75,9 +75,13 @@ All declarations must agree. If `$TARGET` given, verify match or flag needs bump
 grep -rn "TODO.*release\|FIXME\|HACK\|XXX" --include="*.py" \
     --exclude-dir=".git" --exclude-dir="tests" . 2>/dev/null | head -10
 
-# Dependency CVE scan (if available)
-command -v pip-audit &>/dev/null && pip-audit --format=json 2>/dev/null |
-python3 -c "import sys,json; d=json.load(sys.stdin); print(f'{len(d[\"dependencies\"])} deps, {sum(len(x[\"vulns\"]) for x in d[\"dependencies\"])} vulns')" 2>/dev/null || true
+# Dependency CVE scan
+if command -v pip-audit &>/dev/null; then
+    pip-audit --format=json 2>/dev/null |
+    python3 -c "import sys,json; d=json.load(sys.stdin); print(f'{len(d[\"dependencies\"])} deps, {sum(len(x[\"vulns\"]) for x in d[\"dependencies\"])} vulns')"
+else
+    echo "pip-audit not installed — CVE scan skipped; install with: pip install pip-audit"
+fi
 ```
 
 ### Output

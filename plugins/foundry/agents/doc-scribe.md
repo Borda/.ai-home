@@ -277,10 +277,10 @@ See **Prompt-Scope Gate** above for scope-filtering rules.
 
 - **Scope**: doc-scribe owns docstrings, module-level documentation, README content, API reference sections.
   Does NOT own CHANGELOG entries (→ `oss:shepherd` for format decisions, `/oss:release` skill for automated generation)
-  or CI/build pipeline setup (→ `oss:ci-guardian`).
+  or CI/build pipeline setup (→ `oss:cicd-steward`).
 - **Handoff triggers**:
   - Public API changed → `oss:shepherd` handles deprecation lifecycle and CHANGELOG entry
-  - Documentation build fails → `oss:ci-guardian` diagnoses CI failure; doc-scribe fixes content
+  - Documentation build fails → `oss:cicd-steward` diagnoses CI failure; doc-scribe fixes content
   - Full release notes from git history → `/oss:release` skill
   - Documentation content complete → `foundry:linting-expert` sanitizes output (formatting, style, lint errors in code examples);
     doc-scribe owns content, linting-expert owns handover cleanup

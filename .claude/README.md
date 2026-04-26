@@ -170,7 +170,7 @@ MCP servers are defined in `.mcp.json` at the repo root — copy to home: `cp .m
 | **🟠 curator**            | Config quality reviewer                       | Agent/skill auditing, duplication detection, cross-ref validation, line budgets                                  |
 | **🟠 challenger**         | Adversarial plan/arch/code reviewer           | 5-dimension attack + mandatory refutation step; read-only; use before sw-engineer starts                         |
 | **🟢 shepherd**           | Project lifecycle management                  | Issue triage, PR review, SemVer, pyDeprecate, trusted publishing                                                 |
-| **🟢 ci-guardian**        | CI/CD reliability                             | GitHub Actions, reusable workflows, trusted publishing, flaky test detection                                     |
+| **🟢 cicd-steward**       | CI/CD reliability                             | GitHub Actions, reusable workflows, trusted publishing, flaky test detection                                     |
 | **🟣 scientist**          | ML research and implementation                | Paper analysis, experiment design, LLM evaluation, inference optimization                                        |
 | **🟣 data-steward**       | Data lifecycle — acquisition and ML pipelines | API completeness, dataset versioning, split validation, leakage detection, data contracts                        |
 
@@ -188,7 +188,7 @@ Key relationships:
 - `challenger` is **pre-implementation** — adversarially reviews plans and proposals before implementation starts; use before `sw-engineer`
 - `shepherd` is the external interface — PR replies, releases, contributor communication; no code implementation
 
-**Model tiering**: reasoning agents (`sw-engineer`, `qa-specialist`, `perf-optimizer`, `scientist`) default to `opus`; plan-gated agents (`solution-architect`, `shepherd`, `curator`, `challenger`) use `opusplan` (plan-gated Opus — pays for reasoning only when the task warrants it); execution agents (`doc-scribe`, `linting-expert`, `ci-guardian`, `data-steward`, `web-explorer`) default to `sonnet`.
+**Model tiering**: reasoning agents (`sw-engineer`, `qa-specialist`, `perf-optimizer`, `scientist`) default to `opus`; plan-gated agents (`solution-architect`, `shepherd`, `curator`, `challenger`) use `opusplan` (plan-gated Opus — pays for reasoning only when the task warrants it); execution agents (`doc-scribe`, `linting-expert`, `cicd-steward`, `data-steward`, `web-explorer`) default to `sonnet`.
 
 ## ⚡ Skills
 
@@ -470,7 +470,7 @@ Each mode enforces a validation gate *before* writing implementation code:
 
 **oss** 🟢
 
-- `🟢cig` — ci-guardian
+- `🟢cig` — cicd-steward
 - `🟢shep` — shepherd
 
 **research** 🟣
@@ -496,7 +496,7 @@ Each mode enforces a validation gate *before* writing implementation code:
 | 🟠 **perf-optimizer**     |      |      |      |        |        |        |       |       |       |        |       |      |      |
 | 🟠 **doc-scribe**         |      | °    |      | °      |        |        |       |       |       | °      |       |      |      |
 | 🟠 **web-explorer**       |      |      |      |        |        |        |       |       |       |        |       |      |      |
-| 🟢 **ci-guardian**        |      |      |      | °      |        |        |       |       |       | °      |       |      |      |
+| 🟢 **cicd-steward**       |      |      |      | °      |        |        |       |       |       | °      |       |      |      |
 | 🟢 **shepherd**           |      |      |      |        |        |        | °     |       | °     |        |       |      |      |
 | 🟣 **scientist**          |      | °    | °    |        |        | °      |       | °     |       |        |       | °    |      |
 | 🟣 **data-steward**       |      |      |      |        |        |        |       | →     |       |        | °     |      |      |
@@ -668,7 +668,7 @@ Agent Teams is Claude Code's experimental multi-agent feature. Teams are always 
 | `/research:plan --team`   | Wizard + parallel exploration: teammates each own a different axis        |
 | `/develop:refactor`       | Directory or system-wide scope → Claude proposes team (heuristic)         |
 
-**Model tiering:** Lead uses `opusplan`/`opus`. Deep reasoning teammates (`sw-engineer`, `qa-specialist`, `scientist`, `perf-optimizer`) use `opus`. Execution teammates (`doc-scribe`, `linting-expert`, `ci-guardian`) use `sonnet`. Keep teams to 3–5 teammates (~7× token cost vs single session).
+**Model tiering:** Lead uses `opusplan`/`opus`. Deep reasoning teammates (`sw-engineer`, `qa-specialist`, `scientist`, `perf-optimizer`) use `opus`. Execution teammates (`doc-scribe`, `linting-expert`, `cicd-steward`) use `sonnet`. Keep teams to 3–5 teammates (~7× token cost vs single session).
 
 **Communication protocol:** Inter-agent messages use AgentSpeak v2 (defined in `TEAM_PROTOCOL.md`) — ~60% token savings vs natural language. Status codes (`alpha`/`beta`/`gamma`/`delta`/`epsilon`/`omega`), action symbols (`+`/`-`/`~`/`!`), file locking (`+lock`/`-lock`), and priority prefixes (`!!` urgent, `..` FYI). Lead-to-human communication uses normal English.
 

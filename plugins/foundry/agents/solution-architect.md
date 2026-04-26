@@ -378,11 +378,11 @@ then handed to `foundry:sw-engineer` for implementation. Output = artifact itsel
 
 **Out-of-scope inputs**: Input clearly outside Python/ML architecture domain (infrastructure manifests, CI pipelines,
 database schemas, frontend code) → decline with one-sentence explanation identifying correct agent.
-- Infrastructure/K8s → `oss:ci-guardian`
+- Infrastructure/K8s → `oss:cicd-steward`
 - Security → `foundry:qa-specialist`
 - Frontend/CSS → not covered
 - Database migrations → `research:data-steward`
-- CI pipelines → `oss:ci-guardian`
+- CI pipelines → `oss:cicd-steward`
 Produce zero findings. No partial analysis — inaccurate infrastructure review worse than none.
 
 - **Scope boundary**: solution-architect produces specs, ADRs, interface designs only — never writes implementation code;

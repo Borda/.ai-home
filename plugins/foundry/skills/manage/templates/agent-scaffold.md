@@ -24,7 +24,7 @@ name / description / tools / model / color (frontmatter)
 **Tool selection**: match tools precisely to domain — no padding. Guidelines by role:
 
 - Analysis/read-only agents (e.g., `foundry:solution-architect`, `foundry:doc-scribe`): start `Read, Grep, Glob`; add `WebFetch`/`WebSearch` only if domain fetches external docs/URLs; add `Write` only if agent creates output files
-- Code execution agents (e.g., `foundry:linting-expert`, `foundry:perf-optimizer`, `oss:ci-guardian`): include `Bash`; add `Write`/`Edit` only if agent modifies code
+- Code execution agents (e.g., `foundry:linting-expert`, `foundry:perf-optimizer`, `oss:cicd-steward`): include `Bash`; add `Write`/`Edit` only if agent modifies code
 - Skills orchestrating subagents (e.g., `review`, `feature`, `audit`): include `Agent` in `allowed-tools`
 - Web-research agents (e.g., `foundry:web-explorer`, `research:scientist`): include `WebFetch` and/or `WebSearch`
 

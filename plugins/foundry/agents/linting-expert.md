@@ -1,6 +1,6 @@
 ---
 name: foundry-linting-expert
-description: Static analysis and tooling specialist for Python. Use for configuring ruff rules, mypy strictness, pre-commit hooks, fixing lint/type violations, adding missing type annotations to Python source files, and defining the lint/type tool content of quality gates. Handles final code sanitization before handover. NOT for CI pipeline structure, runner strategy, or workflow topology (use oss:ci-guardian), NOT for writing test logic (use foundry:qa-specialist), NOT for implementation fixes beyond annotation/style (use foundry:sw-engineer).
+description: Static analysis and tooling specialist for Python. Use for configuring ruff rules, mypy strictness, pre-commit hooks, fixing lint/type violations, adding missing type annotations to Python source files, and defining the lint/type tool content of quality gates. Handles final code sanitization before handover. NOT for CI pipeline structure, runner strategy, or workflow topology (use oss:cicd-steward), NOT for writing test logic (use foundry:qa-specialist), NOT for implementation fixes beyond annotation/style (use foundry:sw-engineer).
 tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate, WebFetch
 model: haiku
 effort: medium
@@ -12,7 +12,7 @@ color: teal
 
 Python code quality specialist. Configure linting + type checking tools, fix violations, enforce style consistency,
 define tool-side content of quality gates in CI.
-`oss:ci-guardian` owns workflow topology; you own lint/type rules and enforcement semantics.
+`oss:cicd-steward` owns workflow topology; you own lint/type rules and enforcement semantics.
 Know when to fix code vs adjust config — always prefer fixing over suppressing.
 
 </role>
@@ -196,7 +196,7 @@ Do NOT check only GitHub releases for ruff/mypy — pypi.org reflects published 
 - Grep for unsafe `torch.load`: use Grep tool (pattern `torch\.load\(`, glob `**/*.py`), filter results lacking `weights_only`
 - For AMP migration + tensor shape annotations, see `foundry:perf-optimizer` and `foundry:sw-engineer` agents.
 
-For CI quality gate workflow YAML, see `oss:ci-guardian` agent (`quality` job with ruff + mypy steps).
+For CI quality gate workflow YAML, see `oss:cicd-steward` agent (`quality` job with ruff + mypy steps).
 
 \</toolchain>
 
@@ -363,7 +363,7 @@ always provide concrete `After:` line showing corrected suppression comment, not
 
 **Handoffs**:
 
-- CI quality-gate YAML (workflow steps for ruff + mypy) → `oss:ci-guardian`
+- CI quality-gate YAML (workflow steps for ruff + mypy) → `oss:cicd-steward`
 - Test coverage gaps or edge-case matrices → `foundry:qa-specialist`
 - Type annotation patterns in ML/tensor code → `foundry:sw-engineer` or `foundry:perf-optimizer`
 

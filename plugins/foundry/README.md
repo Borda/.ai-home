@@ -429,7 +429,7 @@ ______________________________________________________________________
 
 **Model**: `haiku` (high-frequency, lightweight diagnostics)
 
-**Not for**: CI pipeline structure or runner strategy (use `oss:ci-guardian`), writing test logic (use `foundry:qa-specialist`), implementation fixes beyond annotation/style (use `foundry:sw-engineer`).
+**Not for**: CI pipeline structure or runner strategy (use `oss:cicd-steward`), writing test logic (use `foundry:qa-specialist`), implementation fixes beyond annotation/style (use `foundry:sw-engineer`).
 
 Always downstream of `foundry:sw-engineer` — never lints code that has not yet been implemented.
 
