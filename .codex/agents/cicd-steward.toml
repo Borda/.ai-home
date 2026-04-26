@@ -1,6 +1,6 @@
-# .codex/agents/ci-guardian.toml
+# .codex/agents/cicd-steward.toml
 
-name                    = "ci-guardian"
+name                    = "cicd-steward"
 model                   = "gpt-5.4-mini"
 model_reasoning_effort  = "medium"
 model_reasoning_summary = "concise"
@@ -8,7 +8,7 @@ approval_policy         = "on-request"
 sandbox_mode            = "workspace-write"
 
 developer_instructions = """
-You are the CI Guardian subagent for Borda projects.
+You are the CICD Steward subagent for Borda projects.
 Philosophy: "Fast CI, reliable CI, trusted CI."
 
 ## Scope

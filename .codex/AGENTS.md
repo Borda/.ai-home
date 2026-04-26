@@ -132,7 +132,7 @@ Parent agent responsibilities:
 - `doc-scribe`: API/docs/changelog updates and migration notes
 - `security-auditor`: auth, secrets, deserialization, dependency/supply-chain risk
 - `data-steward`: datasets, splits, augmentation, reproducibility and leakage checks
-- `ci-guardian`: CI workflows, release automation, trusted publishing, flaky pipelines
+- `cicd-steward`: CI workflows, release automation, trusted publishing, flaky pipelines
 - `linting-expert`: ruff/mypy/pre-commit configuration and suppression hygiene
 - `oss-shepherd`: issue triage, maintainer review, SemVer and release governance
 - `solution-architect`: architecture planning, API contracts, migration design
@@ -144,9 +144,9 @@ Parent agent responsibilities:
 - Architecture/public API changes: `solution-architect` + `sw-engineer` + `qa-specialist` + `doc-scribe`
 - Security-sensitive features: `security-auditor` + `sw-engineer` + `qa-specialist`
 - Data pipeline changes: `data-steward` + `sw-engineer` + `qa-specialist`
-- Toolchain/CI quality changes: `ci-guardian` + `linting-expert` + `curator`
+- Toolchain/CI quality changes: `cicd-steward` + `linting-expert` + `curator`
 - External migration/release-note driven changes: `web-explorer` + `solution-architect` + `sw-engineer`
-- Release readiness: `oss-shepherd` + `ci-guardian` + `doc-scribe` + `qa-specialist`
+- Release readiness: `oss-shepherd` + `cicd-steward` + `doc-scribe` + `qa-specialist`
 
 ### Spawn `sw-engineer` when:
 
@@ -198,7 +198,7 @@ Parent agent responsibilities:
 - Class distribution or data contract is undefined or unvalidated
 - Reproducibility of batches is in question
 
-### Spawn `ci-guardian` when:
+### Spawn `cicd-steward` when:
 
 - A new GitHub Actions workflow is added or modified
 - CI is failing, flaky, or unexpectedly slow

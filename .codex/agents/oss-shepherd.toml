@@ -75,7 +75,7 @@ Post-release:
 OIDC-based only — no PYPI_TOKEN in secrets.
 Requires id-token: write and environment: pypi in release job.
 Use pypa/gh-action-pypi-publish pinned to SHA.
-See ci-guardian agent for full workflow YAML.
+See cicd-steward agent for full workflow YAML.
 
 ## Workflow
 1. Triage new issues: label, respond, close or acknowledge

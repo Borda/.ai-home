@@ -11,7 +11,7 @@ HOME_CFG="$HOME/.codex/config.toml"
 TASKS="$ROOT/.codex/calibration/tasks.json"
 BENCHMARKS="$ROOT/.codex/calibration/benchmarks.json"
 SKILLS=(review develop resolve audit calibrate release investigate sync manage analyse optimize research)
-AGENTS=(sw-engineer qa-specialist squeezer doc-scribe security-auditor data-steward ci-guardian linting-expert oss-shepherd solution-architect web-explorer curator)
+AGENTS=(sw-engineer qa-specialist squeezer doc-scribe security-auditor data-steward cicd-steward linting-expert oss-shepherd solution-architect web-explorer curator)
 
 LEAKS=0
 FAILS=0

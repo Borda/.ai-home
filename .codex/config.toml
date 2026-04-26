@@ -128,9 +128,9 @@ config_file = "agents/security-auditor.toml"
 description = "ML data pipeline integrity: split leakage, DataLoader reproducibility, augmentation correctness, class imbalance."
 config_file = "agents/data-steward.toml"
 
-[agents.ci-guardian]
+[agents.cicd-steward]
 description = "CI/CD reliability: GitHub Actions, trusted PyPI publishing, pre-commit hooks, flaky test detection."
-config_file = "agents/ci-guardian.toml"
+config_file = "agents/cicd-steward.toml"
 
 [agents.linting-expert]
 description = "Code quality and static analysis: ruff, mypy, pre-commit config, rule selection progression, suppression discipline."

@@ -61,7 +61,7 @@ All agents are standardized on `gpt-5.4-mini`. Differentiation is via reasoning 
 | **doc-scribe**         | medium | 6-point Google/Napoleon docstrings, README stewardship, CHANGELOG       |
 | **security-auditor**   | xhigh  | OWASP Python, ML supply chain, secrets, CI/CD hygiene *(read-only)*     |
 | **data-steward**       | high   | Split leakage, DataLoader reproducibility, augmentation correctness     |
-| **ci-guardian**        | medium | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
+| **cicd-steward**       | medium | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
 | **linting-expert**     | medium | ruff, mypy, pre-commit config, rule progression, suppression discipline |
 | **oss-shepherd**       | high   | Issue triage, PR review, SemVer, pyDeprecate, release checklist         |
 | **solution-architect** | high   | System design, ADRs, API compatibility, migration planning              |
@@ -78,7 +78,7 @@ Automatic spawn patterns (from `AGENTS.md`):
 - `security-auditor` is used when tasks touch auth, credentials, external APIs, model weights, or deserialization
 - `data-steward` is used when tasks touch data pipelines, splits, augmentation, or DataLoaders
 - `squeezer` is used for profiling, throughput, and memory optimization tasks
-- `ci-guardian` is used for CI workflow and publishing tasks
+- `cicd-steward` is used for CI workflow and publishing tasks
 
 When to address by name vs letting Codex decide:
 
@@ -102,7 +102,7 @@ Reasoning allocation:
 | ---------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
 | **xhigh**  | qa-specialist, security-auditor                                       | Adversarial: exhaustive search for what could go wrong |
 | **high**   | sw-engineer, squeezer, data-steward, oss-shepherd, solution-architect | Analytical: depth without unbounded budget             |
-| **medium** | doc-scribe, ci-guardian, linting-expert, web-explorer, curator        | Writing/config/research balance                        |
+| **medium** | doc-scribe, cicd-steward, linting-expert, web-explorer, curator       | Writing/config/research balance                        |
 
 ### Profiles
 
