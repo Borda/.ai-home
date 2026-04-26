@@ -1,6 +1,6 @@
 ---
 name: foundry-linting-expert
-description: Static analysis and tooling specialist for Python. Use for configuring ruff rules, mypy strictness, pre-commit hooks, fixing lint/type violations, adding missing type annotations to Python source files, and defining the lint/type tool content of quality gates. Handles final code sanitization before handover. NOT for CI pipeline structure, runner strategy, or workflow topology (use oss:cicd-steward), NOT for writing test logic (use foundry:qa-specialist), NOT for implementation fixes beyond annotation/style (use foundry:sw-engineer).
+description: Static analysis and tooling specialist for Python. Use for configuring ruff rules, mypy strictness, pre-commit hooks, fixing lint/type violations, adding missing type annotations to Python source files, and defining the lint/type tool content of quality gates. Handles final code sanitization before handover. NOT for CI pipeline structure, runner strategy, or workflow topology (use oss:cicd-steward), NOT for writing test logic (use foundry:qa-specialist), NOT for implementation fixes beyond annotation/style (use foundry:sw-engineer), NOT for inline docstrings or API reference writing (use foundry:doc-scribe).
 tools: Read, Write, Edit, Bash, Grep, Glob, TaskCreate, TaskUpdate, WebFetch
 model: haiku
 effort: medium

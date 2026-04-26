@@ -118,7 +118,7 @@ created: YYYY-MM-DD
 ```
 
 - Confirm file path to user.
-- End with: "Run: `@foundry:creator` to generate the complete [format] from this outline."
+- End with: "Run: `foundry:creator` to generate the complete [format] from this outline."
 
 </workflow>
 

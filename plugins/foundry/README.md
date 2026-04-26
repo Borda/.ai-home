@@ -147,7 +147,7 @@ ______________________________________________________________________
 
 ### `/foundry:audit`
 
-Full-sweep quality audit of `.claude/` configuration and all `plugins/*/` agent and skill files. Catches broken cross-references, inventory drift, model-tier mismatches, description overlap, and documentation staleness. Reports findings by severity; auto-fixes at the requested level.
+Full-sweep quality audit of `.claude/` configuration and all `plugins/*/` agent and skill files. Catches broken cross-references, inventory drift, model-tier mismatches, description overlap, and documentation staleness. Reports findings by severity; auto-fixes at the requested level. Adversarial mode challenges every claim using `foundry:challenger` + Codex.
 
 ```text
 /foundry:audit                      # full sweep, report only
@@ -156,14 +156,29 @@ Full-sweep quality audit of `.claude/` configuration and all `plugins/*/` agent 
 /foundry:audit fix all              # auto-fix everything including low
 /foundry:audit upgrade              # fetch latest Claude Code docs, apply improvements with A/B testing
 
-/foundry:audit agents               # agents only
-/foundry:audit skills               # skills only
-/foundry:audit rules                # rules only
-/foundry:audit communication        # communication governance files only
+# Tier 1 — group scopes
+/foundry:audit agents               # all agents
+/foundry:audit skills               # all skills
+/foundry:audit rules                # all rules
+/foundry:audit communication        # communication governance files
 /foundry:audit setup                # system config: settings.json, hooks, plugin integration
 /foundry:audit plugin               # foundry plugin integration checks only
-/foundry:audit plugins              # deep audit of all installed plugins + Codex adversarial pass
-/foundry:audit plugins foundry      # deep audit of foundry plugin only
+/foundry:audit plugins              # deep audit of all installed plugins
+
+# Tier 2 — plugin name (shorthand for 'plugins <name>')
+/foundry:audit oss                  # oss plugin agents + skills only
+/foundry:audit foundry              # foundry plugin only (same as 'plugins foundry')
+/foundry:audit oss research         # oss + research plugins
+
+# Tier 3 — specific agent or skill name
+/foundry:audit shepherd             # single agent
+/foundry:audit curator challenger   # two agents
+/foundry:audit review resolve       # two skills
+
+# Adversarial mode — challenger + Codex adversarial pass
+/foundry:audit adversarial          # all agents + skills, adversarial review
+/foundry:audit oss adversarial      # oss plugin, adversarial review
+/foundry:audit agents adversarial fix high  # adversarial + fix high findings
 
 # Combine scope and fix level
 /foundry:audit agents fix medium
@@ -201,7 +216,18 @@ Benchmarks agents and skills against synthetic problems with defined ground trut
 /foundry:calibrate agents fast ab        # agents + general-purpose baseline comparison
 /foundry:calibrate all fast apply        # benchmark then immediately apply improvement proposals
 /foundry:calibrate apply                 # apply proposals from the most recent past run
-/foundry:calibrate foundry:sw-engineer fast    # single agent
+/foundry:calibrate foundry:sw-engineer fast    # single agent (tier 3 by full name)
+
+# Tier 2 — plugin name
+/foundry:calibrate oss fast              # all oss plugin agents + calibratable skills
+/foundry:calibrate oss research fast     # oss + research plugins
+
+# Tier 3 — specific agent or skill (bare name or plugin-prefixed)
+/foundry:calibrate curator fast          # single agent by bare name
+/foundry:calibrate curator shepherd      # two agents
+
+# Multiple targets
+/foundry:calibrate agents skills fast    # agents + skills in one run
 ```
 
 **Thresholds**:
@@ -212,11 +238,13 @@ Benchmarks agents and skills against synthetic problems with defined ground trut
 
 **Modes**:
 
-- `agents` — all 10 specialist agents
+- `agents` — all specialist agents
 - `skills` — `/foundry:audit` and `/oss:review`
 - `routing` — measures orchestrator dispatch accuracy for synthetic task prompts
 - `communication` — team protocol compliance, file-handoff protocol violations
 - `rules` — rule adherence across global and path-scoped rule files
+- `plugins` / `<plugin-name>` — all agents + calibratable skills for one or all plugins
+- `<agent-name>` / `<skill-name>` — single target by bare or plugin-prefixed name
 - `all` — all of the above
 
 Results saved to `.reports/calibrate/<timestamp>/<target>/`. Improvement proposals written to `proposal.md` in each target directory and applied with `apply`.
@@ -429,7 +457,7 @@ ______________________________________________________________________
 
 **Model**: `haiku` (high-frequency, lightweight diagnostics)
 
-**Not for**: CI pipeline structure or runner strategy (use `oss:cicd-steward`), writing test logic (use `foundry:qa-specialist`), implementation fixes beyond annotation/style (use `foundry:sw-engineer`).
+**Not for**: CI pipeline structure or runner strategy (use `oss:cicd-steward`), writing test logic (use `foundry:qa-specialist`), implementation fixes beyond annotation/style (use `foundry:sw-engineer`), inline docstrings or API reference writing (use `foundry:doc-scribe`).
 
 Always downstream of `foundry:sw-engineer` — never lints code that has not yet been implemented.
 
@@ -457,7 +485,7 @@ ______________________________________________________________________
 
 **Model**: `sonnet`
 
-**Not for**: CHANGELOG entries or release notes (use `oss:shepherd` for lifecycle/format decisions, `/oss:release` for automated generation), linting code examples (use `foundry:linting-expert`), implementation code (use `foundry:sw-engineer`).
+**Not for**: CHANGELOG entries or release notes (use `oss:shepherd` for lifecycle/format decisions, `/oss:release` for automated generation), linting code examples (use `foundry:linting-expert`), implementation code (use `foundry:sw-engineer`), outward-facing narrative artifacts like blog posts, talk slides, or social threads (use `foundry:creator`).
 
 Always downstream — documents finalized code, never shapes design. After `foundry:doc-scribe` produces content, follow with `foundry:linting-expert` to sanitize code examples in the output.
 
@@ -497,7 +525,7 @@ ______________________________________________________________________
 
 **Use for**: red-teaming a plan before committing to it, challenging architectural decisions before they ship, adversarial code review on security-sensitive or irreversible operations. Attacks across 5 dimensions (Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep) then applies a mandatory refutation step to eliminate false positives.
 
-**Model**: `opusplan` (plan-gated Opus)
+**Model**: `opus`
 
 **Not for**: designing plans or ADRs (use `foundry:solution-architect`), writing tests (use `foundry:qa-specialist`), config file quality review (use `foundry:curator`).
 
@@ -511,11 +539,11 @@ ______________________________________________________________________
 
 **Use for**: generating complete blog posts, Marp slide decks, social threads, talk abstracts, and lightning talk outlines in one autonomous pass. Reads an approved outline file (`.plans/content/<slug>-outline.md`) produced by `/foundry:create`. Applies a four-beat story arc (Problem→Journey→Insight→Action) calibrated to the target audience level.
 
-**Model**: `sonnet`
+**Model**: `opus`
 
 **Not for**: in-code documentation, docstrings, or API references (use `foundry:doc-scribe`), release notes or changelogs (use `oss:shepherd`), structured reference content such as FAQs or comparison tables (redirect to `foundry:doc-scribe`).
 
-Always downstream of `/foundry:create` — reads the approved outline file and generates the full artifact. The two-phase system: `/foundry:create` (interactive intake → outline) then `@foundry:creator` (autonomous generation → artifact).
+Always downstream of `/foundry:create` — reads the approved outline file and generates the full artifact. The two-phase system: `/foundry:create` (interactive intake → outline) then `foundry:creator` (autonomous generation → artifact).
 
 ______________________________________________________________________
 

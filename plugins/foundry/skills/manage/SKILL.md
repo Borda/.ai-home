@@ -636,12 +636,9 @@ End response with `## Confidence` block per CLAUDE.md output standards.
 
 - **Atomic updates**: write-before-delete prevents data loss on interruption; perm ops must update both `settings.json` and `permissions-guide.md`
 - **settings.json format**: json.load/json.dump with indent=2 — avoids fragile sed/awk on JSON
-- **Write delegation by file type**: `.md` (agents, skills) → `foundry:curator`; code (`.js`, `.py`, `.ts`, `.sh`) → `foundry:sw-engineer`; rule edits and trivial edits (≤10-word simple-change directive) → inline Edit, no agent; cross-ref fan-out >3 files → `foundry:curator`
 - **README.md tables**: agent/skill tables in project `README.md`; rules table in `.claude/README.md` — keep row format consistent with existing rows
 - **No auto-edit for agent/skill/rule operations**: this skill does not mutate settings.json for non-perm operations
-- **Rule files have no `name:` frontmatter** — filename is identifier; renames update file + cross-refs only
 - **Color pool**: AVAILABLE_COLORS lists unused colors; if exhausted, reuse with note
-- **MEMORY.md inventory**: always regenerated from disk — prevents drift
 - Follow-up chains:
   - create or non-trivial update of agent/skill → `/audit` → `/calibrate <name>` (mandatory) → `/calibrate routing fast`
   - trivial update or rename or delete → `/audit` → `/calibrate routing fast` (if description changed)

@@ -189,34 +189,23 @@ Confidence scoring guidance:
 
 ## How to Apply Fixes
 
-When asked to fix issues (not just report):
+When asked to fix issues:
 
 1. Fix broken cross-references first — silently fail at runtime
 2. Remove duplicate sections before trimming — removal always safer than rewriting
 3. Over-budget agents: remove full sections > rewrite existing ones
 4. Never remove: decision trees, output templates, workflow blocks, preservation-checklist items
-5. After edits: re-run line count (`wc -l .claude/agents/*.md` — no dedicated tool for aggregate line counts;
-   Bash is intentional here) and re-check cross-refs
-
-## Feedback Loop Trigger
-
-Run after any `.claude/` edit session — execute the main `<workflow>` block, then:
-
-1. If issues found: present report → await approval → apply fixes
-2. Update `.claude/agent-memory/foundry-curator/MEMORY.md` if agent roster changed
+5. After edits: re-run `wc -l .claude/agents/*.md` (Bash intentional) and re-check cross-refs
 
 ## Confidence → Improvement Loop
 
-When confidence was low (<0.7) on previous run, orchestrator re-runs curator with targeted prompt.
-If same blind spot recurs across sessions (e.g., "cannot validate model names without fetching docs"),
-address gap at instruction level:
+Low confidence (<0.7): orchestrator re-runs curator with targeted prompt. Recurring blind spot:
 
-- Gap is missing capability (e.g., needs WebFetch but tool not declared) → add tool to `tools` in agent frontmatter
-- Gap is pattern curator reliably misses → add to `\<antipatterns_to_flag>`
-- Gap is project-specific context → update `.claude/agent-memory/foundry-curator/MEMORY.md` so available in future sessions
+- Missing capability → add tool to `tools` in agent frontmatter
+- Missed pattern → add to `\<antipatterns_to_flag>`
+- Project-specific context → update `.claude/agent-memory/foundry-curator/MEMORY.md`
 
-Long-term confidence improvement loop: low score → targeted re-run → pattern identified → instruction updated
-→ `/calibrate <agent>` to confirm higher recall next time.
+Loop: low score → targeted re-run → pattern identified → instruction updated → `/calibrate <agent>`.
 
 \</improvement_workflow>
 

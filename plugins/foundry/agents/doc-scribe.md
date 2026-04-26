@@ -1,6 +1,6 @@
 ---
 name: foundry-doc-scribe
-description: Documentation specialist for writing docstrings, API references, and README files. Use for auditing missing docstrings, writing Google-style docstrings from code, creating or updating README content, and finding doc/code inconsistencies. NOT for CHANGELOG entries or release notes (use oss:shepherd for lifecycle/format decisions, /oss:release skill for automated generation), NOT for linting code examples (use foundry:linting-expert), NOT for implementation code (use foundry:sw-engineer).
+description: Documentation specialist for writing docstrings, API references, and README files. Use for auditing missing docstrings, writing Google-style docstrings from code, creating or updating README content, and finding doc/code inconsistencies. NOT for CHANGELOG entries or release notes (use oss:shepherd for lifecycle/format decisions, /oss:release skill for automated generation), NOT for linting code examples (use foundry:linting-expert), NOT for implementation code (use foundry:sw-engineer), NOT for outward-facing narrative artifacts like blog posts, talk slides, or social threads (use foundry:creator).
 tools: Read, Write, Edit, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: sonnet
 effort: medium
@@ -27,7 +27,7 @@ Default: Google docstring style across all Python projects, including ML/scienti
 
 ## Docstring Style Selection
 
-Follow `.claude/rules/python-code.md` — always Google style (Napoleon), no exceptions.
+Follow `.claude/rules/python-code.md` (available post `/foundry:init`) — always Google style (Napoleon), no exceptions.
 
 \</core_principles>
 
@@ -284,7 +284,7 @@ See **Prompt-Scope Gate** above for scope-filtering rules.
   - Full release notes from git history → `/oss:release` skill
   - Documentation content complete → `foundry:linting-expert` sanitizes output (formatting, style, lint errors in code examples);
     doc-scribe owns content, linting-expert owns handover cleanup
-- **Docstring style**: follow `.claude/rules/python-code.md`
+- **Docstring style**: follow `.claude/rules/python-code.md` (available post `/foundry:init`)
 - **Changelog automation**: if project uses towncrier or commitizen, don't edit CHANGELOG.md directly — hand off to `oss:shepherd`
 - **Confidence calibration**: lower confidence when: examples not read, signatures inferred from callers only,
   or caller didn't provide enough context for accurate parameter docs.

@@ -2,7 +2,7 @@
 name: calibrate
 description: Calibration testing for agents and skills. Generates synthetic problems with known outcomes (quasi-ground-truth), runs targets against them, and measures recall, precision, and confidence calibration — revealing whether self-reported confidence scores track actual quality.
 when_to_use: Run to measure agent/skill routing accuracy, validate confidence calibration, or A/B test agent changes after editing descriptions or workflows.
-argument-hint: '{all|agents|skills|routing|communication|<name>} [fast|full] [ab] [apply]'
+argument-hint: '{all|agents|skills|routing|communication|plugins|<plugin-name>|<name>} [...multiple] [fast|full] [ab] [apply]'
 allowed-tools: Read, Write, Edit, Bash, Agent, Glob, TaskCreate, TaskUpdate
 effort: high
 ---
@@ -26,8 +26,11 @@ Calibration data drives improvement loop: systematic gaps → instruction update
     - `routing` — routing accuracy test: measures how accurately `general-purpose` orchestrator selects correct `subagent_type` for synthetic task prompts (not per-agent quality benchmark; included in `all`)
     - `communication` — handover + team protocol compliance: runs `foundry:curator` against synthetic agent responses and team transcripts with injected protocol violations (missing JSON envelope, missing `summary`, AgentSpeak v2 breaches); included in `all`
     - `rules` — rule adherence test: for each global rule file (no `paths:`) and each path-scoped rule when matching file is in context, generates synthetic tasks that should trigger rule's key directives, measures whether `general-purpose` agent with rule loaded correctly applies them; reports rules that are ignored, misapplied, or redundant; included in `all`
-    - `<agent-name>` — single agent (e.g., `foundry:sw-engineer`)
+    - `plugins` — all agents + calibratable skills from all `plugins/*/` directories (union of all plugin-namespaced agents and calibratable skills)
+    - `<plugin-name>` — **tier 2**: bare plugin directory name (e.g. `oss`, `foundry`, `research`, `develop`) auto-resolved when token matches a `plugins/<name>/` directory; calibrates all agents + calibratable skills in that plugin
+    - `<agent-name>` — **tier 3**: single agent (e.g., `foundry:sw-engineer`); also accepts bare name (e.g. `sw-engineer`) and resolves via `plugins/*/agents/<name>.md`
     - `/audit` or `/oss:review` — single skill
+    - Multiple target tokens — space-separated; calibrates union of resolved targets: `oss research fast`, `agents skills`, `curator shepherd`; each token resolved through same tier hierarchy as `/audit` scope tokens (reserved keywords first, then plugin-dir lookup, then agent/skill file search)
   - **Pace** (optional, default `fast`):
     - `fast` — 3 problems per target
     - `full` — 10 problems per target
@@ -86,14 +89,17 @@ Domain tables per mode: see `modes/agents.md`, `modes/skills.md`, `modes/routing
 
 From `$ARGUMENTS`, determine:
 
-- **Target list** — parse first token:
+- **Target list** — parse ALL scope tokens (stop at `fast`, `full`, `ab`, `apply`); union of resolved targets:
   - `all` or omitted → all agents + `/audit` + `/oss:review` + routing + communication + all rules
-  - `agents` → all agents only (full agent list in `modes/agents.md`)
+  - `agents` → all agents (full agent list in `modes/agents.md`)
   - `skills` → `/audit` and `/oss:review` only
   - `routing` → routing accuracy test only
   - `communication` → handover + team protocol compliance only
   - `rules` → rule adherence test (all rule files in `.claude/rules/`) only
-  - Any other token → single agent or skill name
+  - `plugins` → all agents + calibratable skills from all `plugins/*/` directories
+  - `<plugin-name>` matching `plugins/<name>/` directory → tier 2: all agents + calibratable skills in that plugin
+  - Any other token → tier 3: single agent or skill name; search `plugins/*/agents/<name>.md`, `.claude/agents/<name>.md`, `plugins/*/skills/<name>/SKILL.md`, `.claude/skills/<name>/SKILL.md`; error if no match
+  - Multiple tokens → union: e.g. `oss research fast` = oss + research targets at fast pace; `curator shepherd` = two individual agents
 - **Mode**: look for `fast` or `full` in remaining tokens — default `fast`
 - **A/B flag**: `ab` present → also spawn `general-purpose` baseline per problem
 - **Apply flag**:
@@ -113,7 +119,7 @@ Create tasks before proceeding:
 > **Pre-flight**: mode files at `.claude/skills/calibrate/modes/` are symlinked by `/foundry:init`. If absent, resolve via plugin cache:
 > ```bash
 > CALIB_MODES_DIR=".claude/skills/calibrate/modes"
-> [ -d "$CALIB_MODES_DIR" ] || CALIB_MODES_DIR="$(find ${HOME}/.claude/plugins/cache -path "*/calibrate/modes" -type d 2>/dev/null | head -1)"
+> [ -d "$CALIB_MODES_DIR" ] || CALIB_MODES_DIR="$(find ${HOME}/.claude/plugins/cache -path "*/calibrate/modes" -type d 2>/dev/null | head -1)" # timeout: 5000
 > [ -d "$CALIB_MODES_DIR" ] || { printf "! BREAKING: calibrate/modes/ not found — run /foundry:init first\n"; exit 1; }
 > ```
 
@@ -126,6 +132,10 @@ For each target mode in resolved target list, read corresponding mode file and e
 | routing | `.claude/skills/calibrate/modes/routing.md` | "Calibrate routing" |
 | communication | `.claude/skills/calibrate/modes/communication.md` | "Calibrate communication" |
 | rules | `.claude/skills/calibrate/modes/rules.md` | "Calibrate rules" |
+| plugins or `<plugin-name>` (tier 2) | expand to per-agent + per-skill pipelines: glob `plugins/<name>/agents/*.md` and calibratable `plugins/<name>/skills/*/SKILL.md`; spawn one pipeline per resolved target using the appropriate mode file (agents.md for agents, skills.md for calibratable skills); task name "Calibrate <plugin-name>" | "Calibrate <plugin-name>" |
+| `<agent-name>` / `<skill-name>` (tier 3) | single-file pipeline: use agents.md or skills.md mode file with `<TARGET>` = resolved name; task name "Calibrate <name>" | "Calibrate <name>" |
+
+For multiple tokens, merge resolved targets into per-mode groups before spawning — one pipeline per unique mode file needed, each carrying its full target list.
 
 Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instructions for pipeline subagent. Pipeline template lives at `.claude/skills/calibrate/templates/pipeline-prompt.md`. **N override**: `communication` caps at fast=3 / full=5 (not global FULL_N=10) to prevent pipeline context overflow — read `modes/communication.md` for details. **`rules` mode** spawns one `general-purpose` subagent per rule file (not standard pipeline template) — read `modes/rules.md` for direct-spawn approach.
 
@@ -143,7 +153,7 @@ EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN
 for T in agents skills; do [ "$TARGET" = "$T" ] && EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN_DUAL; done
 
 # Every HEALTH_CHECK_INTERVAL_MIN (5 min): check each still-running pipeline
-NEW=$(find .reports/calibrate/<TIMESTAMP>/$TARGET/ -newer /tmp/calibrate-check-$TARGET -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS
+NEW=$(find .reports/calibrate/<TIMESTAMP>/$TARGET/ -newer /tmp/calibrate-check-$TARGET -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS; timeout: 5000
 touch /tmp/calibrate-check-$TARGET
 ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
 if [ "$NEW" -gt 0 ]; then
@@ -249,9 +259,9 @@ For each **missing** target: do not stop — auto-trigger a `fast` benchmark inl
 
 **Spawn one `general-purpose` subagent per found target. Issue ALL spawns in single response — no waiting between spawns.**
 
-Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<PROPOSAL_PATH>`, `<AGENT_FILE>`):
+Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<PROPOSAL_PATH>`, `<AGENT_FILE>` — use agent or skill file path as applicable):
 
-Read proposal file at `<PROPOSAL_PATH>` and apply each "Change N" block to `<AGENT_FILE>` (or skill file if target is skill).
+Read proposal file at `<PROPOSAL_PATH>` and apply each "Change N" block to `<AGENT_FILE>` (path to agent or skill file for this target).
 
 For each change:
 

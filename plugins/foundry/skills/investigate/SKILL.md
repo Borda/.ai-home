@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial Codex review for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop:debug) or config quality (/foundry:audit).
-argument-hint: <symptom, question, or failing command>
+argument-hint: <symptom, question, or failing command> [--fast]
 allowed-tools: Read, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
 ---
@@ -22,6 +22,8 @@ NOT for: known Python test failures with traceback (use `/develop:debug`); `.cla
   - `"/calibrate times out every run"`
   - `"CI fails but passes locally"`
   - `"uv run pytest can't find conftest.py"`
+
+- **`--fast`**: optional flag — skip Step 4 adversarial Codex review; use when speed is more important than thoroughness or when Codex is unavailable.
 
 If $ARGUMENTS empty or too vague, use AskUserQuestion: "What exactly is failing or behaving unexpectedly? Include the command and any error output you can share."
 

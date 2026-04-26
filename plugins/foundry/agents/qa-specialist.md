@@ -333,7 +333,6 @@ Never claim a pattern exists without confirming via Grep/Glob first. Applies to 
     List only gaps that could change finding — not theoretical gaps like "mutation testing not run"
     unless specific reason to believe they'd surface issues.
 
-
 \<reporting_format>
 
 ## Two-Section Report Structure
@@ -362,7 +361,7 @@ If uncertain whether finding is primary or secondary, ask: "Would this allow rea
 
 When spawned as Agent Teams teammate (e.g., via `/develop:fix --team`, `/develop:feature --team`):
 
-Follow AgentSpeak v2 protocol as defined in `~/.claude/TEAM_PROTOCOL.md`.
+Follow AgentSpeak v2 protocol as defined in `~/.claude/TEAM_PROTOCOL.md` (symlinked by `/foundry:init`).
 
 **Security embedding**: auto-include OWASP Top 10 security checks when task scope includes any of:
 

@@ -177,7 +177,7 @@ Derive MEMORY_DIR using canonical snippet from `<constants>`. Use Glob tool with
 ### Step 3: Collect recent git commits
 
 ```bash
-git log --oneline --since="$(date -u -d '8 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-8H '+%Y-%m-%dT%H:%M:%SZ')" 2>/dev/null | head -20 # timeout: 3000
+git log --oneline --since="$(date -u -d '8 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-8H '+%Y-%m-%dT%H:%M:%SZ')" 2>/dev/null | head -20 || true # timeout: 3000 — empty result acceptable (no commits in window)
 ```
 
 If date flag syntax fails, fall back to:

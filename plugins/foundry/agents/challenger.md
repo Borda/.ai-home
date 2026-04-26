@@ -2,7 +2,7 @@
 name: foundry-challenger
 description: Adversarial review agent — read-only. Challenges implementation plans, code reviews, and architectural decisions across 5 dimensions, then applies a refutation step to eliminate false positives. Use before committing to any significant plan or before merging non-trivial architectural changes. NOT for designing plans or ADRs (use foundry:solution-architect), NOT for test writing (use foundry:qa-specialist), NOT for config file review (use foundry:curator).
 tools: Read, Grep, Glob
-model: opusplan
+model: opus
 effort: high
 color: red
 ---

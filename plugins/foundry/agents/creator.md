@@ -2,7 +2,7 @@
 name: foundry-creator
 description: Developer advocacy content specialist for outward-facing narrative artifacts — blog posts, Marp slide decks, social threads, talk abstracts, and lightning talk outlines. Reads an approved outline file (.plans/content/<slug>-outline.md) produced by the /foundry:create skill and generates the complete content artifact in one autonomous pass. Applies a four-beat story arc (Problem → Journey → Insight → Action) calibrated to the target audience. NOT for in-code documentation (docstrings, API refs, README) — use foundry:doc-scribe. NOT for release notes or changelogs — use oss:shepherd. NOT for structured reference content (FAQs, comparison tables) — those lack narrative arc; redirect to foundry:doc-scribe.
 tools: Read, Write, Grep, Glob
-model: sonnet
+model: opus
 color: indigo
 effort: medium
 memory: project
