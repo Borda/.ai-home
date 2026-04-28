@@ -1,0 +1,30 @@
+name: codemap CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "plugins/codemap/**"
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pytest
+        run: pip install -q pytest
+
+      - name: Run codemap bin tests
+        working-directory: plugins/codemap/
+        run: pytest -v tests/ --color=yes
