@@ -3,15 +3,18 @@
 
 ## What this measures
 
-Two arms run the same import-graph navigation tasks:
+Three arms run the same import-graph navigation tasks:
 
   plain    — developer with a minimal fix/feature/refactor/review skill; discovers structure via
              Grep / Glob / Bash
-  codemap  — same skill extended with /codemap:query; uses the Skill tool for structural lookups
-             instead of grepping
+  codemap  — same skill extended with /codemap:query; uses the Skill tool for import-graph lookups
+             instead of grepping for structural questions (semble MCP blocked via --disallowed-tools)
+  semble   — same skill extended with mcp__semble__search; uses the MCP tool for hybrid
+             semantic + lexical search for import-graph questions instead of grepping
+             (Skill tool blocked via --disallowed-tools)
 
-Core claim under test: one /codemap:query call replaces many Grep passes, reducing tool call count,
-elapsed time, and context consumption.
+Core claim under test: one /codemap:query or mcp__semble__search call replaces many Grep passes,
+reducing tool call count, elapsed time, and context consumption.
 
 ## What is NOT measured (excluded by design)
 
@@ -59,9 +62,9 @@ elapsed time, and context consumption.
 
   Two-layer metrics:
     erec (exposure recall) — what the agent had access to:
-      corpus = output_text + codemap skill result text (no grep/glob results)
+      corpus = output_text + codemap skill result text + semble MCP result text (no grep/glob results)
       erec = |{r in expected : any form matches in corpus}| / |expected|
-      Levels the playing field: codemap arm gets credit for its structured answer;
+      Levels the playing field: codemap/semble arms get credit for their structured answers;
       plain arm does NOT get inflated by grep result echoes.
 
     rrec (report recall) — what the agent told the user:
@@ -97,7 +100,8 @@ elapsed time, and context consumption.
 ## Requirements
 
   - claude CLI on PATH (uses Claude Code subscription — no API key)
-  - pip install -r benchmarks/requirements.txt  (tiktoken pandas tabulate rich tqdm)
+  - pip install -r benchmarks/requirements.txt  (tiktoken pandas tabulate rich tqdm semble)
+  - uv add semble  (alternative: uv add semble>=0.1.0)
   - Pre-built codemap index (see step 1 above)
 
 ## Failure conditions
@@ -107,6 +111,11 @@ elapsed time, and context consumption.
     non-zero exit    — claude returned a non-success subtype in the result event; stderr is captured as error
     codemap no-call  — codemap arm completed without ever invoking the Skill tool; this means the agent fell
                        back to grep/bash entirely, defeating the purpose of the codemap arm
+    semble no-call   — semble arm completed without ever calling mcp__semble__search or mcp__semble__find_related
+
+  Cross-arm tool contamination is blocked at the CLI level (not just by instruction) via --disallowed-tools:
+    codemap arm      — mcp__semble__search and mcp__semble__find_related are hard-blocked
+    semble arm       — Skill is hard-blocked
 
 ## Terminal output (one line per completed run)
 
@@ -122,6 +131,7 @@ elapsed time, and context consumption.
   Colour coding:
     yellow  — plain arm
     cyan    — codemap arm
+    green   — semble arm
     red     — any arm where success=False (overrides arm colour)
 
 ## JSON output schema (benchmarks/results/code-YYYY-MM-DD.json)
@@ -138,7 +148,7 @@ elapsed time, and context consumption.
     },
     "results": [
       {
-        "arm": "plain" | "codemap",
+        "arm": "plain" | "codemap" | "semble",
         "task_id": "T01",
         "task_type": "fix" | "feature" | "refactor" | "review",
         "model": "haiku" | "sonnet" | "opus",
@@ -276,10 +286,18 @@ class ToolCounts:
     glob: int = 0
     bash: int = 0
     skill: int = 0  # /codemap:query and other skill invocations via the Skill tool
+    semble: int = 0  # mcp__semble__search and mcp__semble__find_related calls
 
     @property
     def total(self) -> int:
-        return self.grep + self.glob + self.bash + self.skill
+        """Sum of all tool call counts across all arms.
+
+        >>> ToolCounts(grep=3, bash=1, semble=2).total
+        6
+        >>> ToolCounts().total
+        0
+        """
+        return self.grep + self.glob + self.bash + self.skill + self.semble
 
 
 @dataclass
@@ -312,6 +330,7 @@ class BenchmarkRun:
     # Internal fields excluded from JSON serialisation (see _save_snapshot)
     skill_result_text: str = field(default="", repr=False)  # first codemap:query rdeps result (for sc)
     codemap_results: list[str] = field(default_factory=list, repr=False)  # ALL codemap skill results (for erec)
+    semble_results: list[str] = field(default_factory=list, repr=False)  # ALL semble MCP tool results (for erec)
     last_tool_text_offset: int = field(default=0, repr=False)  # output_text offset after last tool event
 
 
@@ -361,6 +380,38 @@ def find_index(repo_path: Path, explicit: Optional[Path]) -> Path:
     )
 
 
+def check_semble_mcp() -> None:
+    """Verify semble is installed and configured as an MCP server before the run starts.
+
+    Checks two things:
+      1. The semble Python package is importable (the MCP server ships with it).
+      2. `claude mcp get semble` exits 0 — works for all scopes (user / project / local).
+
+    Raises RuntimeError with actionable instructions when either check fails.
+    """
+    try:
+        import semble as _semble  # noqa: F401
+    except ImportError:
+        raise RuntimeError(
+            "semble package not installed — required for the semble arm.\n"
+            "Install it:\n"
+            "  pip install semble>=0.1.0\n"
+            "  # or: uv add semble"
+        )
+
+    r = subprocess.run(
+        ["claude", "mcp", "get", "semble"],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(
+            "semble MCP server not configured — run once to register it:\n"
+            "  claude mcp add semble -s user -- uvx --from 'semble[mcp]' semble\n"
+            "Use -s project instead of -s user to scope to this repo only."
+        )
+
+
 def _unique_path(path: Path) -> Path:
     """Return path unchanged if it doesn't exist; otherwise append a counter suffix."""
     if not path.exists():
@@ -372,7 +423,15 @@ def _unique_path(path: Path) -> Path:
 
 
 def _tool_key_arg(name: str, inp: dict) -> str:
-    """Return a short human-readable argument string for tool call logging."""
+    """Return a short human-readable argument string for tool call logging.
+
+    >>> _tool_key_arg("Grep", {"pattern": "import auth", "path": "src/"})
+    "'import auth' in src/"
+    >>> _tool_key_arg("mcp__semble__search", {"query": "import checkpoint_connector", "repo": "/tmp/r", "top_k": 20})
+    "query='import checkpoint_connector'"
+    >>> _tool_key_arg("mcp__semble__find_related", {"query": "find related", "line": 42})
+    "query='find related'"
+    """
     if name == "Grep":
         pat = inp.get("pattern", "")
         loc = inp.get("path", "") or inp.get("glob", "")
@@ -383,6 +442,9 @@ def _tool_key_arg(name: str, inp: dict) -> str:
         return inp.get("command", "")[:120]
     if name == "Skill":
         return f"{inp.get('skill', '')} {inp.get('args', '')}".strip()
+    if name in ("mcp__semble__search", "mcp__semble__find_related"):
+        inp_q = inp.get("query", "")[:80]
+        return f"query={inp_q!r}"
     return str(inp)[:80]
 
 
@@ -577,7 +639,13 @@ class ModelRunner:
     # Base claude CLI invocation
     _CMD = ["claude", "-p", "--verbose", "--output-format", "stream-json", "--max-turns", "25"]
     # Tools counted as exploration overhead
-    EXPLORATION_TOOLS = {"Grep", "Glob", "Bash", "Skill"}
+    EXPLORATION_TOOLS = {"Grep", "Glob", "Bash", "Skill", "mcp__semble__search", "mcp__semble__find_related"}
+    # Tools blocked per arm via --disallowed-tools to enforce mutual exclusion
+    _ARM_DISALLOWED: dict[str, list[str]] = {
+        "codemap": ["--disallowed-tools", "mcp__semble__search,mcp__semble__find_related"],
+        "semble": ["--disallowed-tools", "Skill"],
+        "plain": [],
+    }
 
     # Arm system prompts -------------------------------------------------------
     # PLAIN arm:   minimal fix/feature/refactor/review skill, no codemap.
@@ -646,11 +714,40 @@ grep verification pass is needed or useful.
 
 Grep/Glob/Bash are permitted only for reading source code (finding a literal string)."""
 
-    @classmethod
-    def _system_prompt(cls, task_type: str, arm: str) -> str:
+    _SEMBLE_SUPPLEMENT = """
+
+## semble MCP installed
+
+You have the mcp__semble__search tool available. It performs hybrid semantic + lexical search
+across the codebase and returns ranked code chunks with file path and line range.
+
+Tool parameters:
+  query (str)   — natural language or code query; pass the task prompt directly or rephrase it
+  repo  (str)   — REQUIRED: absolute path to the repository: {repo_path}
+  top_k (int)   — number of results; use 20 for thorough coverage (default 5)
+
+Use mcp__semble__search for ALL structural questions:
+  Which modules import X?      query="import X" or "from X import", top_k=20
+  Blast radius of X?           query="usage of X across the codebase", top_k=20
+  Dependency relationships?    pass the full task prompt as query, top_k=20
+
+**Hard rules — no exceptions:**
+1. NEVER use Grep, Glob, or Bash to investigate import relationships, including
+   running grep/rg/find via Bash shell commands.
+2. NEVER spawn sub-agents for import-graph questions.
+3. Always set repo="{repo_path}" in every mcp__semble__search call.
+
+Grep/Glob/Bash are permitted only for reading source code (finding a literal string)."""
+
+    def _system_prompt(self, task_type: str, arm: str) -> str:
         """Build the system prompt for one arm × task-type combination."""
-        base = cls._PLAIN_SKILLS.get(task_type, cls._PLAIN_SKILLS["fix"])
-        supplement = cls._CODEMAP_SUPPLEMENT if arm == "codemap" else cls._PLAIN_SUPPLEMENT
+        base = self._PLAIN_SKILLS.get(task_type, self._PLAIN_SKILLS["fix"])
+        if arm == "codemap":
+            supplement = self._CODEMAP_SUPPLEMENT
+        elif arm == "semble":
+            supplement = self._SEMBLE_SUPPLEMENT.format(repo_path=self.repo_path)
+        else:
+            supplement = self._PLAIN_SUPPLEMENT
         return base + supplement
 
     def __init__(
@@ -669,7 +766,8 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
         """Run one task in one arm; parse stream-json for tool + token metrics."""
         system_prompt = self._system_prompt(task.type, arm)
         result = BenchmarkRun(arm=arm, task_id=task.id, task_type=task.type, model=self.model_short, success=False)
-        cmd = [*self._CMD, "--model", self.model_id, "--system-prompt", system_prompt, task.prompt]
+        disallow_flags = self._ARM_DISALLOWED.get(arm, [])
+        cmd = [*self._CMD, "--model", self.model_id, *disallow_flags, "--system-prompt", system_prompt, task.prompt]
         self._stream_events(cmd, result)
         return result
 
@@ -693,6 +791,7 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
         pending: dict[str, float] = {}
         pending_codemap_ids: set[str] = set()  # all codemap skill calls (for erec corpus)
         pending_rdeps_ids: set[str] = set()  # codemap rdeps calls specifically (for sc)
+        pending_semble_ids: set[str] = set()  # all semble MCP calls (for erec corpus)
         t_start = time.monotonic()
         try:
             proc = subprocess.Popen(
@@ -716,7 +815,9 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
                         event = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    self._handle_event(event, result, pending, pending_codemap_ids, pending_rdeps_ids, ts)
+                    self._handle_event(
+                        event, result, pending, pending_codemap_ids, pending_rdeps_ids, pending_semble_ids, ts
+                    )
                 stderr_out = proc.stderr.read() if proc.stderr else ""
                 proc.wait(timeout=10)
                 if not result.success and not result.error and stderr_out:
@@ -740,6 +841,7 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
         pending: dict[str, float],
         pending_codemap_ids: set[str],
         pending_rdeps_ids: set[str],
+        pending_semble_ids: set[str],
         ts: float,
     ) -> None:
         """Route a parsed stream-json event to the appropriate handler."""
@@ -771,6 +873,14 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
                     if re.search(r"(?:^|/)scan-query\s+rdeps\s+\S", cmd):
                         pending_codemap_ids.add(tool_id)
                         pending_rdeps_ids.add(tool_id)
+                elif block.get("type") == "tool_use" and block.get("name") in (
+                    "mcp__semble__search",
+                    "mcp__semble__find_related",
+                ):
+                    has_tool_use = True
+                    tool_id = block.get("id", "")
+                    result.tools.semble += 1
+                    pending_semble_ids.add(tool_id)
                 elif block.get("type") == "tool_use":
                     has_tool_use = True
             if has_tool_use:
@@ -787,12 +897,15 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
                     result.tool_elapsed_s += ts - pending.pop(tool_id)
                 is_codemap = tool_id in pending_codemap_ids
                 is_rdeps = tool_id in pending_rdeps_ids
+                is_semble = tool_id in pending_semble_ids
                 content_raw = block.get("content", "")
                 if is_codemap:
                     pending_codemap_ids.discard(tool_id)
                 if is_rdeps:
                     pending_rdeps_ids.discard(tool_id)
-                self._on_tool_result(content_raw, result, is_codemap=is_codemap, is_rdeps=is_rdeps)
+                if is_semble:
+                    pending_semble_ids.discard(tool_id)
+                self._on_tool_result(content_raw, result, is_codemap=is_codemap, is_rdeps=is_rdeps, is_semble=is_semble)
             if has_tool_result:
                 result.last_tool_text_offset = len(result.output_text)
         elif etype == "result":
@@ -828,15 +941,20 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
 
     @staticmethod
     def _on_tool_result(
-        content: str | list, result: BenchmarkRun, is_codemap: bool = False, is_rdeps: bool = False
+        content: str | list,
+        result: BenchmarkRun,
+        is_codemap: bool = False,
+        is_rdeps: bool = False,
+        is_semble: bool = False,
     ) -> None:
-        """Accumulate token count and capture codemap results from a tool result content field.
+        """Accumulate token count and capture codemap/semble results from a tool result content field.
 
         Args:
             content: Raw content from the tool_result event.
             result: The accumulating BenchmarkRun.
             is_codemap: True when this result is from any codemap skill call (appended to codemap_results for erec).
             is_rdeps: True when this result is from a codemap:query rdeps call (saved to skill_result_text for sc).
+            is_semble: True when this result is from a semble MCP call (appended to semble_results for erec).
         """
 
         def _capture(text: str) -> None:
@@ -848,6 +966,8 @@ Grep/Glob/Bash are permitted only for reading source code (finding a literal str
                 result.codemap_results.append(text)
             if is_rdeps and not result.skill_result_text:
                 result.skill_result_text = text
+            if is_semble:
+                result.semble_results.append(text)
 
         if isinstance(content, str):
             _capture(content)
@@ -911,8 +1031,8 @@ class Report:
     """
 
     _BASELINE = "plain"
-    _INJECTED = "codemap"
-    _NO_PAIRS_MD = "_(no completed plain + codemap pairs)_"
+    _INJECTED_ARMS = ("codemap", "semble")
+    _NO_PAIRS_MD = "_(no completed plain + injected arm pairs)_"
 
     # Limitations appended verbatim to every report
     _LIMITATIONS_MD = [
@@ -971,7 +1091,7 @@ class Report:
             f"**Index**: {self.metadata.get('index', 'n/a')}  ",
             f"**Tasks**: {len(self.task_ids)}  ",
             "",
-            "> Savings = 1 − (codemap / plain) per task; positive = codemap needs less.",
+            "> Savings = 1 − (arm / plain) per task; positive = arm needs less.",
             "",
         ]
 
@@ -1011,52 +1131,53 @@ class Report:
         return "\n".join(lines)
 
     def _savings_summary(self, agg: dict) -> list[dict]:
-        """Build savings rows for one model's aggregated results."""
-        baseline, injected = self._BASELINE, self._INJECTED
+        """Build savings rows for one model's aggregated results, one row per arm × metric."""
+        baseline = self._BASELINE
+        present_arms = {r.arm for r in self.results}
+        injected_arms = [a for a in self._INJECTED_ARMS if a in present_arms]
         rows = []
-        for key, label, _ in self._METRICS:
-            savings_per_task = []
-            for tid in self.task_ids:
-                bv = agg.get(tid, {}).get(baseline, {}).get(key)
-                iv = agg.get(tid, {}).get(injected, {}).get(key)
-                if bv and iv and bv > 0:
-                    savings_per_task.append(1.0 - iv / bv)
-            if not savings_per_task:
-                continue
-            rows.append(
-                {
-                    "Metric": label,
-                    "Median savings": f"{statistics.median(savings_per_task):.0%}",
-                    "Mean savings": f"{statistics.mean(savings_per_task):.0%}",
-                    "Min savings": f"{min(savings_per_task):.0%}",
-                    "Max savings": f"{max(savings_per_task):.0%}",
-                }
-            )
+        for arm in injected_arms:
+            for key, label, _ in self._METRICS:
+                savings_per_task = []
+                for tid in self.task_ids:
+                    bv = agg.get(tid, {}).get(baseline, {}).get(key)
+                    iv = agg.get(tid, {}).get(arm, {}).get(key)
+                    if bv and iv and bv > 0:
+                        savings_per_task.append(1.0 - iv / bv)
+                if not savings_per_task:
+                    continue
+                rows.append(
+                    {
+                        "Arm": arm,
+                        "Metric": label,
+                        "Median savings": f"{statistics.median(savings_per_task):.0%}",
+                        "Mean savings": f"{statistics.mean(savings_per_task):.0%}",
+                        "Min savings": f"{min(savings_per_task):.0%}",
+                        "Max savings": f"{max(savings_per_task):.0%}",
+                    }
+                )
         return rows
 
     def _per_task_tables(self, agg: dict) -> list[str]:
-        """Return markdown lines for per-task metric tables."""
-
-        baseline, injected = self._BASELINE, self._INJECTED
+        """Return markdown lines for per-task metric tables, with dynamic columns for all injected arms."""
+        baseline = self._BASELINE
+        present_arms = {r.arm for r in self.results}
+        injected_arms = [a for a in self._INJECTED_ARMS if a in present_arms]
         lines: list[str] = []
         for key, label, fmt in self._METRICS:
             rows = []
             for tid in self.task_ids:
                 t = self.task_meta.get(tid)
                 bv = agg.get(tid, {}).get(baseline, {}).get(key)
-                iv = agg.get(tid, {}).get(injected, {}).get(key)
-                have_pair = bv is not None and iv is not None and bv > 0
-                saved = f"{1.0 - iv / bv:.0%}" if have_pair else "—"
-                arrow = ("↓" if iv < bv else "↑") if have_pair else ""
-                rows.append(
-                    {
-                        "Task": tid,
-                        "Type": t.type if t else "?",
-                        "Plain": fmt(bv) if bv is not None else "—",
-                        "Codemap": fmt(iv) if iv is not None else "—",
-                        "Savings": f"{saved} {arrow}".strip(),
-                    }
-                )
+                row = {"Task": tid, "Type": t.type if t else "?", "Plain": fmt(bv) if bv is not None else "—"}
+                for arm in injected_arms:
+                    iv = agg.get(tid, {}).get(arm, {}).get(key)
+                    have_pair = bv is not None and iv is not None and bv > 0
+                    saved = f"{1.0 - iv / bv:.0%}" if have_pair else "—"
+                    arrow = ("↓" if iv < bv else "↑") if have_pair else ""
+                    row[arm.capitalize()] = fmt(iv) if iv is not None else "—"
+                    row[f"{arm.capitalize()} savings"] = f"{saved} {arrow}".strip()
+                rows.append(row)
             lines += [f"### {label}", "", pd.DataFrame(rows).to_markdown(index=False), ""]
         return lines
 
@@ -1066,13 +1187,14 @@ class Report:
 # ---------------------------------------------------------------------------
 
 
-# ANSI colors for run-line output — arm colors make plain/codemap pairs easy to scan
+# ANSI colors for run-line output — arm colors make plain/codemap/semble trios easy to scan
 _COLOR_PLAIN = "\033[33m"  # yellow
 _COLOR_CODEMAP = "\033[36m"  # cyan
+_COLOR_SEMBLE = "\033[32m"  # green
 _COLOR_FAIL = "\033[31m"  # red — overrides arm color on failure
 _COLOR_RESET = "\033[0m"
 
-_ARM_COLOR = {"plain": _COLOR_PLAIN, "codemap": _COLOR_CODEMAP}
+_ARM_COLOR = {"plain": _COLOR_PLAIN, "codemap": _COLOR_CODEMAP, "semble": _COLOR_SEMBLE}
 
 
 def _run_line(run_n: int, total_runs: int, task: Task, model_short: str, arm: str, result: BenchmarkRun) -> str:
@@ -1091,7 +1213,7 @@ def _run_line(run_n: int, total_runs: int, task: Task, model_short: str, arm: st
         f"\t| elapsed={result.elapsed_s:7.1f}s"
         f" | tokens={result.input_tokens / 1000:7.1f}k"
         f" | calls={result.tools.total:3}"
-        f" (grep={tc.grep:3}; glob={tc.glob:2}; bash={tc.bash:3}; skill={tc.skill:2})"
+        f" (grep={tc.grep:3}; glob={tc.glob:2}; bash={tc.bash:3}; skill={tc.skill:2}; semble={tc.semble:2})"
         f"{quality_suffix}"
         f"{error_suffix}"
     )
@@ -1141,7 +1263,13 @@ class Benchmark:
                     runner = ModelRunner(model_short, model_id, self.repo_path)
                     result = runner.run(task, arm)
                     # Build corpora for v2 quality scoring
-                    exposure_corpus = result.output_text + "\n" + "\n".join(result.codemap_results)
+                    exposure_corpus = (
+                        result.output_text
+                        + "\n"
+                        + "\n".join(result.codemap_results)
+                        + "\n"
+                        + "\n".join(result.semble_results)
+                    )
                     report_corpus = result.output_text[result.last_tool_text_offset :]
                     result.quality = self.gt.score(
                         task_id=task.id,
@@ -1156,6 +1284,10 @@ class Benchmark:
                     if arm == "codemap" and result.tools.skill == 0 and result.success:
                         result.success = False
                         result.error = "codemap skill never called"
+                    # Semble arm that never called any semble MCP tool is a failure.
+                    if arm == "semble" and result.tools.semble == 0 and result.success:
+                        result.success = False
+                        result.error = "semble tool never called"
                     self.results.append(result)
                     self._write_tool_log(result)
                     color = _COLOR_FAIL if not result.success else _ARM_COLOR.get(arm, "")
@@ -1181,7 +1313,7 @@ class Benchmark:
         serialised = []
         for r in self.results:
             d = asdict(r)
-            for key in ("skill_result_text", "codemap_results", "last_tool_text_offset"):
+            for key in ("skill_result_text", "codemap_results", "semble_results", "last_tool_text_offset"):
                 d.pop(key, None)
             serialised.append(d)
         with self.output_path.open("w") as fh:
@@ -1212,8 +1344,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--arm",
-        choices=["plain", "codemap"],
-        help="Run only one arm (default: both)",
+        choices=["plain", "codemap", "semble"],
+        help="Run only one arm (default: all three)",
     )
     parser.add_argument("--all", action="store_true", help="Run all tasks in both arms")
     parser.add_argument("--tasks", nargs="+", metavar="ID", help="Run specific task IDs only")
@@ -1238,11 +1370,14 @@ def main() -> None:
     if not all_tasks:
         sys.exit("No tasks to run.")
 
-    # ── Locate prerequisites (index existence validated, not measured) ────
+    # ── Locate prerequisites (validated before any run starts) ──────────
     repo_path = args.repo_path.resolve()
     index_path = find_index(repo_path, args.index)
 
-    arms = [args.arm] if args.arm else ["plain", "codemap"]
+    arms = [args.arm] if args.arm else ["plain", "codemap", "semble"]
+
+    if "semble" in arms:
+        check_semble_mcp()
     models_to_run: list[tuple[str, str]] = [(args.model, MODELS[args.model])] if args.model else list(MODELS.items())
     total_runs = len(all_tasks) * len(arms) * len(models_to_run)
 
@@ -1271,7 +1406,8 @@ def main() -> None:
         return
 
     if "codemap" in arms:
-        _sample = ModelRunner._system_prompt("fix", "codemap")
+        _sample_runner = ModelRunner("haiku", MODELS["haiku"], repo_path)
+        _sample = _sample_runner._system_prompt("fix", "codemap")
         print(f"[→ codemap arm:  skill + /codemap:query available ({len(_sample)} chars for fix type)]")
     output_path = _unique_path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
