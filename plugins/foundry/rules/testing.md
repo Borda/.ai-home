@@ -28,7 +28,8 @@ paths:
 - Each test validates exactly one scenario
 - No `if`/`for` logic in test bodies
   - Exception: list-comprehension or generator used solely to build `@pytest.mark.parametrize` args,
-    spanning fewer than 30% of lines in `parametrize` decorator call
+    spanning fewer than 30% of the lines inside the `@pytest.mark.parametrize(...)` call itself
+    (count only lines within the decorator parentheses, not the test function body)
 - Parametrize aggressively — 3+ test functions with same structure → `@pytest.mark.parametrize`
 - Group topic-related tests into class; class name carries unit (and optionally condition)
   so method names describe expected outcome only
@@ -52,11 +53,16 @@ def reset_random_seeds():
     import random
     random.seed(42)
     try:
-        import numpy as np; np.random.seed(42)
+        import numpy as np
+
+        np.random.seed(42)
     except ImportError:
         pass
     try:
-        import torch; torch.manual_seed(42); torch.cuda.manual_seed_all(42)
+        import torch
+
+        torch.manual_seed(42)
+        torch.cuda.manual_seed_all(42)
     except ImportError:
         pass
 ```
@@ -79,7 +85,7 @@ def test_cuda_inference(): ...
 ## Helpers in Tests
 
 - Helper with no shared logic across cases → split into separate dedicated functions, not single branching helper
-- Shared logic only → shared function
+- Shared logic only → shared function; helper must not branch on case type (no if/for selecting different behavior per caller)
 
 ## TDD for New Features
 

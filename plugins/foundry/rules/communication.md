@@ -49,8 +49,12 @@ Rules:
 
 Labelled or annotated question (e.g. `[AskUserQuestion simulated] — What format?`) still plain text, still violates rule. Only actual tool invocation satisfies constraint.
 
+Compliant example — this is the only valid form:
+> Call `AskUserQuestion(questions=["What format is the data in? (JSON, CSV, XML)"])` — no prose question in the response body.
+
 - Plain text questions easily missed, don't block execution, don't surface as distinct UI affordance
 - Applies to: ambiguous input, clarifying choices, scope decisions, continuation guards, any point where user input required before proceeding
+- **Scope decisions count**: when user asks "should I also X?" mid-task, treat as a scope decision requiring AskUserQuestion — not as rhetorical; never silently resolve
 - Applies globally — all skills, agents, model-generated questions without exception
 - When `AskUserQuestion` not in skill's `allowed-tools`, add it before asking any question
 - Max 4 questions per call; group related sub-questions into one option set rather than asking sequentially

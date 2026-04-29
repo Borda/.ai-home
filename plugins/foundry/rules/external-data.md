@@ -18,7 +18,7 @@ Default page size 30. Override:
 # List commands — raise the limit explicitly
 gh issue list --limit 1000
 gh pr list --state all --limit 500
-gh release list --limit 100
+gh release list --limit 500  # adjust upward for repos with many releases
 
 # API calls — use --paginate to follow all pages automatically
 gh api repos/:owner/:repo/issues --paginate
@@ -42,7 +42,8 @@ Rules:
 - `total_count` > items returned → partial result; fetch remaining pages
 - Loop until no next-page signal; never stop after one response
 - No pagination signals + round item count (10, 20, 25, 50, 100…) → likely default page size
-  - Verify: request page 2; if page 2 returns items, first response was truncated
+  - Verify by fetching page 2 (e.g. `?page=2` or `?offset=<count>`); if page 2 returns items, first response was truncated — fetch all pages before proceeding
+  - Do not substitute structural inspection for an actual page-2 request
 
 ## GraphQL APIs
 

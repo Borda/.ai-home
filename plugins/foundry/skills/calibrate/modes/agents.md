@@ -14,12 +14,12 @@ Problem domain by agent:
 - `foundry:curator` → config issues: broken cross-refs, missing workflow blocks, wrong model, step gaps; handover compliance: malformed JSON envelopes; context discipline: spawn prompt bloat, AgentSpeak v2 violations
 - `foundry:doc-scribe` → docs gaps: missing docstrings, missing Google style sections, broken examples
 - `foundry:perf-optimizer` → perf issues: unnecessary loops, repeated computation, wrong dtype, missing vectorisation
-- `oss:cicd-steward` → Continuous Integration (CI) issues: non-pinned action Secure Hash Algorithms (SHAs), missing cache, inefficient matrix
-- `research:data-steward` → data issues: label leakage, split contamination, augmentation order bugs, API pagination truncation, dataset completeness, provenance gaps
-- `research:scientist` → paper analysis: missed contributions, wrong method attribution
+- `oss:cicd-steward` → Continuous Integration (CI) issues: non-pinned action Secure Hash Algorithms (SHAs), missing cache, inefficient matrix *(oss plugin required — skip if `$OSS_AVAILABLE` empty)*
+- `research:data-steward` → data issues: label leakage, split contamination, augmentation order bugs, API pagination truncation, dataset completeness, provenance gaps *(research plugin required — skip if `$RESEARCH_AVAILABLE` empty)*
+- `research:scientist` → paper analysis: missed contributions, wrong method attribution *(research plugin required — skip if `$RESEARCH_AVAILABLE` empty)*
 - `foundry:solution-architect` → design issues: leaky abstractions, circular dependencies, missing Architecture Decision Record (ADR), backward-compat violations without deprecation path
 - `foundry:web-explorer` → content quality: broken or unverified Uniform Resource Locators (URLs), outdated docs, incomplete extraction from fetched pages
-- `oss:shepherd` → Open Source Software (OSS) governance: incorrect Semantic Versioning (SemVer) decision, missing CHANGELOG entry, bad deprecation path, wrong release checklist item
+- `oss:shepherd` → Open Source Software (OSS) governance: incorrect Semantic Versioning (SemVer) decision, missing CHANGELOG entry, bad deprecation path, wrong release checklist item *(oss plugin required — skip if `$OSS_AVAILABLE` empty)*
 - `foundry:challenger` → plan/architecture challenges: missed assumptions, missing edge cases, unjustified blocker classification, skipped refutation step
 - `foundry:creator` → content quality: narrative arc gaps, audience-profile mismatches, voice inconsistency, missing story beats, out-of-scope format acceptance
 
@@ -27,7 +27,9 @@ All agents support `ceiling` difficulty tier. Ceiling patterns by domain: `found
 
 ### Step 2: Spawn agent pipeline subagents
 
-Mark "Calibrate agents" in_progress. Per agent in domain table, spawn one `general-purpose` pipeline subagent. Issue ALL spawns in **single response** — agents independent, run concurrently.
+Mark "Calibrate agents" in_progress. **Availability check** (vars set in SKILL.md Step 2): skip `oss:*` agents if `$OSS_AVAILABLE` empty; skip `research:*` agents if `$RESEARCH_AVAILABLE` empty. Log: "<plugin> plugin not installed — skipping <agent> calibration" per excluded agent.
+
+Per agent in domain table (after exclusions), spawn one `general-purpose` pipeline subagent. Issue ALL spawns in **single response** — agents independent, run concurrently.
 
 Each subagent gets pipeline template from `.claude/skills/calibrate/templates/pipeline-prompt.md` with substitutions:
 

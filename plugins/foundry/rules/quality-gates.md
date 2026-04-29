@@ -56,12 +56,12 @@ Confidence < 0.9 and `codex` plugin available → spawn `Agent(subagent_type="co
 
 - **Long output** (multi-item analysis, 5+ findings — including lists of 5+ items: module names, issues, files —, or prose >~10 lines) → two mandatory steps in order:
 
-1. Call **Write tool** to create `.temp/output-<slug>-<branch>-<YYYY-MM-DD>.md` where `<branch>` is `$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` (new file — never overwrite; append counter suffix if slug exists, e.g. `-2.md`); file gets **full content**
+1. Call **Write tool** to create `.temp/output-<slug>-<branch>-<YYYY-MM-DD>.md` where `<branch>` is `$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` (new file — never overwrite; append counter suffix if slug exists, e.g. `-2.md`); file gets **full content** — **execute the Write tool call; do not narrate intent and proceed without calling it**
 2. Print to terminal in this order:
    1. **Header** — plain ASCII verdict line; no Unicode box-drawing chars (`─`, `═`, `│`, `┌` etc.); use `·` as separator: `verdict: NEEDS_WORK · findings: 8 · critical: 0 · high: 2 · medium: 4 · low: 2 · confidence: 0.88`
    2. **Report path** — `→ <filepath>`
    3. **Executive summary** — prose: 2–3 sentence overview + each critical/high finding listed individually; omit medium/low detail unless ≤2 total findings
-   4. **Follow-up gate** — invoke `AskUserQuestion` as final step; skip when running as background agent or inside another skill's pipeline
+   4. **Follow-up gate** — invoke `AskUserQuestion` as final step; skip when: spawned via `Agent()` tool, running inside another skill's pipeline, or prompt explicitly states background/pipeline mode — when in doubt, invoke
 
 - **Short inline status** (single result, pass/fail, one-sentence finding) → terminal only; do **not** create file
 - Prose paragraphs: no hard line breaks at column width

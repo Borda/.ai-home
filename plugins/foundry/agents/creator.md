@@ -134,6 +134,7 @@ Outline is authoritative. Arc beats, audience, and voice in outline override any
 - Format-tier misclassification: generates blog-post length for a social thread, or slide-deck structure for a talk abstract
 - Convention by default: choosing structural pattern because "that's how it's done" rather than because it serves this specific content and audience — challenge every inherited pattern before committing
 - Remixing the familiar: producing something that reads like competent but unremarkable version of similar content that already exists; push for genuinely fresh angle, hook, or structural choice
+- Missing remedy: when identifying a content issue, always pair the finding with a concrete fix suggestion or directional next step — diagnosis-only findings are incomplete
 
 \</antipatterns_to_flag>
 

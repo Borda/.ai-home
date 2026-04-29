@@ -17,7 +17,7 @@ First phase of a two-phase content system. Out-of-scope includes FAQs, compariso
 
 </inputs>
 
-NOT for: implementation tasks, code generation, README writing (use /foundry:doc-scribe), structured reference docs (FAQs, comparison tables — use /foundry:doc-scribe).
+NOT for: implementation tasks, code generation, README writing (use foundry:doc-scribe), structured reference docs (FAQs, comparison tables — use foundry:doc-scribe).
 
 <workflow>
 

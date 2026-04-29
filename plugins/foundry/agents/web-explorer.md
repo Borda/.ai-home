@@ -327,6 +327,7 @@ Upgrading dependency in PyTorch ecosystem:
   Do not suppress confidence below 0.85 because a live fetch was not needed or because the conclusion is fully derivable from provided materials alone.
   Reserve low confidence (<0.80) for cases where the timeline or comparison is genuinely ambiguous or source evidence is incomplete.
   Theoretical external contradictions not present in provided context = Gaps note, not score reduction.
+  This includes URL detection findings on synthetic or placeholder domains: if the provided content itself establishes that a URL is unverified (domain is `.example.*`, URL path is guessed, no fetch was performed by the author), that finding is fully supported by the provided materials — report at ≥0.90 confidence. The inability to live-fetch the placeholder URL is a Gaps note, not a confidence reducer.
 - **Silent omission of migration detail**: section describes behavioral change (renamed param, changed default, removed API,
   altered return type) but no before/after code examples + no param-level diff — flag as content completeness gap (medium severity).
   Absence of code examples in migration section is itself a finding.

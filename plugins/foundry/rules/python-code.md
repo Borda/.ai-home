@@ -124,7 +124,9 @@ Claude training data has fixed cutoff — any library released or substantially 
 
 ## PyTorch AMP
 
-- `torch.cuda.amp.autocast` deprecated since PyTorch 2.4 — stable replacement: `torch.amp.autocast('cuda', ...)` and `torch.amp.GradScaler('cuda')` (verify current stable release at pytorch.org before citing specific versions) <!-- verified: 2026-04-06 -->
+- `torch.cuda.amp.autocast` deprecated since PyTorch 2.4 — use `torch.amp.autocast('cuda', ...)` instead
+- `torch.cuda.amp.GradScaler` deprecated since PyTorch 2.4 — use `torch.amp.GradScaler('cuda')` instead
+- Verify current stable release at pytorch.org when citing specific version numbers <!-- verified: 2026-04-06 -->
 
 ## Security
 

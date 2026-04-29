@@ -107,7 +107,7 @@ Common categories:
 If `$CODEX_OK` is non-empty (set below) AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
 
 ```bash
-CODEX_OK=$(command -v codex 2>/dev/null || find ~/.claude/plugins/cache -name "codex*" -type d 2>/dev/null | head -1)  # timeout: 5000
+CODEX_OK=$(claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "available" || echo "")  # timeout: 5000
 ```
 
 ```bash

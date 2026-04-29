@@ -24,6 +24,7 @@ Never rely on default 120 s cap; fail fast, let caller retry.
 | Test suite (`pytest`, `uv run pytest`) | 3 min | `timeout: 600000` |
 | Build / compile step | 2 min | `timeout: 360000` |
 | Simple shell utilities (`wc`, `find`, `grep`, `ls`) | 0.5 s | `timeout: 5000` |
+| Any other command (unknown duration) | estimate P90 conservatively | 3× estimate; min `timeout: 15000` |
 
 Rules:
 
@@ -68,6 +69,6 @@ When a user asks "why" about something that happened (deleted content, unexpecte
 
 - **Never act** — do not restore, revert, or modify anything
 - State clearly that the cause is unknown and why (e.g. "pre-session change not made by me")
-- Ask the user what they want done before taking any action
+- Ask the user what they want done before taking any action — use `AskUserQuestion` tool (required by `communication.md` for all interactive questions)
 
 Restoring without being asked = overstepping. The user asking "why" is a question, not a request to fix.

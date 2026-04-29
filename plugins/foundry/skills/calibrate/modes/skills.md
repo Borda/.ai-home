@@ -9,21 +9,23 @@
 Skill domains:
 
 - `/audit` → synthetic `.claude/` config with N injected structural issues
-- `/oss:review` → synthetic Python module with N cross-domain issues (arch + tests + docs + lint)
-- `/research:plan` → synthetic optimization goal (e.g. "reduce pytest runtime by 30%"); measure whether plan mode produces complete, valid `program.md` with all required sections, plausible `metric_cmd`, correct `direction`, coherent `scope_files`
-- `/research:judge` → synthetic `program.md` with N injected plan-quality issues (e.g. missing guard command, absent `direction`, non-existent `scope_files` path, invalid `agent_strategy`); measure whether judge correctly identifies each injected issue at right severity
-- `/develop:review` → synthetic Python file with N injected code-quality issues (style, correctness, coverage gaps); measure whether review identifies each injected issue at correct severity level
-- `/codemap:query` → synthetic codemap index with known centrality/coupling values; measure whether `central`, `coupled`, `deps`, `rdeps`, `path` queries return correct modules matching ground-truth graph structure
-- `/codemap:scan` → synthetic Python project with known module structure; measure whether scan correctly identifies modules, dependencies, and produces valid index
-- `/codemap:integration` → synthetic project with known skill integration opportunities; measure whether integration correctly scores and ranks candidate skills
-- `/research:verify` → paper-vs-code fidelity check; inject N known deviations (hyperparams, architecture, loss function, preprocessing); score recall per dimension (F, H, E, N, C)
+- `/oss:review` → synthetic Python module with N cross-domain issues (arch + tests + docs + lint) *(oss plugin required — skip if `$OSS_AVAILABLE` empty)*
+- `/research:plan` → synthetic optimization goal (e.g. "reduce pytest runtime by 30%"); measure whether plan mode produces complete, valid `program.md` with all required sections, plausible `metric_cmd`, correct `direction`, coherent `scope_files` *(research plugin required — skip if `$RESEARCH_AVAILABLE` empty)*
+- `/research:judge` → synthetic `program.md` with N injected plan-quality issues (e.g. missing guard command, absent `direction`, non-existent `scope_files` path, invalid `agent_strategy`); measure whether judge correctly identifies each injected issue at right severity *(research plugin required — skip if `$RESEARCH_AVAILABLE` empty)*
+- `/develop:review` → synthetic Python file with N injected code-quality issues (style, correctness, coverage gaps); measure whether review identifies each injected issue at correct severity level *(develop plugin required — skip if `$DEVELOP_AVAILABLE` empty)*
+- `/codemap:query` → synthetic codemap index with known centrality/coupling values; measure whether `central`, `coupled`, `deps`, `rdeps`, `path` queries return correct modules matching ground-truth graph structure *(codemap plugin required — skip if `$CODEMAP_AVAILABLE` empty)*
+- `/codemap:scan` → synthetic Python project with known module structure; measure whether scan correctly identifies modules, dependencies, and produces valid index *(codemap plugin required — skip if `$CODEMAP_AVAILABLE` empty)*
+- `/codemap:integration` → synthetic project with known skill integration opportunities; measure whether integration correctly scores and ranks candidate skills *(codemap plugin required — skip if `$CODEMAP_AVAILABLE` empty)*
+- `/research:verify` → paper-vs-code fidelity check; inject N known deviations (hyperparams, architecture, loss function, preprocessing); score recall per dimension (F, H, E, N, C) *(research plugin required — skip if `$RESEARCH_AVAILABLE` empty)*
 - `/distill:lessons` → synthetic `.notes/lessons.md` corpus with N injected lessons of known disposition (→ rule, → agent update, → skill update, → already covered, → too narrow); measure whether distill correctly classifies each lesson and generates accurate proposals; ground truth = injected dispositions and target files
 - `/manage:create` → synthetic create-agent and create-skill directives; measure whether output file has valid frontmatter, correct structure, NOT-for clause, non-empty domain content; ground truth = structural completeness checklist
 - `/manage:update` → synthetic rename and content-edit directives against a fixture agent/skill file; measure whether cross-reference propagation is complete and description-changed flag is correctly set; ground truth = known cross-ref targets in fixture
 
 ### Step 2: Spawn skill pipeline subagents
 
-Mark "Calibrate skills" in_progress. For each skill in domain table, spawn one `general-purpose` pipeline subagent. Issue ALL spawns in **single response**.
+Mark "Calibrate skills" in_progress. **Availability check** (vars set in SKILL.md Step 2): exclude skills marked with plugin requirements above when that plugin is absent. Log: "<plugin> plugin not installed — skipping <skill> calibration" per excluded skill.
+
+For each skill in domain table (after exclusions), spawn one `general-purpose` pipeline subagent. Issue ALL spawns in **single response**.
 
 For skill targets (target name starts with `/`): spawn `general-purpose` subagent with skill's `SKILL.md` content prepended as context, running against synthetic input from problem. Pipeline template write-and-acknowledge pattern still applies.
 

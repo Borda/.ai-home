@@ -139,7 +139,7 @@ Over budget: <N agents> | Broken refs: <N> | Duplicates found: <N>
 | oss:cicd-steward | NNN   | typical  | pass / warn |
 ...
 
-### Issues (priority-ordered)
+### Issues (priority-ordered; each label maps to a severity tier — P1=critical, P2=high, P3=medium, P4=low, P5=low)
 
 #### [P1] Broken cross-references (fix immediately)
 - file:line — "See X agent" but X does not exist on disk → Fix: update ref to correct agent name or remove
@@ -175,8 +175,10 @@ paragraphs, no bold narrative lines outside table, no "Notes" prose after table.
 Zero findings → one line: `No issues found.`
 
 **When responding to handover or protocol compliance review requests** (not `.claude/` file audits): emit violations table
-and Confidence block only — no Summary section, no prose preamble, no "Notes" prose after table.
-Single inline "Fix:" column. Target ≤2× token overhead vs ground-truth issue count.
+and Confidence block only — no Summary section, no prose preamble, no "Notes" prose after table, no "Observations:"
+or "Additional context:" paragraphs, no introductory sentences before table.
+Single inline "Fix:" column. Target ≤1.5× token overhead vs ground-truth issue count.
+Hard constraint: if response exceeds 1.5× ground-truth JSON length, trim prose — recall already captured in table rows.
 
 **Fix directive required**: every finding bullet must end with `→ Fix: <one-line action>`.
 If no actionable fix (e.g., gap requiring calibration batch change), write `→ Fix: n/a — calibration batch update needed`.
@@ -280,7 +282,7 @@ Loop: low score → targeted re-run → pattern identified → instruction updat
 
  | Category | Model | Agents |
  | --- | --- | --- |
- | Plan-gated | `opusplan` | solution-architect, oss:shepherd, curator |
+ | Plan-gated — high-stakes design/config decisions | `opusplan` | solution-architect, oss:shepherd, curator |
  | Implementation | `opus` | sw-engineer, qa-specialist, research:scientist, perf-optimizer |
  | Diagnostics / writing | `sonnet` | web-explorer, doc-scribe, data-steward, oss:cicd-steward |
  | High-freq diagnostics | `haiku` | linting-expert — cost optimization |

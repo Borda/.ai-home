@@ -452,7 +452,7 @@ _SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2
 [ -f "$_SHARED/codex-prepass.md" ] || { printf "⚠ WARNING: codex-prepass.md not found at $_SHARED — skipping codex pre-pass\n"; CODEX_AVAILABLE=""; }
 ```
 
-if [ -n "$CODEX_AVAILABLE" ]; then read `$_SHARED/codex-prepass.md` and run the Codex pre-pass on the combined diff of all fixes; else echo "⚠ codex plugin not available — skipping codex pass"; fi
+If `$CODEX_AVAILABLE` is non-empty: Read `$_SHARED/codex-prepass.md` and follow the Codex pre-pass instructions it contains, applied to the combined diff of all fixes from Step 8. Otherwise: `echo "⚠ codex plugin not available — skipping codex pass"`
 
 Treat any findings as additional issues entering Step 10's re-audit scope. Skip if Step 8 touched only 1 file.
 
@@ -553,7 +553,7 @@ Run `/foundry:init` to propagate clean config to ~/.claude/
 **Trigger**: `/audit --upgrade`
 
 ```bash
-UPGRADE_MD=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/audit/ 2>/dev/null | head -1)upgrade.md  # timeout: 5000
+UPGRADE_MD=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/audit/ 2>/dev/null | head -1)/upgrade.md  # timeout: 5000
 [ -f "$UPGRADE_MD" ] || UPGRADE_MD="plugins/foundry/skills/audit/upgrade.md"
 ```
 

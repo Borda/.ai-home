@@ -75,13 +75,15 @@ Never skip trailers because skill template omits them.
 
 ## Commit Gate (two-path)
 
+Note: branch safety check (above) runs before commit gate — even Path A sentinel does not authorize a commit to main/master.
+
 Before any `git commit`, resolve which path applies:
 
 **Path A — skill pre-auth** (skills that need multiple commits, e.g. `/oss:resolve`):
 - Skill computes sentinel at start: `SENTINEL="/tmp/claude-commit-auth-$(git rev-parse --show-toplevel | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')-$(git branch --show-current | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')"`
 - `touch $SENTINEL` at start of commit phase; `rm -f $SENTINEL` on finish or abort (use `trap` to guarantee cleanup)
 - While sentinel exists and is <15 min old → hook allows commit directly, no question
-- Sentinel absent, expired, or branch mismatch → hook blocks → fall through to Path B
+- Sentinel absent, expired, or branch mismatch (sentinel slug ≠ current branch slug) → hook blocks → fall through to Path B
 
 **Path B — user ad-hoc request**:
 - No auth file for current branch → invoke `AskUserQuestion` before `git commit`

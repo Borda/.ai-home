@@ -431,15 +431,15 @@ ______________________________________________________________________
 
 ### foundry:qa-specialist
 
-**Role**: QA specialist for writing, reviewing, and fixing tests.
+**Role**: QA specialist for writing, reviewing, and fixing tests. Rigorous black-box end-user tester: focuses exclusively on the public API surface, derives expectations from docs/type hints — not implementation, and writes tests that represent realistic user workflows.
 
-**Use for**: writing new pytest tests, analyzing coverage gaps, building edge-case matrices, fixing failing tests, integration test design. Automatically includes OWASP Top 10 security perspective when used in agent teams. Includes anti-hallucination assertion protocol for code reviews: occurrence thresholds (>10 established / 3–10 emerging / \<3 skip), conditional context loading by diff content type, and structured uncertainty markers.
+**Use for**: writing new pytest tests, analyzing public-API coverage gaps, building edge-case matrices, fixing failing tests, integration test design. Automatically includes OWASP Top 10 security perspective when used in agent teams.
 
 **Model**: `opus`
 
-**Not for**: linting, type checking, or annotation fixes (use `foundry:linting-expert`), production implementation (use `foundry:sw-engineer`), slow test suite profiling or optimizing test execution speed (use `foundry:perf-optimizer`).
+**Not for**: linting, type checking, or annotation fixes (use `foundry:linting-expert`), production implementation (use `foundry:sw-engineer`), slow test suite profiling or optimizing test execution speed (use `foundry:perf-optimizer`), testing private/internal methods or mocking internals.
 
-Writes deterministic, parametrized, behavior-focused tests following Arrange-Act-Assert. Follows TDD for new features: write tests before implementation.
+Writes deterministic, parametrized, behavior-focused tests. Systematic progression: happy path → edge cases → error cases → boundary values → adversarial inputs. Applies a public-API coverage checklist before marking done.
 
 ______________________________________________________________________
 

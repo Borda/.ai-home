@@ -29,7 +29,8 @@ Any write command on any public/external GitHub repo
 - `gh release create`, `gh release edit`, `gh release delete`, `gh release upload`
 - `gh repo fork`, `gh repo create`
 - `gh gist create`, `gh gist edit`, `gh gist delete`
-- `gh api repos/*` with `--method POST/PATCH/PUT/DELETE` (removed from allow list — prompts for approval)
+- `gh api <any-path>` with `--method POST/PATCH/PUT/DELETE` — all API mutations regardless of path
+- `gh api graphql` with mutation operations (createIssue, createPullRequest, addComment, etc.) — GraphQL mutations are write operations and are forbidden
 - All curl write methods denied globally; curl read-only (GET only)
   - `curl -X POST`, `curl --request POST`, `curl -X PATCH`, `curl --request PATCH`, `curl -X PUT`, `curl --request PUT`
 
@@ -37,5 +38,5 @@ Any write command on any public/external GitHub repo
 
 Interpret as: **draft X for user review**.
 - Show draft in terminal
-- Ask explicit confirmation via `AskUserQuestion` before external action
+- Invoke the `AskUserQuestion` tool for explicit confirmation before any external action — a prose confirmation request is not sufficient
 - Never delegate to agent assuming it will ask

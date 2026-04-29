@@ -299,6 +299,9 @@ automatic call delegation.
 - Bug/issue list: separate **correctness bugs** (definite errors, data races, incorrect logic) from
   **improvement suggestions** (style, typing improvements, deprecation warnings).
   Lead with correctness bugs. Include improvement suggestions only when prompt explicitly requests.
+- Within correctness bugs, distinguish **direct bugs** (always trigger on the given code path) from
+  **latent bugs** (only surface under specific inputs or missing keys) — list direct bugs first,
+  latent bugs last, each clearly labelled. This helps readers triage fix priority.
 
 \</output_format>
 

@@ -165,11 +165,18 @@ For each target mode in resolved target list, read corresponding mode file and e
 
 For multiple tokens, merge resolved targets into per-mode groups before spawning — one pipeline per unique mode file needed, each carrying its full target list.
 
-Before spawning the skills pipeline (when target includes `skills` or `all`), check oss plugin availability:
+Before spawning **any** pipeline (when target includes `agents`, `skills`, or `all`), check cross-plugin availability:
 ```bash
 OSS_AVAILABLE=$(find ~/.claude/plugins/cache -name "oss" -type d 2>/dev/null | head -1)  # timeout: 5000
+RESEARCH_AVAILABLE=$(find ~/.claude/plugins/cache -name "research" -type d 2>/dev/null | head -1)  # timeout: 5000
+CODEMAP_AVAILABLE=$(find ~/.claude/plugins/cache -name "codemap" -type d 2>/dev/null | head -1)  # timeout: 5000
+DEVELOP_AVAILABLE=$(find ~/.claude/plugins/cache -name "develop" -type d 2>/dev/null | head -1)  # timeout: 5000
 ```
-Only include `/oss:review` scenarios if `$OSS_AVAILABLE` is non-empty; otherwise note "oss plugin not installed — skipping /oss:review calibration" and exclude it from the skills pipeline target list.
+
+- **`agents` pipeline**: exclude `oss:cicd-steward` and `oss:shepherd` if `$OSS_AVAILABLE` empty; exclude `research:data-steward` and `research:scientist` if `$RESEARCH_AVAILABLE` empty. Log: "oss/research plugin not installed — skipping <agent> calibration"
+- **`skills` pipeline**: exclude `/oss:review` if `$OSS_AVAILABLE` empty; exclude `/codemap:*` skills if `$CODEMAP_AVAILABLE` empty; exclude `/research:plan`, `/research:judge`, `/research:verify` if `$RESEARCH_AVAILABLE` empty; exclude `/develop:review` if `$DEVELOP_AVAILABLE` empty. Log skip message per excluded skill.
+
+Fallback role descriptions for cross-plugin agents (if ever substituted with `general-purpose`) — see `skills/_shared/agent-resolution.md`.
 
 Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instructions for pipeline subagent. Pipeline template lives at `$CALIB_MODES_DIR/../templates/pipeline-prompt.md`. **N override**: `communication` caps at fast=3 / full=5 (not global FULL_N=10) to prevent pipeline context overflow — read `$CALIB_MODES_DIR/communication.md` for details. **`rules` mode** spawns one `general-purpose` subagent per rule file (not standard pipeline template) — read `$CALIB_MODES_DIR/rules.md` for direct-spawn approach.
 
@@ -184,26 +191,28 @@ LAUNCH_AT=$(date +%s)
 RUN_TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 for batch_target in $SPACE_SEPARATED_TARGETS; do touch /tmp/calibrate-check-$batch_target; done
 
-# Use extended timeout for dual-source runs (Codex active in agents/skills modes)
-EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN
-for T in agents skills; do [ "$batch_target" = "$T" ] && EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN_DUAL; done
-
 # Every HEALTH_CHECK_INTERVAL_MIN (5 min): check each still-running pipeline
-NEW=$(find .reports/calibrate/$RUN_TS/$batch_target/ -newer /tmp/calibrate-check-$batch_target -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS; timeout: 5000
-touch /tmp/calibrate-check-$batch_target
-ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
-if [ "$NEW" -gt 0 ]; then
-    echo "✓ $batch_target active"
-elif [ "$ELAPSED" -ge "$EFFECTIVE_TIMEOUT_MIN" ]; then
-    echo "⏱ $batch_target TIMED OUT (hard limit)"
-elif [ "$ELAPSED" -ge "$HEALTH_CHECK_INTERVAL_MIN" ]; then
-    OUTPUT_FILE=".reports/calibrate/$RUN_TS/$batch_target/pipeline.jsonl"
-    if tail -20 "$OUTPUT_FILE" 2>/dev/null | grep -qi 'delay\|wait\|slow'; then
-        echo "⏸ $batch_target: extension granted (+5 min)"
-    else
-        echo "⏱ $batch_target TIMED OUT"
+for batch_target in $SPACE_SEPARATED_TARGETS; do
+    # Use extended timeout for dual-source runs (Codex active in agents/skills modes)
+    EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN
+    for T in agents skills; do [ "$batch_target" = "$T" ] && EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN_DUAL; done
+
+    NEW=$(find .reports/calibrate/$RUN_TS/$batch_target/ -newer /tmp/calibrate-check-$batch_target -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS; timeout: 5000
+    touch /tmp/calibrate-check-$batch_target
+    ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
+    if [ "$NEW" -gt 0 ]; then
+        echo "✓ $batch_target active"
+    elif [ "$ELAPSED" -ge "$EFFECTIVE_TIMEOUT_MIN" ]; then
+        echo "⏱ $batch_target TIMED OUT (hard limit)"
+    elif [ "$ELAPSED" -ge "$HEALTH_CHECK_INTERVAL_MIN" ]; then
+        OUTPUT_FILE=".reports/calibrate/$RUN_TS/$batch_target/pipeline.jsonl"
+        if tail -20 "$OUTPUT_FILE" 2>/dev/null | grep -qi 'delay\|wait\|slow'; then
+            echo "⏸ $batch_target: extension granted (+5 min)"
+        else
+            echo "⏱ $batch_target TIMED OUT"
+        fi
     fi
-fi
+done
 ```
 
 **On timeout**: read `tail -100 <output_file>` for partial JSON; if none use: `{"target":"<TARGET>","verdict":"timed_out","mean_recall":null,"gaps":["pipeline timed out — re-run individually with /calibrate <target> fast"]}`. Timed-out targets appear in report with ⏱ prefix and null metrics.
@@ -296,7 +305,12 @@ Stop. `--apply` without pace flag is documented as "skip benchmark, apply propos
 
 **Spawn one `general-purpose` subagent per found target. Issue ALL spawns in single response — no waiting between spawns.**
 
-Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<PROPOSAL_PATH>`, `<AGENT_FILE>` — use agent or skill file path as applicable):
+**`<AGENT_FILE>` resolution**: before spawning, resolve the file path for each target:
+- Agent target (e.g. `sw-engineer`, `curator`): `plugins/foundry/agents/<name>.md`
+- Skill target (e.g. `audit`, `manage`): `plugins/foundry/skills/<name>/SKILL.md`
+- Project-local override: check `.claude/agents/<name>.md` or `.claude/skills/<name>/SKILL.md` first; use if present
+
+Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<PROPOSAL_PATH>`, `<AGENT_FILE>` — resolved path from above):
 
 Read proposal file at `<PROPOSAL_PATH>` and apply each "Change N" block to `<AGENT_FILE>` (path to agent or skill file for this target).
 
