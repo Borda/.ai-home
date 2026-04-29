@@ -90,6 +90,10 @@ CHECKPOINT="/tmp/optimize-check-$LAUNCH_AT"
 touch "$CHECKPOINT"
 ```
 
+<!-- Note: single checkpoint covers all axes — a stalled individual agent is masked by peers still writing files.
+     For production use, create per-agent checkpoints (e.g., /tmp/optimize-check-<axis>-$LAUNCH_AT) to detect individual stalls.
+     Current single-checkpoint design trades stall-masking for simpler orchestration. -->
+
 Poll every 5 min: `find $RUN_DIR -newer "$CHECKPOINT" -type f | wc -l` — new files = alive; zero = stalled.
 
 - **Hard cutoff: 15 min** no file activity → timed out

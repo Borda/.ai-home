@@ -7,12 +7,15 @@
 //   This hook is one leg of a two-hook system keeping file state consistent
 //   between what Claude reads and what it edits:
 //
-//   Read path (this hook): normalizes source file in-place before Claude
-//     reads it. Claude sees compressed content; disk matches — no mismatch.
+//   Read path (this hook): compresses markdown content and serves it from a
+//     session-scoped temp file — original file is NEVER modified on Read.
+//     Emits updatedInput redirecting Claude to the temp file.
 //
 //   Edit path (this hook): normalizes source file in-place before Edit runs.
 //     Ensures old_string from a prior compressed read still finds its match
 //     even if the file was modified with padding between Read and Edit.
+//     Also emits updatedInput with old_string normalized so padded old_string
+//     from a pre-compression read matches the now-normalized file.
 //
 //   Post-edit (lint-on-save.js): runs pre-commit after every Write/Edit,
 //     applying mdformat + trailing-whitespace. File stays normalized.
@@ -25,15 +28,17 @@
 // HOW IT WORKS — Read path
 //   1. Parse stdin JSON; skip non-Read/Edit tools or non-.md files (exit 0).
 //   2. Read source file; skip on error (exit 0).
-//   3. Run compressMarkdown; if unchanged, exit 0 (no write needed).
-//   4. Write compressed content back to source path in-place.
-//   5. Emit updatedInput with original file_path unchanged.
+//   3. Run compressMarkdown; if unchanged, exit 0 (passthrough, no temp file).
+//   4. Write compressed content to session-scoped temp file (original untouched).
+//   5. Emit updatedInput with file_path = tempFilePath (preserving limit/offset).
 //
 // HOW IT WORKS — Edit path
 //   1. Detect Edit tool on a .md/.markdown file.
 //   2. Read source file; if unreadable or empty, exit 0.
-//   3. Run compressMarkdown; if unchanged, exit 0.
-//   4. Write normalized content back to source file in place; exit 0.
+//   3. Run compressMarkdown; if unchanged, skip disk write.
+//   4. Write normalized content back to source file in place (so old_string matches).
+//   5. Emit updatedInput with old_string = compressMarkdown(old_string) if present,
+//      plus all other Edit fields unchanged.
 //
 // EXIT CODES
 //   0  passthrough (non-.md file, read error, no-op, or successful rewrite)
@@ -42,6 +47,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 /**
  * Compress markdown content:
@@ -123,7 +129,9 @@ process.stdin.on("end", () => {
       process.exit(0);
     }
 
-    // Edit path: normalize file in-place before Edit runs so old_string matches
+    // Edit path: normalize file in-place before Edit runs so old_string matches.
+    // Also emit updatedInput with old_string normalized so padded old_string
+    // from a compressed-read still finds its match in the now-normalized file.
     if (data.tool_name === "Edit") {
       const editInput = data.tool_input || {};
       const editPath = editInput.file_path || "";
@@ -142,9 +150,28 @@ process.stdin.on("end", () => {
           fs.writeFileSync(editAbs, editNorm, "utf8");
         } catch (_) {}
       }
+      // Emit updatedInput with normalized old_string (if present) so that
+      // padded old_string constructed from a compressed read still matches.
+      const oldString = editInput.old_string;
+      if (typeof oldString === "string" && oldString.length > 0) {
+        const normalizedOld = compressMarkdown(oldString);
+        process.stdout.write(
+          JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "allow",
+              updatedInput: {
+                ...editInput,
+                old_string: normalizedOld,
+              },
+            },
+          }),
+        );
+      }
       process.exit(0);
     }
 
+    // Read path
     const input = data.tool_input || {};
     const filePath = input.file_path || "";
 
@@ -171,27 +198,48 @@ process.stdin.on("end", () => {
     // Compress
     const compressed = compressMarkdown(content);
 
-    // If content unchanged after compression, passthrough — no write needed.
-    // This also handles repeated reads: once compressed, subsequent reads
-    // produce identical output and skip the write naturally.
+    // If content unchanged after compression, passthrough — no temp file needed.
+    // This also handles repeated reads of already-normalized files.
     if (compressed === content) {
       process.exit(0);
     }
 
-    // Write compressed content back to actual source path (in-place).
-    // Claude reads compressed content from actual path; Edit tool tracks
-    // the same path — no mismatch.
-    fs.writeFileSync(absPath, compressed, "utf8");
+    // Compute session-scoped temp dir.
+    // session_id follows same sanitization as lint-on-save.js.
+    const sessionId = data.session_id || "default";
+    const sid = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const tmpDir = `/tmp/claude-state-${sid}/md-compress`;
 
-    // Emit updatedInput with original file_path unchanged.
-    // updatedInput signals to Claude Code that input was rewritten;
-    // file_path stays the same so Edit read-tracking is satisfied.
+    // Ensure temp dir exists (mkdirSync with recursive is safe if already present).
+    try {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    } catch (_) {
+      // If we can't create temp dir, passthrough rather than crash
+      process.exit(0);
+    }
+
+    // Temp file name: sha1 of original absolute path (first 16 hex chars) + .md
+    const hash = crypto.createHash("sha1").update(absPath).digest("hex").slice(0, 16);
+    const tempFilePath = `${tmpDir}/${hash}.md`;
+
+    // Write compressed content to temp file — original file is NEVER touched.
+    try {
+      fs.writeFileSync(tempFilePath, compressed, "utf8");
+    } catch (_) {
+      // Can't write temp file — passthrough unchanged
+      process.exit(0);
+    }
+
+    // Emit updatedInput redirecting Claude to the temp file.
+    // Preserve limit / offset / lines fields from original input.
+    const updatedInput = { ...input, file_path: tempFilePath };
+
     process.stdout.write(
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "allow",
-          updatedInput: input,
+          updatedInput,
         },
       }),
     );

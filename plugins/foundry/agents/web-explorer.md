@@ -243,8 +243,9 @@ gh release list --repo pytorch/pytorch --limit 5
 # Fetch release notes for a specific version
 gh release view <version> --repo pytorch/pytorch
 
-# Search for deprecation notices in release notes
-gh release view <version> --repo pytorch/pytorch --json body -q .body | grep -i "deprecat"
+# Extract body then search for deprecation notices using Grep tool on the saved output
+gh release view <version> --repo pytorch/pytorch --json body -q .body > /tmp/pytorch-release.txt
+# Use Grep tool: pattern="deprecat" path="/tmp/pytorch-release.txt" (case-insensitive: true)
 
 # Track nightly build status
 # check pytorch/pytorch/actions on GitHub for nightly workflow
@@ -288,9 +289,7 @@ Upgrading dependency in PyTorch ecosystem:
    (a) location ref, (b) severity label (critical/high/medium/low), (c) concrete remediation action.
 5. Version comparisons: fetch CHANGELOG for range using "CHANGELOG / release notes" prompt; build before/after migration table
 6. Verify all URLs before including in output — fetch, read, confirm they exist and say what you claim.
-   Exception: URL path with clearly fabricated segment (words like `DOESNOTEXIST`, `fakepath`, `nonexistent`,
-   or names a symbol not in library's public API) — flag as broken from path-structure analysis without live fetch,
-   but state explicitly you're reasoning from path structure. Reserve live fetches for ambiguous paths.
+   Never fabricate URLs. If a symbol's API URL is unknown, state that the URL is unknown and ask the user to provide it or use WebSearch to find it.
 7. Cross-check API examples against project's pinned library version (check pyproject.toml)
    - Verify docs version matches actual dependency version
    - Cross-check examples against library's test suite if available
@@ -348,5 +347,6 @@ Not code implementation, experiment design, or ML paper deep-dives — hand off 
 
 **Incoming handoffs**: called by `/research:topic` (Step 2a parallel codebase check), `/foundry:audit` (Claude Code docs freshness check),
 `/foundry:manage` (agent/skill frontmatter schema validation).
+Note: step numbers are indicative — verify against the current skill version before relying on them.
 
 </notes>

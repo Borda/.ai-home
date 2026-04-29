@@ -29,6 +29,7 @@ COLAB_KNOWN_HW:             H100, L4, T4, A100
 SUMMARY_INTERVAL:           10 iterations
 DIMINISHING_RETURNS_WINDOW: 5 iterations < 0.5% each → warn user and suggest stopping
 STATE_DIR:                  .experiments/state/<run-id>/  (timestamped dir per run — see .claude/rules/artifact-lifecycle.md)
+CLAUDE_SKILL_DIR:           "${CLAUDE_SKILL_DIR:-plugins/research/skills/run}"  (resolved at Agent Resolution step)
 ```
 
 <!-- Note: STATE_DIR (.experiments/state/) holds per-iteration artifacts (diary, experiments.jsonl).
@@ -71,10 +72,11 @@ STATE_DIR:                  .experiments/state/<run-id>/  (timestamped dir per r
 _RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
 [ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
 # shared resolution block — canonical source: skills/_shared/agent-resolution.md
-CLAUDE_SKILL_DIR="${CLAUDE_SKILL_DIR:-plugins/research/skills/run}"
 ```
 
-Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:linting-expert`, `foundry:perf-optimizer`, `foundry:solution-architect`.
+Note: `CLAUDE_SKILL_DIR` is initialized in `<constants>` block.
+
+Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:linting-expert`, `foundry:perf-optimizer`, `foundry:solution-architect`, `research:scientist`.
 
 ## Default Mode (Steps R1–R7)
 
@@ -188,6 +190,14 @@ Run all checks before touching code. Fail fast with clear message:
 7. **`compute: docker` check**: run `docker ps` via Bash (`timeout: 5000`). If non-zero: print `⚠ Docker daemon not running. Start Docker Desktop and retry.` and **stop**.
 8. **Flag conflict**: if `--colab` and `--compute=docker` both active: print `⚠ --colab and --compute=docker are mutually exclusive. Use one or the other.` and **stop**.
 9. **`--journal` prerequisite**: verify `--researcher`/`--architect` also set. If neither: print `⚠ --journal requires --researcher or --architect — omit --journal or add a hypothesis pipeline flag.` and **stop**.
+
+**`--codex-delegation` warning** (non-blocking): check whether `.claude/skills/_shared/codex-delegation.md` exists. If not found:
+
+```bash
+[ -f ".claude/skills/_shared/codex-delegation.md" ] || echo "⚠ .claude/skills/_shared/codex-delegation.md not found. R7 Codex delegation will be skipped. Run /foundry:init to install it."
+```
+
+Set `CODEX_DELEGATION_AVAILABLE=true` if found, `false` otherwise. Continue regardless.
 
 **Initialize sandbox variables** (after all checks pass):
 
@@ -371,49 +381,7 @@ Return ONLY: {"files_modified":[...]}
 
 #### Phase 2c — Codex co-pilot (`--codex` only)
 
-> **Cost-bounded gate.** Run when `--codex` confirmed at R2 AND both gates pass:
->
-> 1. **Cost ceiling** — `CODEX_ITER < MAX_CODEX_RUNS` (default `MAX_CODEX_RUNS=10`; even with `MAX_ITERATIONS=20` Codex runs at most 10 times).
-> 2. **Diminishing returns** — last 2 Codex passes did NOT both produce no code changes. After 2 consecutive no-op Codex passes, skip Codex for remaining iterations and append note to `diary.md`: `"Codex skipped from iter N — 2 consecutive no-ops"`.
->
-> Initialize before R5 loop: `CODEX_ITER=0`, `CODEX_NOOP_STREAK=0`, `CODEX_DISABLED=false`.
-> After each Phase 2c: increment `CODEX_ITER`; on no-op outcome `((CODEX_NOOP_STREAK++))`, on changes `CODEX_NOOP_STREAK=0`. If `CODEX_NOOP_STREAK >= 2` set `CODEX_DISABLED=true`.
-
-If gate fails (`CODEX_DISABLED=true` or `CODEX_ITER >= MAX_CODEX_RUNS`): skip Phase 2c, continue to Phase 3.
-
-Otherwise print narration, update R5b before calling Agent:
-
-```text
-[→ Iter N/max · Phase 2c: Codex co-pilot — running (CODEX_ITER/MAX_CODEX_RUNS)]
-```
-
-TaskUpdate R5b subject: `R5b: Codex co-pilot — iter N/max_iterations running`, status: `in_progress`
-
-Codex runs second pass when active, building on Claude's kept change or fresh attempt after revert/no-op. Codex's commit is evaluated by Phase 7 against `best_metric` (same rule as any other iteration); "delta ≥ 0.1%" means delta against `best_metric`, not against the previous Claude iteration. Codex wins only if delta ≥ 0.1% AND guard passes.
-
-- Claude Phase 2 **kept**: Codex second pass on current state — building on Claude's work.
-- Claude Phase 2 **reverted/no-op**: working tree restored; Codex fresh attempt on clean tree.
-
-Run Codex ideation:
-
-```text
-Agent(
-  subagent_type="codex:codex-rescue",
-  prompt="Goal: <goal>. Run clarification: <clarification_prompt>  ← omit this clause entirely if clarification_prompt is null. Current metric: <metric_key>=<current_value> (baseline: <baseline>, direction: <higher|lower>). Scope files: <scope_files>. Read context from .experiments/state/<run-id>/context-<i>.md. Starting state: Claude's change was [kept|reverted|no-op]. [If kept: try to improve further from the current state. If reverted/no-op: propose a fresh approach.] Propose and implement ONE atomic optimization change most likely to improve the metric without breaking <guard_cmd>. Write your full reasoning to .experiments/state/<run-id>/codex-ideation-<i>.md."
-)
-```
-
-- Claude **kept** + Codex proposes changes: proceed Phases 3–7 (commit, verify, guard, decide). Codex wins only if delta ≥ 0.1% AND guard passes.
-- Claude **kept** + Codex no-op: append `codex-no-op` record, continue — Claude's result stands.
-- Claude **reverted/no-op** + Codex proposes: proceed Phases 3–7.
-- Claude **reverted/no-op** + Codex no changes: append `status: codex-no-op` (`ideation_source: "codex"`), continue.
-- Set `"ideation_source": "codex"` in Phase 8 JSONL record for any Codex-proposed change.
-
-After Codex completes (any outcome):
-
-TaskUpdate R5b subject: `R5b: Codex co-pilot — iter N done (<outcome>)`
-
-**Stuck escalation with `--codex`**: when Phase 9 detects `STUCK_THRESHOLD` discards and `--codex` active, increase Codex effort — add to Codex prompt: "Previous N attempts were all reverted. Focus on a fundamentally different approach (different file, different algorithm, different abstraction)."
+Read `${CLAUDE_SKILL_DIR}/modes/codex-copilot.md` — contains full Phase 2c logic, cost-bounded gate, Codex dispatch prompt, outcome handling, and stuck escalation.
 
 #### Phase 3 — Verify files changed
 
@@ -546,6 +514,8 @@ TaskUpdate R5 subject: `R5: Iter N/max — last: <status>, best: <best_metric>`
 - **Early stop**: if `target` set, stop when metric crosses it. Mark `state.json` `status: goal-achieved`.
 - **Context compaction** (every SUMMARY_INTERVAL): write full iteration summary to `.experiments/state/<run-id>/progress-<i>.md`, discard verbose per-iteration details from working memory. Retain only: current metric, iteration count, JSONL path, `best_commit`. Full history recoverable from `experiments.jsonl` and `ideation-<i>.md`.
 
+**After campaign loop completes** (outside per-iteration loop):
+
 ```bash
 rm -f /tmp/claude-commit-authorized  # timeout: 3000
 ```
@@ -554,14 +524,16 @@ rm -f /tmp/claude-commit-authorized  # timeout: 3000
 
 Pre-compute branch before writing: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')`
 
-Write full report to `.temp/output-optimize-run-$BRANCH-$(date +%Y-%m-%d).md` via Write tool. Do not print to terminal.
+Write full report to `.temp/output-optimize-run-$BRANCH-$(date +%Y-%m-%d).md` via Write tool. Do not print to terminal. Anti-overwrite: if file exists, append counter suffix (e.g. `-2.md`): `OUT=".temp/output-optimize-run-$BRANCH-$(date +%Y-%m-%d).md"; if [ -f "$OUT" ]; then OUT="${OUT%.md}-2.md"; fi`
 
 Read `${CLAUDE_SKILL_DIR}/modes/report.md`
 `state.json`: `status = completed`.
 
 ### Step R7: Codex delegation (optional)
 
-Inspect applied changes (`git diff <baseline_commit>...<best_commit> --stat`), identify tasks Codex can complete (comments on non-obvious changes, docstrings for modified functions, test coverage). Read `.claude/skills/_shared/codex-delegation.md` and apply criteria. **Prerequisite**: this file is installed by `foundry:init` from `plugins/foundry/skills/_shared/codex-delegation.md` — if not found, stop and warn: `⚠ .claude/skills/_shared/codex-delegation.md not found. Run /foundry:init to install it, then retry R7.`
+Skip R7 if `CODEX_DELEGATION_AVAILABLE=false` (warning already printed at R2 — no further action needed).
+
+Inspect applied changes (`git diff <baseline_commit>...<best_commit> --stat`), identify tasks Codex can complete (comments on non-obvious changes, docstrings for modified functions, test coverage). Read `.claude/skills/_shared/codex-delegation.md` and apply criteria.
 
 Call `AskUserQuestion` tool after R7 output — do NOT write options as plain text. Map options into tool call:
 - question: "What next?"

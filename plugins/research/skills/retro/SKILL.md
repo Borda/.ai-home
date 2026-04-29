@@ -19,9 +19,13 @@ NOT for: running experiments (use `/research:run`); designing experiments (use `
 
 ## Agent Resolution
 
-> **Foundry plugin check**: run `Glob(pattern="foundry*", path="$HOME/.claude/plugins/cache/")` returning results = installed. If check fails, proceed as if foundry available — common case; only fall back if agent dispatch explicitly fails.
+```bash
+# Locate research plugin shared dir — installed first, local workspace fallback
+_RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
+[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
+```
 
-`research:scientist` in same plugin as this skill — no fallback needed if research plugin installed.
+Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. `research:scientist` is in the same plugin — no fallback needed if research plugin installed.
 
 ## Retro Mode (Steps T1–T7)
 
@@ -63,7 +67,7 @@ mkdir -p "$RUN_DIR/scripts"
 
 ### Step T2: Statistical significance analysis
 
-Write analysis script to `$RUN_DIR/scripts/analyze.py` via Write tool, then execute in two separate Bash calls (cd first if needed). Never inline Python.
+Write analysis script to `$RUN_DIR/scripts/analyze.py` via Write tool, then execute in two separate Bash calls. Never inline Python.
 
 **Script requirements**:
 
@@ -270,7 +274,7 @@ Hypotheses:    <N> next steps generated
 -> saved to .temp/output-retro-<branch>-<date>.md
 ---
 Next: /research:run <program.md> --hypothesis <RUN_DIR>/hypotheses.jsonl
-     /research:fortify <commit>    ← stress-test top hypothesis before full re-run
+     /research:fortify <run-id>    ← stress-test top hypothesis before full re-run
 ```
 
 Call `AskUserQuestion` tool after summary — do NOT write options as plain text:

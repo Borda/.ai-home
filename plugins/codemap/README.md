@@ -11,6 +11,7 @@ You do not use codemap by querying it directly. You use it by wiring it in and l
 ______________________________________________________________________
 
 <details>
+
 <summary><strong>📋 Contents</strong></summary>
 
 - [What is codemap?](#what-is-codemap)
@@ -78,6 +79,7 @@ ______________________________________________________________________
 ## 📦 Install
 
 <details>
+
 <summary><strong>Prerequisites</strong></summary>
 
 - Claude Code installed and working
@@ -109,6 +111,7 @@ CODEMAP_TOOLS=$(ls -d "$HOME/.claude/plugins/cache/borda-ai-rig/codemap"/*/bin 2
 Reload your shell (`source ~/.zshrc`) and `scan-query` is available everywhere. This snippet always picks up the latest installed version automatically — no version pins to maintain.
 
 <details>
+
 <summary><strong>Upgrade</strong></summary>
 
 ```bash
@@ -121,6 +124,7 @@ After upgrading, re-run `/codemap:integration init` to re-apply injection blocks
 </details>
 
 <details>
+
 <summary><strong>Uninstall</strong></summary>
 
 ```bash
@@ -294,6 +298,7 @@ ______________________________________________________________________
 <a id="query"></a>
 
 <details>
+
 <summary>
 
 ### query — full subcommand reference
@@ -507,6 +512,7 @@ command -v scan-query
 ```
 
 <details>
+
 <summary>
 
 Degraded modules in the scan report

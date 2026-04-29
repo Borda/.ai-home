@@ -53,12 +53,14 @@ Usage: /research:sweep "goal description" [--flags]
 
 ### Step S2: Non-interactive plan
 
-Run plan mode steps P-P2 and P-P3 from `plugins/research/skills/plan/SKILL.md` (P-P0 skipped — `<goal>` always text string; P-P1 skipped — goal provided explicitly) with overrides:
+Locate plan skill: `_RESEARCH_SKILLS=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills 2>/dev/null | head -1); [ -z "$_RESEARCH_SKILLS" ] && _RESEARCH_SKILLS="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/skills"`.
+
+Run plan mode steps P-P2 and P-P3 from `$_RESEARCH_SKILLS/plan/SKILL.md` (P-P0 skipped — `<goal>` always text string; P-P1 skipped — goal provided explicitly) with overrides:
 
 - **P-P2 (config presentation)**: Accept all auto-detected defaults without prompting. Print proposed config as informational block prefixed `sweep: auto-config →` — do NOT wait for confirmation.
 - If `--colab[=HW]` or `--compute=colab` passed, write `compute: colab` (and `colab_hw: <HW>` if provided) into Config block.
 - **P-P3 (write program.md)**: Write to `<--out path>` if provided; else `program.md` at project root.
-  - If output path exists: rename to `<path>.<UTC-ISO>.bak` (e.g., `program.md.2026-04-26T14-00-00Z.bak`), proceed — no confirmation in sweep mode. Timestamped suffix prevents overwrite on successive runs.
+  - If output path exists: rename to `<path>.<UTC-ISO-safe (dashes)>.bak` (e.g., `program.md.2026-04-26T14-00-00Z.bak`), proceed — no confirmation in sweep mode. Timestamped suffix prevents overwrite on successive runs.
 
 Print on completion:
 
@@ -86,6 +88,7 @@ Repeat up to `MAX_REFINE` times:
 5. **If `NEEDS-REVISION`**:
 
    - If `REFINE_ITER < MAX_REFINE`:
+     - Run judge mode (J1–J6 from `$_RESEARCH_SKILLS/judge/SKILL.md`) against program file.
      - Read `JUDGE_REPORT`. Extract `### Required Changes` section.
      - Apply each fix to program file via Edit tool. Count as `N_FIXES`.
      - Print: `sweep: applied N_FIXES fix(es) to <program path> — re-judging`
@@ -113,7 +116,7 @@ Fix the issues above in <program path>, then:
 
 ### Step S5: Run
 
-Run Default Mode (R1–R7 from `plugins/research/skills/run/SKILL.md`) against program file from S2, passing all flags:
+Run Default Mode (R1–R7 from `$_RESEARCH_SKILLS/run/SKILL.md`) against program file from S2, passing all flags:
 
 - `--colab[=HW]` / `--compute`
 - `--team`
@@ -134,7 +137,7 @@ sweep: complete — plan → judge → run pipeline finished
 
 <notes>
 
-- **`.bak` backup behavior** (S2): when output path exists, sweep renames it to `<path>.<UTC-ISO>.bak` before overwriting. Timestamped suffix prevents collision on successive runs. The `.bak` file is the undo path for S3 judge+refinement edits.
+- **`.bak` backup behavior** (S2): when output path exists, sweep renames it to `<path>.<UTC-ISO-safe (dashes)>.bak` before overwriting. Timestamped suffix prevents collision on successive runs. The `.bak` file is the undo path for S3 judge+refinement edits.
 - **`--journal` and `--hypothesis` not available in sweep**: these flags require interactive setup and per-run state that sweep's non-interactive pipeline cannot provide. Use `/research:run` directly when you need them.
 - **`--team` and interactivity**: sweep is non-interactive except when `--team` is active. Team mode Phase B presents a user confirmation gate (hypothesis selection) before Phase C — sweep pauses and waits. This is expected behavior; sweep cannot bypass the Phase B gate.
 - **`--skip-validation`**: passes through to judge step (S3). Useful for cross-machine workflows where metric/guard commands can only run on the target machine.

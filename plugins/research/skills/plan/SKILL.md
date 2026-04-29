@@ -49,9 +49,10 @@ Parse `<input>` from arguments. Determine: **file path** or **goal string**:
 Run baseline profiling:
 
 ```bash
-python3 -m cProfile -s cumtime "$ARGUMENTS" 2>&1 | head -40  # timeout: 60000
-PROFILE_EXIT=${PIPESTATUS[0]}
+python3 -m cProfile -s cumtime "$ARGUMENTS" > /tmp/cprofile-out.txt 2>&1  # timeout: 60000
+PROFILE_EXIT=$?
 [ $PROFILE_EXIT -ne 0 ] && echo "cProfile failed (exit $PROFILE_EXIT)" && exit 1
+head -40 /tmp/cprofile-out.txt  # timeout: 5000
 time python3 "$ARGUMENTS"  # timeout: 60000
 ```
 
@@ -81,15 +82,13 @@ Set as `<goal>`, proceed to P-P1.
 
 ### Step P-P1: Parse and scan
 
-**Scope guard (first action)**: Before scanning, check `<goal>` is optimization goal. Input clearly not optimization goal (code question, regex/algo explanation, debug question, or any prompt without measurable improvement target) → print:
+**Scope guard (first action)**: Before scanning, check `<goal>` is optimization goal. Input clearly not optimization goal (code question, regex/algo explanation, debug question, or any prompt without measurable improvement target) → invoke `AskUserQuestion`:
 
-```text
-Warning: This input does not look like an optimization goal.
-/research:plan expects: "Reduce X" / "Increase Y" / "Improve Z metric".
-Use /research for explanatory questions.
-```
+- question: "This input does not look like an optimization goal (`/research:plan` expects 'Reduce X' / 'Increase Y' / 'Improve Z metric'). How to proceed?"
+- (a) label: `rephrase as optimization goal` — description: provide a revised goal with a measurable improvement target
+- (b) label: `abort` — description: stop; use `/research` for explanatory questions
 
-Stop. Do not proceed to P-P2 or P-P3.
+Stop if user selects (b). Do not proceed to P-P2 or P-P3 without a valid optimization goal.
 
 Parse `<goal>`. Scan codebase to detect:
 
@@ -125,6 +124,16 @@ After user confirms, run expert agent review before writing `program.md`. Dispat
 PLAN_RUN_DIR=".experiments/plan-$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # timeout: 5000
 mkdir -p "$PLAN_RUN_DIR"  # timeout: 5000
 ```
+
+**Health monitoring** (CLAUDE.md §8) — create checkpoint before spawning agents:
+
+```bash
+LAUNCH_AT=$(date +%s)
+CHECKPOINT="/tmp/plan-check-$LAUNCH_AT"
+touch "$CHECKPOINT"  # timeout: 3000
+```
+
+Poll every 5 min: `find $PLAN_RUN_DIR -newer "$CHECKPOINT" -type f | wc -l` — new files = alive; zero = stalled. Hard cutoff: 15 min. One extension (+5 min) if partial output visible. On timeout: surface partial results with ⏱, continue to P-P3 with available advisor output.
 
 **Always** — spawn architect to validate scope coverage:
 
@@ -199,11 +208,11 @@ sandbox_network: none | bridge
 Print:
 
 ```text
-✓ Program saved to program.md
+✓ Program saved to <OUTPUT_PATH>
 
 Next steps:
-  /research:judge program.md   ← validate plan before running (recommended)
-  /research:run program.md     ← start iteration loop directly
+  /research:judge <OUTPUT_PATH>   ← validate plan before running (recommended)
+  /research:run <OUTPUT_PATH>     ← start iteration loop directly
 ```
 
 ### Step P-P4: --team flag
@@ -217,7 +226,7 @@ Next steps:
 4. Resolve run-modes dir, read team protocol — include a one-line summary in Team Mode Notes:
 
    ```bash
-   _RESEARCH_RUN_MODES=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/run/modes 2>/dev/null | sort -V | tail -1)
+   _RESEARCH_RUN_MODES=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/run/modes 2>/dev/null | head -1)
    [ -d "$_RESEARCH_RUN_MODES" ] || _RESEARCH_RUN_MODES="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/skills/run/modes"
    [ -f "$_RESEARCH_RUN_MODES/team.md" ] || { echo "⚠ team.md not found at $_RESEARCH_RUN_MODES"; }
    ```

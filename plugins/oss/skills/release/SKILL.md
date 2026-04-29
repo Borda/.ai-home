@@ -11,6 +11,8 @@ effort: high
 
 Prepare release communication from what changed. Output adapts to audience — user-facing notes, CHANGELOG entry, internal summary, or migration guide.
 
+NOT for ecosystem impact analysis without a release (use oss:analyse). NOT for contributor communication or post-release announcements (use oss:shepherd).
+
 </objective>
 
 <inputs>
@@ -95,13 +97,28 @@ SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/release" -type d 2>/dev/
 ## Step 1: Gather changes
 
 ```bash
-# Use $RANGE from Mode Detection, or fall back to last-tag..HEAD
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
-RANGE="${RANGE:-$LAST_TAG..HEAD}"
+# Branch-aware range: if last tag is on current branch's direct lineage → plain git log.
+# Stable/bug-fix branches carry cherry-picks from another branch; need common-ancestor base.
+BRANCH_TAG=$(git describe --tags --abbrev=0 --first-parent 2>/dev/null)
+if [ -n "$BRANCH_TAG" ]; then
+    # Last tag is on this branch's direct lineage — standard range
+    LAST_TAG="$BRANCH_TAG"
+    RANGE="${RANGE:-$LAST_TAG..HEAD}"
+    git describe --tags --abbrev=0 2>/dev/null || echo "⚠ No release tags — full history from initial commit."
+else
+    # No first-parent tag → stable/bug-fix branch; commits likely cherry-picked from another branch
+    SOURCE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+    SOURCE_COMMIT=$(git rev-list -n1 "refs/tags/$SOURCE_TAG" 2>/dev/null || echo "$SOURCE_TAG")
+    COMMON_COMMIT=$(git merge-base HEAD "$SOURCE_COMMIT" 2>/dev/null)
+    # Nearest release tag at the branch point; fall back to commit SHA
+    LAST_TAG=$(git describe --tags --abbrev=0 "$COMMON_COMMIT" 2>/dev/null || echo "$COMMON_COMMIT")
+    RANGE="${RANGE:-$LAST_TAG..HEAD}"
+    # Collect source subjects for cherry-pick annotation in Step 2 classification
+    CHERRY_PICK_SUBJECTS=$(git log "$LAST_TAG..$SOURCE_TAG" --no-merges --format="%s" 2>/dev/null)
+    SOURCE_TAG_REF="$SOURCE_TAG"
+    echo "ℹ Stable-branch mode: base=$LAST_TAG  source=$SOURCE_TAG"
+fi
 [ -z "$RANGE" ] && echo "Error: could not determine commit range" && exit 1
-
-# No-tags guard: warn when no real release tags exist (LAST_TAG = initial commit)
-git describe --tags --abbrev=0 2>/dev/null || echo "⚠ No release tags found — analyzing full history from initial commit. Consider tagging your first release."
 
 # One-liner overview (navigation index)
 git log $RANGE --oneline --no-merges # timeout: 3000
@@ -111,7 +128,7 @@ git log $RANGE --oneline --no-merges # timeout: 3000
 git log $RANGE --no-merges --format="--- %H%n%B" # timeout: 3000
 
 # File-level diff stat — confirms what areas actually changed
-git diff --stat $(echo "$RANGE" | sed 's/\.\./\ /') # timeout: 3000
+git diff --stat "$(echo "$RANGE" | sed 's/\.\./\ /')" # timeout: 3000
 
 # PR titles, bodies, and labels for merged PRs (richer context than commits)
 TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | { read -r _ _ val; echo "${val:-main}"; })
@@ -131,7 +148,7 @@ Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes 
 | **New Features** | 🚀 Added | User-visible additions |
 | **Breaking Changes** | ⚠️ Breaking Changes | Existing code **stops working immediately** after upgrade — API removed, signature changed incompatibly, behavior changed with no fallback. Must be 100% certain it no longer works. |
 | **Improvements** | 🚀 Added or 🌱 Changed | Enhancements to existing behavior |
-| **Performance** | 🚀 Added or 🔧 Fixed | Speed or memory improvements |
+| **Performance** | 🚀 Added or 🔧 Fixed or 🌱 Changed | Speed or memory improvements. Use 🔧 Fixed if it corrects a regression, use 🚀 Added if it's a new optimization feature, use 🌱 Changed if it's a refactor for efficiency. |
 | **Deprecations** | 🗑️ Deprecated | Old API **still works** this release but is scheduled for removal — emits a warning, replacement exists |
 | **Removals** | ❌ Removed | Previously deprecated API now gone (this is what becomes a Breaking Change in the next cycle) |
 | **Bug Fixes** | 🔧 Fixed | Correctness fixes |
@@ -140,6 +157,8 @@ Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes 
 **Breaking vs Deprecated**: old call still works (even with warning) → Deprecated, never Breaking. Breaking = upgrade causes immediate failures, no compat period.
 
 Filter out: merge commits, minor dep bumps, CI/tooling config, comment typos, internal refactors, code cleanup, internal-only dep bumps, developer housekeeping, no-user-impact changes. **Never include internal staff names or internal maintenance details in public-facing output.** Always include: breaking changes, behavior changes, new API surface.
+
+**Cherry-pick annotation (stable-branch mode)**: when `$CHERRY_PICK_SUBJECTS` is set (populated in Step 1 for stable/bug-fix branches), check each commit's subject against it. Match → commit is a backport from `$SOURCE_TAG_REF`; append "(backported from $SOURCE_TAG_REF)" to the classification entry. No match → fix is original to this stable branch; no annotation needed.
 
 ## Step 3: Explore interesting changes
 
@@ -161,7 +180,7 @@ Pre-flight — verify all templates present before proceeding:
 ```bash
 # $SKILL_DIR resolved in Shared setup block above
 [ -z "$SKILL_DIR" ] && echo "Error: could not locate release skill directory" && exit 1
-for tmpl in PUBLIC-NOTES.tmpl.md CHANGELOG.tmpl.md SUMMARY.tmpl.md MIGRATION.tmpl.md; do # timeout: 5000
+for tmpl in PUBLIC-NOTES.tmpl.md CHANGELOG.tmpl.md SUMMARY.tmpl.md MIGRATION.tmpl.md audit-checks.md; do # timeout: 5000
     [ -f "$SKILL_DIR/templates/$tmpl" ] || {
         echo "Missing template: $tmpl — aborting"
         exit 1
@@ -201,6 +220,8 @@ Read migration guide template from $SKILL_DIR/templates/MIGRATION.tmpl.md and us
 
 ## Step 5: Writing guidelines
 
+[ -f "$SKILL_DIR/guidelines/writing-rules.md" ] && read "$SKILL_DIR/guidelines/writing-rules.md" || echo "⚠ writing-rules.md not found — proceeding without style guidelines"
+
 Read writing guidelines from $SKILL_DIR/guidelines/writing-rules.md and follow them.
 
 After polishing, for `notes` base output and `--migration` flag output, dispatch shepherd for public-facing voice/tone review before writing to disk:
@@ -210,9 +231,8 @@ After polishing, for `notes` base output and `--migration` flag output, dispatch
 SHEPHERD_DIR=".temp/release-shepherd-$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')-$(date +%Y-%m-%d)"
 mkdir -p "$SHEPHERD_DIR"
 # Write the generated draft content to: $SHEPHERD_DIR/draft.md before dispatching
+# IMPORTANT: expand $SHEPHERD_DIR to its literal computed value before inserting into the spawn prompt — do not pass the variable name literally.
 ```
-
-IMPORTANT: expand `$SHEPHERD_DIR` to its literal computed value before inserting into the spawn prompt — do not pass the variable name literally.
 
 ```text
 Agent(subagent_type="oss:shepherd", prompt="Review the draft release content at <$SHEPHERD_DIR/draft.md> for public-facing voice and tone. Apply shepherd voice guidelines: human and direct, no internal jargon, no staff names, no internal maintenance details. Write the revised content to <$SHEPHERD_DIR/shepherd-revised.md>. Return ONLY: {\"status\":\"done\",\"changes\":N,\"file\":\"<$SHEPHERD_DIR/shepherd-revised.md>\"}")
@@ -248,7 +268,7 @@ End response with `## Confidence` block per CLAUDE.md output standards.
 VERSION="${REST%% *}"
 [[ "$VERSION" != v* ]] && VERSION="v$VERSION"
 DATE=$(date +%Y-%m-%d)
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+# Use same range detection as Step 1 — run the branch-aware detection block from Step 1 here.
 RANGE="$LAST_TAG..HEAD"
 # $SKILL_DIR resolved in Shared setup block above
 ```
@@ -330,7 +350,7 @@ Write each artifact in sequence:
 
 ```bash
 # $SKILL_DIR resolved in Shared setup block above
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+# Use same range detection as Step 1 — run the branch-aware detection block from Step 1 here.
 RANGE="${LAST_TAG}..HEAD"
 ```
 
@@ -373,6 +393,12 @@ Then end response with `## Confidence` block per CLAUDE.md output standards.
   - Readiness check → `/release prepare <version>` runs built-in audit first; use standalone `/release audit [version]` only for readiness check without cutting release
   - Release includes breaking changes → `/oss:analyse` for downstream ecosystem impact
   - Notes/changelog written → see Step 5 for release-create gate (`gh release create` must be user-run via project tooling)
-  - `migration` content written → add to project docs and link from CHANGELOG entry
+  - `migration` content written → add to project docs and link from CHANGELOG entry (see inputs table for mode/flag summary)
 
 </notes>
+
+<calibration>
+
+Calibratable modes: notes (classification accuracy), prepare (pipeline completeness), audit (verdict accuracy: READY/NEEDS_ATTENTION/BLOCKED).
+
+</calibration>

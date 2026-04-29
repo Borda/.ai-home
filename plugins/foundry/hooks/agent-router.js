@@ -14,6 +14,7 @@
 //
 //   B. Anthropic LLM pick (ANTHROPIC_API_KEY set — always available in Claude Code):
 //      PreToolUse:   pass agent list + query to claude-haiku → pick best name or "none"
+//      5-second timeout via Promise.race; falls through to tier 3 on timeout
 //      No SessionStart work needed for this path
 //
 // HOW IT WORKS
@@ -364,7 +365,10 @@ process.stdin.on("end", async () => {
 
     if (target === "general-purpose" && anthropicKey && index.local_agents.length > 0) {
       try {
-        const picked = await askLlm(index.local_agents, queryText, anthropicKey);
+        const picked = await Promise.race([
+          askLlm(index.local_agents, queryText, anthropicKey),
+          new Promise((resolve) => setTimeout(() => resolve("none"), 5000)),
+        ]);
         if (picked && picked !== "none" && index.local_agents.some((a) => a.name === picked)) {
           target = picked;
           routingNote = `[Router: '${subagentType}' → '${target}' (llm)]`;

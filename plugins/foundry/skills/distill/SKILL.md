@@ -11,6 +11,8 @@ effort: high
 
 Analyze how Claude Code is used and surface concrete improvements — new agents/skills to reduce repetition, or consolidate lessons into governance files (rules, agent instructions, skill updates) — without duplicating what exists.
 
+NOT for: single-file agent/skill edits (use /foundry:manage); quality-checking files (use /foundry:audit).
+
 </objective>
 
 <inputs>
@@ -26,7 +28,9 @@ Analyze how Claude Code is used and surface concrete improvements — new agents
 </inputs>
 
 <constants>
-MEMORY_DIR=".claude/agent-memory"
+
+MEMORY_DIR — resolved at runtime via: `$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|[/.]|-|g')/memory`
+
 </constants>
 
 <workflow>
@@ -37,7 +41,7 @@ Use the Glob tool to enumerate agents and skills across all sources — project-
 
 - **Project-local**: pattern `agents/*.md`, path `.claude/`; pattern `skills/*/SKILL.md`, path `.claude/`
 - **Plugin source** (workspace): pattern `*/agents/*.md`, path `plugins/`; pattern `*/skills/*/SKILL.md`, path `plugins/`
-- **Installed plugin cache** (if accessible): pattern `*/agents/*.md`, path `~/.claude/plugins/cache/borda-ai-rig/`; pattern `*/skills/*/SKILL.md`, path `~/.claude/plugins/cache/borda-ai-rig/`
+- **Installed plugin cache** (if accessible): resolve cache root dynamically — `PLUGIN_CACHE=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/ 2>/dev/null | head -1)` — then scan `$PLUGIN_CACHE` for pattern `*/agents/*.md` and `*/skills/*/SKILL.md`
 
 For each agent/skill found, extract: name, description, tools, purpose. Tag each entry with its plugin namespace (e.g. `foundry:sw-engineer`, `oss:resolve`) — used in Step 3 gap analysis to prevent recommending duplicates of plugin-namespaced agents/skills.
 
@@ -157,7 +161,7 @@ Locate, evaluate, and trim the project memory file.
 ```bash
 # timeout: 3000
 PROJECT="$(git rev-parse --show-toplevel)"
-MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')/memory/MEMORY.md"
+MEMORY_FILE="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|[/.]|-|g')/memory/MEMORY.md"
 echo "Memory file located."
 ```
 
@@ -209,7 +213,12 @@ Read accumulated lessons and feedback, then identify patterns that should be pro
 
 Find and read all source material in parallel:
 
-Use Read tool on `.notes/lessons.md` (skip if file not found). Derive MEMORY_DIR via canonical snippet from `<constants>`, then use Glob tool with pattern `feedback_*.md` in MEMORY_DIR to list feedback files; read each with Read tool. Also read `.claude/rules/` (Glob `rules/*.md`, path `.claude/`) to understand what's already captured as a rule.
+Use Read tool on `.notes/lessons.md` (skip if file not found). Derive MEMORY_DIR via canonical snippet:
+```bash
+PROJECT="$(git rev-parse --show-toplevel)"  # timeout: 3000
+MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT" | sed 's|[/.]|-|g')/memory"
+```
+Then use Glob tool with pattern `feedback_*.md` in `$MEMORY_DIR` to list feedback files; read each with Read tool. Also read `.claude/rules/` (Glob `rules/*.md`, path `.claude/`) to understand what's already captured as a rule.
 
 **Step L2: Cluster and classify**
 
@@ -471,7 +480,7 @@ Print changed files. Run `git diff HEAD -- <files>` and show output. Surface unr
   - Security findings appearing in reviews for non-auth code → suggests qa-specialist teammate scope is too broad; narrow it
   - Model tier mismatches (e.g., heavy analysis assigned to `sonnet` teammates) → flag for tier adjustment
 
-- **`external` mode calibration**: two concrete GT fixture cases defined in `calibrate/modes/skills.md`:
+- **`external` mode calibration**: two concrete GT fixture cases defined in the calibrate skills mode file — find it via `ls ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/calibrate/modes/skills.md 2>/dev/null | sort -V | tail -1` with fallback to `plugins/foundry/skills/calibrate/modes/skills.md`:
   - **caveman plugin** — narrow, self-contained communication mode, no local structural overlap → GT: install-as-is recommended, Group A empty or thin
   - **Karpathy autoresearch** — research automation tool, strong overlap with `research:` plugin structure → GT: Group A candidates map to research plugin, digest recommended, install-as-is not triggered
   - Ground truth = static snapshot of each tool's agent/skill/rule files (no live fetch needed); score adoption-table lane assignments against GT outcomes

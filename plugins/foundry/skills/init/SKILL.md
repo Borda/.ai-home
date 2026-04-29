@@ -190,6 +190,7 @@ mkdir -p ~/.claude/rules  # timeout: 5000
 
 ```bash
 LINK_CONFLICTS=()
+# timeout: 30000
 for src in "$PLUGIN_ROOT/rules/"*.md; do
     dest="$HOME/.claude/rules/$(basename "$src")"
     if [ -L "$dest" ]; then
@@ -198,7 +199,7 @@ for src in "$PLUGIN_ROOT/rules/"*.md; do
     elif [ -f "$dest" ]; then
         LINK_CONFLICTS+=("rules/$(basename "$src")  (real file)")
     fi
-done  # timeout: 5000
+done
 src="$PLUGIN_ROOT/TEAM_PROTOCOL.md"; dest="$HOME/.claude/TEAM_PROTOCOL.md"
 if [ -L "$dest" ]; then
     target=$(readlink "$dest")
@@ -210,7 +211,7 @@ fi  # timeout: 5000
 
 If conflicts exist:
 
-If `APPROVE_ALL=true`: print `[--approve] auto-accepting: replace all symlink conflicts` and replace all (apply option a below).
+If `APPROVE_ALL=true`: print `[--approve] auto-accepting: replace all symlink conflicts` and replace all (apply option a below). # --approve mode: auto-accept all conflicts; AskUserQuestion skipped
 
 Otherwise, use `AskUserQuestion`:
 

@@ -12,6 +12,8 @@ context: fork
 
 Track open-loop ideas, deferred questions, diverging threads — without losing to context compaction or session end. Three on-demand commands (`resume`, `archive`, `summary`) plus behavioral parking rule that writes `session-open-*.md` memory files as items arise.
 
+NOT for: general persistent notes or diary entries (use .notes/ directly); managing task lists (use TaskCreate/TaskUpdate tools).
+
 </objective>
 
 <inputs>
@@ -25,11 +27,11 @@ Track open-loop ideas, deferred questions, diverging threads — without losing 
 
 <constants>
 
-- Memory dir: `$HOME/.claude/projects/$(git rev-parse --show-toplevel | sed 's|[/.]|-|g' | sed 's/^-//')/memory/`
+- Memory dir: `$HOME/.claude/projects/$(git rev-parse --show-toplevel | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')/memory/`
 - Canonical MEMORY_DIR snippet (use in every bash block that needs the path):
   ```bash
   PROJECT="$(git rev-parse --show-toplevel)"
-  SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
+  SLUG="$(echo "$PROJECT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')"
   MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
   ```
 - File pattern: `session-open-*.md`
@@ -71,7 +73,7 @@ Derive MEMORY_DIR using canonical snippet from `<constants>`.
 ```bash
 # Use canonical MEMORY_DIR from <constants>
 PROJECT="$(git rev-parse --show-toplevel)"
-SLUG="$(echo "$PROJECT" | sed 's|[/.]|-|g' | sed 's|^-||')"
+SLUG="$(echo "$PROJECT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')"
 MEMORY_DIR="$HOME/.claude/projects/$SLUG/memory/"
 echo "$MEMORY_DIR"
 ```
@@ -158,11 +160,13 @@ Ensure log directory exists:
 mkdir -p .claude/logs # timeout: 5000
 ```
 
-Append one-line JSON entry using the Edit tool: read `.claude/logs/session-archive.jsonl` (or create with Write if absent), append a new line: `{"ts":"<ISO8601-UTC>","item":"<name>","action":"archived"}`
+Append one-line JSON entry: If the archive file does not exist: create it with Write tool. If it already exists: append using Edit tool — add new session entry at the end of the file. Entry format: `{"ts":"<ISO8601-UTC>","item":"<name>","action":"archived"}`
 
 ### Step 5: Confirm to user
 
 Print: `Archived: <item name>` — one line, terminal only.
+
+End with `## Confidence` block per quality-gates.md — score based on match quality (did fuzzy-match find the right item; was the archive entry written cleanly).
 
 ## Mode: summary (session digest)
 
@@ -230,6 +234,8 @@ fi
 
 Write to `$OUTPUT`, print compact terminal summary with `→ file`.
 
+End with `## Confidence` block per quality-gates.md — score based on summary completeness (all completed tasks captured, parked items current, git log resolved).
+
 </workflow>
 
 <notes>
@@ -263,7 +269,7 @@ type: project
 
 Written to: `~/.claude/projects/<project-slug>/memory/session-open-<slug>-<YYYY-MM-DD>.md`
 
-Derive project slug via: `git rev-parse --show-toplevel | sed 's|[/.]|-|g' | sed 's/^-//'`
+Derive project slug via: `git rev-parse --show-toplevel | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//'`
 
 **Memory pollution guard**: before parking new item, count existing `session-open-*.md` files. If count ≥ 10, surface full list and ask user to archive some before writing new one.
 

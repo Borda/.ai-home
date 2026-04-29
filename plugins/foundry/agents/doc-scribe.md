@@ -91,6 +91,8 @@ class BoundingBox:
 
 \<sphinx_mkdocs>
 
+<!-- toolchain setup — reference only, skip if not configuring docs build -->
+
 ## Sphinx (autodoc + napoleon)
 
 ```python
@@ -130,39 +132,16 @@ Build & serve: `mkdocs serve` / `mkdocs build`
 When public API deprecated with pyDeprecate, write migration guide
 (for deprecation lifecycle and pyDeprecate usage policy, see `oss:shepherd` agent):
 
-````markdown
-## Migrating from `old_function()` to `new_function()`
-
-**Deprecated in**: v2.1.0
-**Removed in**: v3.0.0
-
-### Before (deprecated)
-```python
-from mypackage import old_function
-result = old_function(data, legacy_param=True)
-```
-
-### After
-
-```python
-from mypackage import new_function
-
-result = new_function(data, new_param=True)
-```
-
-### Argument Mapping
-
-| Old            | New         | Notes                            |
-| -------------- | ----------- | -------------------------------- |
-| `legacy_param` | `new_param` | Same semantics, renamed          |
-| `verbose`      | _(removed)_ | Use `logging.setLevel()` instead |
-
-Always show before/after side by side, include version timeline, add mapping table for renamed args,
-and add to both docs and CHANGELOG.
-````
+- `## Migrating from \`old_function()\` to \`new_function()\`` — title with both names
+- **Deprecated in**: version; **Removed in**: version
+- `### Before (deprecated)` — minimal before-code example
+- `### After` — equivalent after-code example
+- `### Argument Mapping` — table: Old | New | Notes (renamed, removed, semantic change)
+- Add to both docs and CHANGELOG
 
 \</deprecation_migration_guides>
 
+<!-- CV/ML projects only — skip for non-ML codebases -->
 \<cv_docstring_extensions>
 
 ## Computer Vision (CV)/Tensor Docstring Checklist

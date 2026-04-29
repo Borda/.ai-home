@@ -11,8 +11,12 @@ effort: high
 
 Turn unformed idea into branching exploration tree, then distill into spec. Idea mode = pure divergence — grow tree of directions, deepen promising branches, prune others, save result. No premature convergence. Run `breakdown` on tree when ready: asks distillation questions, writes spec section-by-section.
 
+NOT for: implementation tasks with a known solution; code generation; single well-scoped feature requests.
+
 <HARD-GATE>
+
 Do NOT take any implementation action — writing code, creating files, scaffolding — until the user has approved a design (spec). This applies regardless of perceived simplicity. A simple idea can have a short tree and spec, but the process is never skipped.
+
 </HARD-GATE>
 
 </objective>
@@ -99,8 +103,7 @@ On write failure: log `> Viewer write failed: <reason>` inline and continue.
 
 Print launch note:
 
-> **Live tree viewer**: run `python3 -m http.server 8000` (if port 8000 is in use, substitute any free port) from project root, then open:
-> `http://localhost:8000/plugins/foundry/skills/brainstorm/scripts/tree-viewer.html?state=<sidecar-path>`
+> **Live tree viewer**: run the tree viewer script from the skill directory (path varies by installation — check `plugins/foundry/skills/brainstorm/scripts/` in the source tree or the installed plugin cache). Serve with `python3 -m http.server 8000` (substitute any free port if 8000 is in use) from project root, then open `http://localhost:<PORT>/<path-to-tree-viewer.html>?state=<sidecar-path>`.
 
 ## Step 2: Clarifying questions
 
@@ -289,7 +292,7 @@ BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')
 OUTPUT_PATH=".temp/output-brainstorm-review-$BRANCH-$(date +%Y-%m-%d).md"
 ```
 
-Spawn **foundry:curator** with tree-focused prompt. Substitute `$OUTPUT_PATH` value (pre-computed above) for `<output-path>` placeholder before passing the prompt — do NOT pass the literal `$OUTPUT_PATH` variable name in the prompt string:
+Spawn **foundry:curator** with tree-focused prompt. Substitute `$OUTPUT_PATH` value (pre-computed above) for `<output-path>` placeholder before passing the prompt — do NOT pass the literal `$OUTPUT_PATH` variable name in the prompt string. Also replace `<tree-file>` with the actual file path written in Step 4 (the tree output file path, e.g., `.plans/blueprint/<slug>.md`):
 
 ```markdown
 Read .plans/blueprint/<tree-file>. Audit for tree quality only (do NOT audit `.claude/` config files — scope is the brainstorm tree only):
@@ -322,9 +325,10 @@ Show tree file path and compact tree summary (same format as Step 3). Then call 
 
 ```bash
 # Initialize approval counter at Step 5 entry
+# Note: approval-cycle limit is prose-enforced (LLM context), not shell-enforced
 APPROVAL_CYCLES=${APPROVAL_CYCLES:-0}
 APPROVAL_CYCLES=$((APPROVAL_CYCLES + 1))
-[ "$APPROVAL_CYCLES" -gt 3 ] && { echo "⚠ 3 approval cycles reached with no convergence — surfacing unresolved concerns:"; exit 0; }
+[ "$APPROVAL_CYCLES" -gt 3 ] && echo "⚠ 3 approval cycles reached with no convergence — surfacing unresolved concerns:"
 ```
 
 On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles — counter tracked above.)

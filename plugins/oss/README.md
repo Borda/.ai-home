@@ -7,6 +7,7 @@ OSS workflow plugin for Python/ML open-source projects. Two specialist agents an
 ______________________________________________________________________
 
 <details>
+
 <summary><strong>📋 Contents</strong></summary>
 
 - [What is oss?](#what-is-oss)
@@ -83,6 +84,7 @@ All `oss` skills degrade gracefully when optional plugins are absent — you get
 > **Note:** Skills are always invoked with the `oss:` prefix: `/oss:analyse`, `/oss:review`, `/oss:resolve`, `/oss:release`.
 
 <details>
+
 <summary><strong>Upgrade</strong></summary>
 
 ```bash
@@ -93,6 +95,7 @@ claude plugin install oss@borda-ai-rig
 </details>
 
 <details>
+
 <summary><strong>Uninstall</strong></summary>
 
 ```bash
@@ -456,6 +459,7 @@ ______________________________________________________________________
 <a id="troubleshooting"></a>
 
 <details>
+
 <summary>
 
 ## 🔍 Troubleshooting

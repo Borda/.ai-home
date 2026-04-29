@@ -1,6 +1,6 @@
 ---
 name: resolve
-description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (1) PR intelligence — reads the full thread, linked issues, and PR body to synthesize contribution motivation and classify every comment into action items; (2) conflict resolution — checks out the PR branch (fork-aware via gh pr checkout), merges BASE into it, and resolves conflicts semantically using the contributor's intent as the priority lens; (3) implements each action item as a separate attributed commit via Codex, then pushes back to the contributor's fork. Supports three source modes: pr (live GitHub comments only), report (latest /review report findings as action items, no GitHub re-fetch), and pr + report (both sources aggregated and deduplicated in one pass). Also accepts bare comment text for single-comment dispatch."
+description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (1) PR intelligence — reads the full thread, linked issues, and PR body to synthesize contribution motivation and classify every comment into action items; (2) conflict resolution — checks out the PR branch (fork-aware via gh pr checkout), merges BASE into it, and resolves conflicts semantically using the contributor's intent as the priority lens; (3) implements each action item as a separate attributed commit via Codex, then pushes back to the contributor's fork. Supports three source modes: pr (live GitHub comments only), report (latest /review report findings as action items, no GitHub re-fetch), and pr + report (both sources aggregated and deduplicated in one pass). Also accepts bare comment text for single-comment dispatch. NOT for drafting contributor replies (use oss:analyse --reply). NOT for release preparation (use oss:release)."
 argument-hint: <PR number or URL> [report] | report | <review comment text>
 disable-model-invocation: true
 effort: high
@@ -31,10 +31,13 @@ Bare comment text → skip to Codex dispatch (Step 12).
   - `report` (bare word) → **report mode**: latest review findings as action items; no GitHub re-fetch
   - `42 report` or `<URL> report` → **pr + report mode**: aggregate live GitHub comments + review report, deduplicated in one pass
   - Bare review comment text → **comment dispatch mode** (jumps to Step 12)
+- **`--no-challenge`**: optional — skip Step 3d entirely; all pending items treated as `VALID` (no challenge run)
 
 </inputs>
 
 <workflow>
+
+<!-- Symbol legend: ⚠ = warning/skipped (non-blocking, proceed with caution) · ⛔ = blocked/stop (halt workflow, do not proceed) -->
 
 <!-- Agent Resolution: canonical table at plugins/oss/skills/_shared/agent-resolution.md -->
 
@@ -48,6 +51,8 @@ _OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>
 ```
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`.
+
+<!-- Inline fallback (if agent-resolution.md unreadable): foundry:sw-engineer → general-purpose, foundry:qa-specialist → general-purpose, foundry:linting-expert → general-purpose, foundry:challenger → general-purpose. -->
 
 **Task hygiene**: Before creating tasks, call `TaskList`. For each task:
 
@@ -117,6 +122,8 @@ fi
 If gh missing or not authenticated: stop (error printed above).
 
 Codex missing: set `CODEX_AVAILABLE=false`, continue — Steps 3–7 work without Codex; Step 8 skipped with notice: `⚠ codex not found — skipping action items. Install: /plugin marketplace add openai/codex-plugin-cc && /plugin install codex@openai-codex && /reload-plugins`
+
+**Degradation for simple items**: for simple, single-file action items, Claude can implement directly in-process without codex — use Step 8 in-process fallback: spawn `foundry:sw-engineer` directly without codex wrapper.
 
 ### Review-handoff auto-detect (when $ARGUMENTS is empty)
 
@@ -237,6 +244,22 @@ gh api repos/{owner}/{repo}/pulls/<PR_NUMBER>/reviews  # formal reviews (Approve
 gh api repos/{owner}/{repo}/pulls/<PR_NUMBER>/comments # inline code comments with file + line
 ```
 
+Fetch resolved thread status — REST API `/pulls/{PR}/comments` returns individual comment objects but does **not** expose `isResolved`; that field lives only on `PullRequestReviewThread` in GraphQL:
+
+```bash
+# Derive owner + name from current remote (same repo as BASE_REPO_OWNER but avoids re-parsing URL)
+REPO_OWNER=$(gh repo view --json owner --jq .owner.login 2>/dev/null || echo "$BASE_REPO_OWNER")  # timeout: 6000
+REPO_NAME=$(gh repo view --json name --jq .name 2>/dev/null)  # timeout: 6000
+RESOLVED_THREAD_IDS=$(gh api graphql \
+  -f query='query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved,comments(first:1){nodes{databaseId}}}}}}}' \
+  -f owner="$REPO_OWNER" \
+  -f repo="$REPO_NAME" \
+  -F pr="$PR_NUMBER" \
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved) | .comments.nodes[0].databaseId]' \
+  2>/dev/null || echo "[]")  # timeout: 15000
+# RESOLVED_THREAD_IDS: JSON array of databaseId integers for root comments of resolved threads
+```
+
 Non-empty `CLOSING_ISSUES` → fetch each linked issue:
 
 ```bash
@@ -255,14 +278,14 @@ Motivation = **priority lens for conflict resolution** in Step 7 — whose logic
 
 ### Classify action items
 
-Read every comment, review, inline code comment. Classify:
+Read every comment, review, inline code comment. For each inline code comment: if its `id` (REST response field `id`, same value as `databaseId` in GraphQL) appears in `RESOLVED_THREAD_IDS` → classify as `[done]` immediately without reading thread content. For all others, apply the table below:
 
 | Code | Meaning |
 | --- | --- |
 | `[gh][req]` | Change **required** before merge — requested by a reviewer with write access or the maintainer |
 | `[gh][suggest]` | Improvement suggested — nice-to-have, non-blocking |
 | `[gh][question]` | Open question that needs an answer before deciding what code to write |
-| `[done]` | A subsequent commit or reply already addressed this — skip |
+| `[done]` | Review thread marked resolved on GitHub (`isResolved=true`) OR subsequent commit/reply already addressed this — skip |
 | `[info]` | Praise, acknowledgement, emoji-only — skip |
 | `[self-review]` | Finding from the `/oss:review` report — not a GitHub commenter; author = agent name |
 
@@ -344,7 +367,18 @@ Report merged: <N> findings from /review · <M> deduplicated against GitHub comm
 
 ## Step 3d: Challenge action items
 
-Challenge each pending action item before creating tasks. Route by domain to best adversarial agent; default `foundry:challenger`.
+```bash
+# --no-challenge flag: skip this step entirely
+[[ "$ARGUMENTS" == *"--no-challenge"* ]] && {
+    echo "⚠ --no-challenge: skipping Step 3d — all pending items treated as VALID"
+    CHALLENGE_VERDICTS="[]"
+    # proceed directly to Step 3e; all items keep their type unchanged
+}
+```
+
+When `--no-challenge` is NOT set:
+
+Route each pending item by domain (default `foundry:challenger`); spawn one agent per group **in the background**:
 
 | Item domain | Challenger |
 | --- | --- |
@@ -353,24 +387,64 @@ Challenge each pending action item before creating tasks. Route by domain to bes
 | Test coverage, assertions, regressions | `foundry:qa-specialist` |
 | Default / unclassified | `foundry:challenger` |
 
-Group items by challenger. Spawn one agent per group in parallel:
+Write a per-group output file before spawning each agent:
+
+```bash
+CHALLENGE_DIR="/tmp/resolve-challenge-$$"
+mkdir -p "$CHALLENGE_DIR"  # timeout: 5000
+LAUNCH_AT=$(date +%s)
+NUM_GROUPS=0  # incremented once per spawned agent group below
+```
+
+Spawn each challenge group with `run_in_background=true`, instructing it to write compact JSON to `$CHALLENGE_DIR/<group>.json`; increment `NUM_GROUPS` after each spawn:
 
 ```text
-Agent(subagent_type="foundry:challenger", prompt="
+Agent(subagent_type="foundry:challenger", run_in_background=true, prompt="
 Challenge each review comment for PR #<N>.
 For each item: read referenced file at file:line if given; determine if comment is valid against actual code, or should be pushed back.
+Be concise — max 2 tool calls per item.
 
 Items:
 <id>: <summary> | file: <file:line or '—'> | @<author>: <full_comment_text>
 ...
 
-Return ONLY compact JSON:
+Write ONLY compact JSON to $CHALLENGE_DIR/challenger.json using the Write tool:
 {\"verdicts\": [{\"id\": <id>, \"verdict\": \"VALID\"|\"PUSH_BACK\", \"rationale\": \"<one sentence>\"}]}
+Then return the same JSON as your final message.
 ")
 ```
 
-Aggregate verdicts. Per item:
-- **VALID** → keep unchanged
+(Repeat pattern for `foundry:sw-engineer` → `$CHALLENGE_DIR/sw-engineer.json`, `foundry:qa-specialist` → `$CHALLENGE_DIR/qa-specialist.json`; do `((NUM_GROUPS++))` after each `Agent(...)` call.)
+
+**5-minute health monitor** — check every 90 s; hard cutoff at 300 s (5 min):
+
+```bash
+# Poll until all groups done or 5-min deadline reached
+while true; do
+    NOW=$(date +%s)
+    ELAPSED=$((NOW - LAUNCH_AT))
+    DONE=$(find "$CHALLENGE_DIR" -name "*.json" -newer "/tmp/resolve-challenge-$$" 2>/dev/null | wc -l | tr -d ' ')
+
+    [ "$DONE" -ge "$NUM_GROUPS" ] && break   # all groups returned
+    [ "$ELAPSED" -ge 300 ] && {
+        echo "⏱ Challenge timeout at ${ELAPSED}s — marking remaining items VALID"
+        break
+    }
+    sleep 90
+done  # timeout: 360000
+```
+
+Aggregate verdicts — read each `$CHALLENGE_DIR/*.json` that exists:
+
+- File present → use verdicts
+- File absent (agent timed out) → mark every item in that group as `VALID` with rationale `"challenge timed out — treated as VALID"`
+
+```bash
+rm -rf "$CHALLENGE_DIR"  # cleanup  # timeout: 5000
+```
+
+Per verdict:
+- **VALID** → keep item unchanged
 - **PUSH_BACK** → set type to `[challenged:pushback]`; store rationale; exclude from SELECTED_ITEMS
 
 Print challenge summary:
@@ -557,8 +631,6 @@ Report count + file list; `AskUserQuestion` with options:
 
 ## Step 6: Distill conflict context
 
-Run before touching any conflict markers.
-
 ### 6a: Source-branch intent
 
 Use Step 3b motivation as primary lens. Additionally:
@@ -582,8 +654,6 @@ git log origin/$BASE_REF --after="$SOURCE_LAST_TIME" --oneline # commits the con
 One-sentence summary: independent base changes after contributor's last commit — preserve unconditionally.
 
 ## Step 7: Resolve per conflicted file
-
-Delegate per-file conflict edits to `foundry:sw-engineer`. Build spawn prompt from all three context sources, check result before completing merge.
 
 ### 7a: Spawn sw-engineer
 
@@ -652,16 +722,13 @@ Mark all conflict tasks completed:
 for each (filepath, conflict_task_id) pair from Step 5a: TaskUpdate(task_id=\<conflict_task_id>, status="completed")
 ```
 
-## Step 7c: User item selection
-
-*Moved to **Step 3f** — runs before checkout (Step 4). `SELECTED_ITEMS` already set when Step 8 is reached.*
-
 ## Step 8: Implement action items
 
 Authorize commits for this workflow:
 
 ```bash
-touch /tmp/claude-commit-authorized  # timeout: 3000
+SENTINEL="/tmp/claude-commit-auth-$(git rev-parse --show-toplevel | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')-$(git branch --show-current | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')"
+touch "$SENTINEL"  # timeout: 3000
 ```
 
 If `CODEX_AVAILABLE=false`: mark all items `⚠ skipped — codex not installed`, skip to Step 9.
@@ -736,11 +803,11 @@ git stash list --quiet | grep -q "resolve-pre-item" && git stash pop  # timeout:
 ## Step 9: Lint and QA gate
 
 ```bash
-RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # IMPORTANT: expand $RUN_DIR to its literal value in each prompt string below — agents receive text, not shell context; un-expanded $RUN_DIR means literal string in instructions
 mkdir -p "$RUN_DIR" # timeout: 5000
 ```
 
-Spawn both in parallel. **Before spawning, expand `$RUN_DIR` to its resolved value in each prompt string** — agents receive text, not shell context; un-expanded `$RUN_DIR` means literal string in instructions:
+Spawn both in parallel:
 
 ```text
 Agent(subagent_type="foundry:linting-expert", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}.")
@@ -749,8 +816,6 @@ Agent(subagent_type="foundry:qa-specialist", maxTurns=15, prompt="Review all fil
 ```
 
 > **Health monitoring**: synchronous. No response ~15 min → surface partial results from `$RUN_DIR` ⏱.
-
-Wait for both. Then:
 
 - `foundry:linting-expert` made file changes → commit:
 
@@ -771,7 +836,7 @@ EOF
 Revoke commit authorization:
 
 ```bash
-rm -f /tmp/claude-commit-authorized  # timeout: 3000
+rm -f "$SENTINEL"  # timeout: 3000
 ```
 
 ## Step 10: Push
@@ -828,13 +893,7 @@ Then print:
 
 ### Action Items
 
-<!-- MUST render as markdown table — same schema as Step 3b; statuses now final (✓ resolved / ⊘ skipped / ⊘ no action) -->
-
-| # | Type | Author | Status | Summary | File:Line | Notes |
-|---|------|--------|--------|---------|-----------|-------|
-| 1 | [gh][req] | @reviewer | ✓ resolved | rename param x → count | src/foo.py:42 | — |
-| 2 | [gh][suggest] | @maintainer | ✓ resolved | add docstring | — | — |
-| 3 | [gh][question] | @reviewer | ⊘ skipped | why not use X? | — | existing approach correct per linked issue #42 |
+<!-- Use same action item schema as Step 3b (columns: item, type, status, commit, notes); statuses now final (✓ resolved / ⊘ skipped / ⊘ no action) -->
 
 ### Lint + QA
 <linting-expert summary: N fixes applied | or "no violations"> / <foundry:qa-specialist summary: N blocking fixed, N warnings | or "clean">
@@ -862,7 +921,7 @@ fi
 ## Step 12: Comment dispatch + Codex review loop
 
 ```bash
-# pipe exit code from ls|head is head's (0); ls failure suppressed by 2>/dev/null; fallback guard below handles empty result
+# pipe exit code from ls|head is head's (0) — correct here; only path discovery, not guarding execution; ls failure suppressed by 2>/dev/null; fallback guard below handles empty result
 _OSS_RESOLVE=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/resolve 2>/dev/null | head -1)
 [ -z "$_OSS_RESOLVE" ] && _OSS_RESOLVE="plugins/oss/skills/resolve"
 ```
@@ -877,18 +936,15 @@ Read and execute `$_OSS_RESOLVE/modes/comment-dispatch.md`.
 - **Branch safety** — `gh pr checkout <PR#>` always lands on PR's HEAD, never `main`/`master`. Never push to default branch — if PR branch = default branch, abort and surface.
 - **OSS fork support** — `gh pr checkout <PR#>` works same for branches + forks; forks get contributor remote + tracking; plain `git push` targets fork branch automatically.
 - **Merge direction** — `origin/BASE_REF` INTO `HEAD_REF` (not reverse); PR branch = source of truth; maintainer still clicks Merge.
-- **Never rebase** — use `git merge`; rebase rewrites SHAs, breaks cherry-pick/revert; Step 5 uses `git merge --continue --no-edit`.
-- **Contribution motivation before code** — Step 3a before any file read/edit; provides "whose intent wins" lens; PR body + linked issues reveal constraints invisible in git diff.
-- **Separate commits per action item** — each `[req]`/`[suggest]` = one atomic commit; `[resolve #N]` tag = `git log --grep` findable; history reviewable, diff bisectable, changes independently revertable; no empty commits.
+- **Contribution motivation before code** — provides "whose intent wins" lens; PR body + linked issues reveal constraints invisible in git diff.
 - **`[question]` items** — answer inline in resolve report only (never post to PR); reclassify before implementing; never silently implement unanswered question.
-- **Case A (already MERGING)** — prior `git merge` left markers → skip Steps 5 detection + 6 context-distill, jump to Step 7a; no new merge.
 - **Push verification** — confirm via `gh pr view --json commits` before reporting success; exit 0 from `git push` necessary but not sufficient (branch protection can silently reject).
 - **Merge-push sequencing** — `git merge` and `git push` are not atomic; a concurrent push to the same branch between these steps causes a non-fast-forward rejection. If that happens, fetch + pull and retry the push step only — do not re-run the full merge.
 - **`gh pr merge` flags**: `--merge` = preserves all commits; `--squash` = collapses (loses action-item commits); never `--rebase` (rewrites SHAs); default `--merge`.
 - **Escape hatch**: `git merge --abort` = undo all conflict state; `git push --force-with-lease` (never plain `--force`) only when user explicitly requests — if push rejected after local amend.
 - **Codex agent health**: subject to CLAUDE.md §8 — 15-min cutoff, ⏱ on timeout; partial results via `tail -100` on output file.
 - **Worktree cleanup safety net**: `SessionEnd` runs `git worktree prune` — catches orphaned worktrees.
-- **Mode routing**: see Steps 3a–3c and `<inputs>` for mode definitions, source routing, action-item derivation.
+- **Thread resolution via GraphQL** — GitHub REST `/pulls/{PR}/comments` returns individual comment objects; `isResolved` lives on `PullRequestReviewThread` (GraphQL only). Step 3b fetches it separately. `RESOLVED_THREAD_IDS` = array of root comment `databaseId` values for all resolved threads; inline comments matching any ID → auto-`[done]`. GraphQL fetch failure (network, permissions) → `[]` fallback — skill continues without resolved-status data.
 - **`[gh]` items** (all pr-sourced items in all modes): commit messages use: `[resolve #<id>] @<reviewer> (gh):`
 - **`[report]` items**: attribute to agent, not GitHub commenter — distinguishes automated findings in git history. Format: `[resolve #<id>] /review finding by <agent-name> (report: <report-path>):`
 - **Sources block**: print after mode resolution, before GitHub API calls — "abort if wrong source" moment.

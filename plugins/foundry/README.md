@@ -7,6 +7,7 @@ OSS Claude Code config: 10 specialist agents, 9 skills, event-driven hooks, and 
 ______________________________________________________________________
 
 <details>
+
 <summary><strong>📋 Contents</strong></summary>
 
 - [What is foundry?](#what-is-foundry)
@@ -422,7 +423,7 @@ ______________________________________________________________________
 
 **Model**: `opusplan` (plan-gated Opus)
 
-**Not for**: writing implementation code (use `foundry:sw-engineer`), release management (use `oss:shepherd`).
+**Not for**: writing implementation code (use `foundry:sw-engineer`), release management (use `oss:shepherd`), performance profiling or DataLoader throughput tuning (use `foundry:perf-optimizer`).
 
 Produces documentation — ADRs, interface contracts, migration plans, component diagrams — not production code. Hands off to `foundry:sw-engineer` for execution.
 
@@ -436,7 +437,7 @@ ______________________________________________________________________
 
 **Model**: `opus`
 
-**Not for**: linting, type checking, or annotation fixes (use `foundry:linting-expert`), production implementation (use `foundry:sw-engineer`).
+**Not for**: linting, type checking, or annotation fixes (use `foundry:linting-expert`), production implementation (use `foundry:sw-engineer`), slow test suite profiling or optimizing test execution speed (use `foundry:perf-optimizer`).
 
 Writes deterministic, parametrized, behavior-focused tests following Arrange-Act-Assert. Follows TDD for new features: write tests before implementation.
 
@@ -516,13 +517,13 @@ ______________________________________________________________________
 
 **Role**: adversarial reviewer for implementation plans, architecture proposals, and significant code reviews.
 
-**Use for**: red-teaming a plan before committing to it, challenging architectural decisions before they ship, adversarial code review on security-sensitive or irreversible operations. Attacks across 5 dimensions (Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep) then applies a mandatory refutation step to eliminate false positives.
+**Use for**: red-teaming a plan before committing to it, challenging architectural decisions before they ship, adversarial code review on security-sensitive or irreversible operations. Treats every claim as unproven until backed by evidence. Attacks across 6 dimensions (Assumptions, Missing Cases, Security Risks, Architectural Concerns, Complexity Creep, Root Cause) — drills to bedrock for every standing challenge (keeps asking "why?" until root cause found, not just surface symptom). Applies mandatory refutation step to stay objective: accepts refutation when evidence warrants.
 
 When `codex@openai-codex` plugin is installed, challenger automatically launches a parallel Codex adversarial review track (same target, `--scope auto`) and aggregates the results — findings from both tracks are reported together with convergence callouts where both flagged the same area. Pass `--no-codex` in the prompt to skip. If Codex is installed but the parallel run fails for any reason, the failure is surfaced in the report; results are never silently dropped to Claude-only.
 
 **Model**: `opus`
 
-**Not for**: designing plans or ADRs (use `foundry:solution-architect`), writing tests (use `foundry:qa-specialist`), config file quality review (use `foundry:curator`).
+**Not for**: designing plans or ADRs (use `foundry:solution-architect`), writing tests or test coverage review (use `foundry:qa-specialist`), config file quality review (use `foundry:curator`).
 
 Read-only — never writes or edits files. Runs by default in all `/develop:*` skills and `/oss:review` — skip with `--no-challenge`.
 
@@ -532,7 +533,7 @@ ______________________________________________________________________
 
 **Role**: developer advocacy content specialist for outward-facing narrative artifacts.
 
-**Use for**: generating complete blog posts, Marp slide decks, social threads, talk abstracts, and lightning talk outlines in one autonomous pass. Reads an approved outline file (`.plans/content/<slug>-outline.md`) produced by `/foundry:create`. Applies a four-beat story arc (Problem→Journey→Insight→Action) calibrated to the target audience level.
+**Use for**: generating complete blog posts, Marp slide decks, social threads, talk abstracts, and lightning talk outlines in one autonomous pass. Imagines the ideal reader experience first, then works backwards to structure and form — questions status-quo conventions before accepting them, pushes for genuinely fresh angles. Reads an approved outline file (`.plans/content/<slug>-outline.md`) produced by `/foundry:create`. Applies a four-beat story arc (Problem→Journey→Insight→Action) calibrated to the target audience level.
 
 **Model**: `opus`
 
@@ -605,6 +606,7 @@ No environment variables required. foundry reads from `~/.claude/settings.json` 
 ______________________________________________________________________
 
 <details>
+
 <summary>
 
 ## 🔍 Troubleshooting
@@ -642,6 +644,7 @@ ______________________________________________________________________
 </details>
 
 <details>
+
 <summary>
 
 ## 🏗️ Plugin structure
@@ -668,7 +671,7 @@ plugins/foundry/
     ├── task-log.js              SubagentStart/Stop tracking to /tmp/claude-state-<session>/
     ├── statusline.js            status bar agent counts
     ├── teammate-quality.js      TaskCompleted/TeammateIdle teammate output quality gate
-    ├── lint-on-save.js          runs pre-commit after every Write/Edit
+    ├── lint-on-save.js          runs pre-commit after every Write/Edit; async + cross-session lock; 15s timeout
     ├── rtk-rewrite.js           transparently rewrites CLI calls for token compression
     ├── commit-guard.js          PreToolUse Bash guard that blocks git commit unless authorized by a skill sentinel
     └── md-compress.js           compresses large markdown files before they enter context
@@ -681,6 +684,7 @@ ______________________________________________________________________
 <a id="upgrade"></a>
 
 <details>
+
 <summary><strong>🔄 Upgrade</strong></summary>
 
 ```bash
@@ -704,6 +708,7 @@ ______________________________________________________________________
 <a id="uninstall"></a>
 
 <details>
+
 <summary><strong>🗑️ Uninstall</strong></summary>
 
 ```bash

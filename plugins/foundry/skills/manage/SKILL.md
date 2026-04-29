@@ -1,6 +1,6 @@
 ---
 name: manage
-description: Create, update, or delete agents, skills, rules, and hooks with full cross-reference propagation. Trivial edits (typos, small fixes ≤10 words) applied inline without agent; `.md` content-edits delegated to foundry:curator; code file edits (`.js`, `.py`, `.ts`) delegated to foundry:sw-engineer; large cross-ref fan-outs (> 3 files) also delegate. The parent orchestrates MEMORY.md, README, audit, calibration, and the final report. Also manages settings.json permissions atomically with permissions-guide.md.
+description: Create, update, or delete agents, skills, rules, and hooks with full cross-reference propagation. Trivial edits (typos, small fixes ≤10 words) applied inline without agent; `.md` content-edits delegated to foundry:curator; code file edits (`.js`, `.py`, `.ts`) delegated to foundry:sw-engineer; large cross-ref fan-outs (> 3 files) also delegate. The parent orchestrates MEMORY.md, README, audit, calibration, and the final report. Also manages settings.json permissions atomically with permissions-guide.md. NOT for: validation/quality audit of existing agents/skills (use /foundry:audit); implementing code changes (use develop:feature or develop:fix).
 argument-hint: create <agent|skill|rule> <name> "desc" | update <name> [new-name|"change"|spec.md] | delete <name> | add perm <rule> "desc" "use-case" | remove perm <rule>
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
@@ -25,6 +25,8 @@ Manage lifecycle of agents, skills, rules, hooks in `.claude/`. Handles creation
   - `delete <name>` — delete; type auto-detected from disk (agents, skills, rules, hooks); asks user if ambiguous
   - `add perm <rule> "description" "use case"` — add permission to settings.json allow list and permissions-guide.md
   - `remove perm <rule>` — remove permission from settings.json allow list and permissions-guide.md
+
+**NOT for**: validation/quality audit of existing agents/skills (use /foundry:audit); implementing code changes (use develop:feature or develop:fix).
 - Names must be **kebab-case** (lowercase, hyphens only)
 - Descriptions must be quoted when they contain spaces
 - Permission rules use Claude Code format: `WebSearch`, `Bash(cmd:*)`, `WebFetch(domain:example.com)`
@@ -143,7 +145,7 @@ Trivial = directive ≤10 words AND matches a simple-change pattern. Trivial edi
 
 - **Perm operations**: skip Steps 2, 3, 5, 6, 7, 8, 9 — go Step 1 → Step 4 → Step 10
 - **Hook operations**: skip Steps 2, 3, 6 (no color inventory, no MEMORY.md roster entry, no README table row); in Steps 5 and 7 skip cross-ref propagation (hook filenames not referenced from agent/skill markdown) — go Step 1 → Step 4 → Step 9 → Step 10
-- **Content-edit operations**: skip Step 2 (entity already exists); skip Step 3 color inventory (no create); in Steps 5–7 only update cross-refs and README if name or description changed
+- **Content-edit operations**: skip Step 2 (entity already exists); skip Step 3 color inventory (no create); in Steps 5–7 only update cross-refs and README if name or description changed. Step 6 count: only update if name added or removed — content-only edits do not change agent/skill count.
 - **Trivial content-edits**: additionally skip Steps 6–7 (no roster/description change possible); proceed Step 1 → Step 4 → Step 8 → Step 10
 
 ## Step 2: Overlap review (create only)
@@ -196,9 +198,11 @@ Extract names inline from Glob results — strip `.claude/agents/` prefix and `.
 
 4. Spawn **foundry:curator** subagent to generate and write agent file:
 
+> Before passing the schema file path to curator: verify the file exists on disk using the Read tool (limit=1). If the schema file path from the JSON envelope does not exist, proceed with default frontmatter fields (name, description, model, color) — note the omission in the Step 10 report.
+
 ```markdown
 Read the agent scaffold template at `.claude/skills/manage/templates/agent-scaffold.md`.
-Also read the schema file at the path returned in the step 1 JSON to incorporate any new frontmatter fields.
+Also read the schema file at the path returned in the step 1 JSON to incorporate any new frontmatter fields (skip if schema file not found — use default frontmatter fields: name, description, model, color).
 Create `.claude/agents/<name>.md` with:
 - Frontmatter: name=<name>, description=<description>, model=<model>, color=<color>; add any broadly-useful new fields from the schema
 - Body: rich domain-specific content for the role described by the description, following all content rules and tool selection guidelines in the scaffold template
@@ -365,6 +369,8 @@ Use `description_changed` from returned JSON to decide whether Steps 5–7 need 
 
 No schema fetch needed — rule files simpler than agents/skills (only frontmatter + free-form markdown sections).
 
+**Rule scope guidance**: empty `paths:` = global rule (applies everywhere); populated `paths:` = scoped (e.g., `paths: ["src/**/*.py"]` for Python-only rules). Default to global unless the rule is clearly language/directory-specific.
+
 Write `.claude/rules/<name>.md` with this structure:
 
 ```markdown
@@ -501,7 +507,7 @@ with open('.claude/settings.json', 'w') as f:
 
 ```bash
 python3 -c "import json; d=json.load(open('.claude/settings.json')); print('OK' if '<rule>' not in d['permissions']['allow'] else 'STILL PRESENT')"  # timeout: 15000
-grep -cF '`<rule>`' .claude/permissions-guide.md && echo "STILL IN GUIDE" || echo "OK"
+grep -qF '`<rule>`' .claude/permissions-guide.md && echo "STILL IN GUIDE" || echo "OK"
 ```
 
 ## Step 5: Propagate cross-references
@@ -516,7 +522,7 @@ Use Grep to find all references:
 - Pattern `<name>`, file `.claude/CLAUDE.md`, output mode `content`
 - Pattern `<name>`, file `README.md`, output mode `content`
 
-**For update (rename):** Count files grep returns. **≤ 3 files**: apply inline with Edit tool. **> 3 files**: spawn **foundry:curator** subagent:
+**For update (rename):** Count files grep returns. **≤ 3 files**: apply inline with Edit tool. **> 3 files**: spawn **foundry:curator** subagent. For hook renames: also update the hook entry in `.claude/settings.json` `hooks` array if the hook filename is referenced there by path.
 
 ```text
 Apply these cross-reference updates (<old-name> → <new-name>):
@@ -592,6 +598,10 @@ For **create** and **update (rename)**: verify tool efficiency — cross-check a
 
 Run `/audit --skip-gate` to validate created/modified files without triggering the interactive follow-up gate. **Skip if invoked with `--skip-audit` or if current `manage` operation runs inside an audit-initiated fix session** — outer audit covers it.
 
+```bash
+[[ "$SKIP_AUDIT" == "true" ]] && { echo "[--skip-audit] skipping Step 9 audit"; } || {
+```
+
 ```text
 /audit --skip-gate
 ```
@@ -617,6 +627,8 @@ Then run `/calibrate routing --fast` to confirm overall routing accuracy unaffec
 ```
 
 Skip calibration for: trivial edits, renames, deletes, rule operations, perm operations.
+
+}
 
 ## Step 10: Summary report
 

@@ -17,11 +17,13 @@ First phase of a two-phase content system. Out-of-scope includes FAQs, compariso
 
 </inputs>
 
+NOT for: implementation tasks, code generation, README writing (use /foundry:doc-scribe), structured reference docs (FAQs, comparison tables — use /foundry:doc-scribe).
+
 <workflow>
 
 **Task hygiene**: Call `TaskList`; mark clearly-done tasks `completed`, orphaned tasks `deleted`, genuinely-continuing tasks `in_progress`.
 
-**Task tracking**: TaskCreate entries for all 5 steps before any tool calls.
+**Task tracking**: TaskCreate entries for all steps before any tool calls.
 
 ## Step 1 — Parse topic and out-of-scope detection
 
@@ -118,7 +120,8 @@ created: YYYY-MM-DD
 ```
 
 - Confirm file path to user.
-- End with: "Run: `foundry:creator` to generate the complete [format] from this outline."
+- End with: "Run @foundry:creator to generate the complete [format] from this outline — foundry:creator is an agent; invoke it with `@foundry:creator` followed by the outline file path."
+- End with a `## Confidence` block per quality-gates.md protocol, scoring based on how well the outline covers the user's stated topic, arc, and audience.
 
 </workflow>
 
@@ -131,6 +134,6 @@ created: YYYY-MM-DD
 - Refuse FAQs / comparison tables / reference docs at Step 1 gate; name `foundry:doc-scribe` as redirect.
 - Write outline exactly once after approval — no second draft unless user requests.
 - `foundry:creator` reads the output outline file and generates the full artifact autonomously.
-- Spec: `.plans/blueprint/2026-04-24-creator-agent-spec.md`
+- See brainstorm/create workflow design notes (blueprint files in .plans/blueprint/ are TTL-30d).
 
 </notes>

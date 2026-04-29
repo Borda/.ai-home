@@ -15,6 +15,15 @@ NOT for: running experiments (use `/research:run`); judging experimental methodo
 
 </objective>
 
+<constants>
+
+HARD_CUTOFF: 900   # 15 min — if scientist does not return, surface partial results from RUN_DIR
+# Deviation from CLAUDE.md §8: V3 Agent call is synchronous — no Bash file-activity poll available.
+# HARD_CUTOFF is the only liveness mechanism; manual poll unreachable during synchronous Agent call.
+# Same pattern as research:topic — synchronous Agent(...) exempt from §8 file-activity polling.
+
+</constants>
+
 <workflow>
 
 ## Agent Resolution
@@ -200,6 +209,9 @@ Full audit: <RUN_DIR>/audit-raw.md
 **Score**: 0.N
 **Gaps**:
 - [specific limitation]
+
+**Refinements**: N passes.
+- Pass 1: [gap addressed]
 ```
 
 ### Step V6: Terminal summary

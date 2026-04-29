@@ -54,9 +54,9 @@ Triggered by `fortify` or `fortify <run-id|program.md>`.
 
 **Input resolution** (priority order):
 
-1. Explicit `<run-id>` argument → read `.experiments/state/<run-id>/state.json`
-2. Explicit `<program.md>` argument → scan `.experiments/state/*/state.json` for matching `program_file`, pick latest with `status: completed` or `status: goal-achieved`
-3. No argument → scan `.experiments/state/`, pick latest with `status: completed` or `status: goal-achieved`
+1. Explicit `<run-id>` argument → read `$STATE_DIR_BASE/<run-id>/state.json`
+2. Explicit `<program.md>` argument → scan `$STATE_DIR_BASE/*/state.json` for matching `program_file`, pick latest with `status: completed` or `status: goal-achieved`
+3. No argument → scan `$STATE_DIR_BASE/`, pick latest with `status: completed` or `status: goal-achieved`
 4. None found → stop:
    ```text
    fortify: No completed run found. Run /research:run first.
@@ -71,7 +71,7 @@ if [ -z "$JUDGE_VERDICT_FILE" ]; then
   echo "Ablation studies require an approved baseline. Run: /research:judge <program.md>"
   exit 1
 fi
-JUDGE_VERDICT=$(grep -i '^[*]*[Vv]erdict[*]*:' "$JUDGE_VERDICT_FILE" | head -1 | sed -E 's/.*[Vv]erdict[*: ]+//;s/[* ].*//')
+JUDGE_VERDICT=$(grep -i '^[*]*[Vv]erdict[*]*:' "$JUDGE_VERDICT_FILE" | head -1 | sed 's/\*\*//g' | sed -E 's/.*[Vv]erdict[: ]+//;s/[[:space:]].*//')
 ```
 
 Verify `JUDGE_VERDICT == "APPROVED"` AND the verdict file references the same `program_file` (grep the file for the program path). If verdict is not APPROVED or file mismatches:
@@ -92,7 +92,7 @@ Also read `baseline_commit` — iteration 0 commit from `experiments.jsonl` (fir
 ```bash
 BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')  # timeout: 3000
 TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)                                           # timeout: 3000
-FORTIFY_DIR=".experiments/fortify-$TS"                                       # timeout: 5000
+FORTIFY_DIR="$FORTIFY_DIR_BASE/fortify-$TS"                                  # timeout: 5000
 WORKTREE_BASE="$FORTIFY_DIR/worktrees"
 mkdir -p "$FORTIFY_DIR" "$WORKTREE_BASE"
 ```
@@ -148,7 +148,7 @@ Poll every 5 min: `find <FORTIFY_DIR> -newer "$CHECKPOINT_F2" -type f | wc -l` (
 
 Read `ablation-candidates.jsonl` after scientist completes. If `--max-ablations <M>` specified and component count + 1 (for full variant) exceeds M: sort by `expected_importance` (HIGH first, then MEDIUM, then LOW), keep top M-1 components plus always include the `full` sanity-check variant.
 
-**`--skip-run` early exit**: if `--skip-run` flag present, print candidate table (component_id, name, description, files, expected_importance) and exit. No ablation execution. Print: `"fortify: --skip-run — <N> candidates identified. Next: /research:fortify without --skip-run"`. Jump to F8 (skip-run variant).
+**`--skip-run` early exit**: if `--skip-run` flag present, print candidate table (component_id, name, description, files, expected_importance) and exit. No ablation execution. Mark tasks F3, F4, F5, F6, F7 as `skipped` via TaskUpdate before proceeding. Print: `"fortify: --skip-run — <N> candidates identified. Next: /research:fortify without --skip-run"`. Jump to F8 (skip-run variant).
 
 ## Step F3: Generate ablation variants
 
@@ -196,8 +196,8 @@ For `no-<component>` variant: revert the component's commits.
 **IMPORTANT — order matters**: revert in **reverse chronological order** (newest first) to avoid conflicts. If `revert_commits` from `variants.jsonl` is in chronological order (oldest first, e.g. as scientist returned them), reverse before reverting:
 
 ```bash
-# Sort newest-first for conflict-free revert
-REVERT_COMMITS_SORTED=$(echo "<commit1> <commit2> ..." | tr ' ' '\n' | tac | tr '\n' ' ')
+# Sort newest-first for conflict-free revert (portable awk reverse — avoids tac not available on macOS)
+REVERT_COMMITS_SORTED=$(echo "<commit1> <commit2> ..." | tr ' ' '\n' | awk '{lines[NR]=$0} END{for(i=NR;i>=1;i--) print lines[i]}' | tr '\n' ' ')
 git revert $REVERT_COMMITS_SORTED --no-edit  # timeout: 15000
 ```
 
@@ -280,7 +280,15 @@ Include this warning prominently in the F7 report.
 
 Skip entirely if no `--venue` flag. Supported venues: `CVPR`, `NeurIPS`, `ICML`, `workshop`.
 
-Spawn `research:scientist` via `Agent(subagent_type="research:scientist", prompt="...")` with health monitoring (same 15-min cutoff, one 5-min extension):
+**Health monitoring setup** (same pattern as F2 — create checkpoint before spawn):
+
+```bash
+LAUNCH_AT_F6=$(date +%s)
+CHECKPOINT_F6="/tmp/fortify-check-$LAUNCH_AT_F6"
+touch "$CHECKPOINT_F6"  # timeout: 3000
+```
+
+Spawn `research:scientist` via `Agent(subagent_type="research:scientist", prompt="...")` with health monitoring (same 15-min cutoff, one 5-min extension — poll `find <FORTIFY_DIR> -newer "$CHECKPOINT_F6" -type f | wc -l`):
 
 ```markdown
 Act as a peer reviewer for <venue>.

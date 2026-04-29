@@ -7,6 +7,7 @@ ML research plugin: two specialist agents and eight slash-command skills for lit
 ______________________________________________________________________
 
 <details>
+
 <summary><strong>📋 Contents</strong></summary>
 
 - [What is research?](#what-is-research)
@@ -82,6 +83,7 @@ claude plugin install research@borda-ai-rig
 ```
 
 <details>
+
 <summary><strong>Upgrade</strong></summary>
 
 ```bash
@@ -92,6 +94,7 @@ claude plugin install research@borda-ai-rig
 </details>
 
 <details>
+
 <summary><strong>Uninstall</strong></summary>
 
 ```bash
@@ -654,6 +657,7 @@ All skills read this file. Write it with `/research:plan`, or by hand. Required 
 ```
 
 <details>
+
 <summary>
 
 Config fields reference
@@ -717,6 +721,7 @@ Directories without `result.jsonl` (judge, verify, fortify, retro run dirs) are 
 ______________________________________________________________________
 
 <details>
+
 <summary>
 
 ## 🔍 Troubleshooting

@@ -7,6 +7,7 @@ Six slash-command skills — `plan`, `feature`, `fix`, `refactor`, `debug`, `rev
 ______________________________________________________________________
 
 <details>
+
 <summary><strong>📋 Contents</strong></summary>
 
 - [What is develop?](#what-is-develop)
@@ -78,6 +79,7 @@ claude plugin install develop@borda-ai-rig
 ```
 
 <details>
+
 <summary><strong>Install the full suite (recommended)</strong></summary>
 
 ```bash
@@ -92,6 +94,7 @@ claude plugin install research@borda-ai-rig
 Installing `foundry` gives `develop` access to `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`, `foundry:doc-scribe`, and others. Without it, all agent dispatches fall back to `general-purpose` with role-description prompts — functional but lower quality.
 
 <details>
+
 <summary><strong>Verify installation</strong></summary>
 
 ```bash
@@ -523,6 +526,7 @@ Completed runs are cleaned up after 30 days. Interrupted runs (no `result.jsonl`
 ______________________________________________________________________
 
 <details>
+
 <summary>
 
 ## 🔍 Troubleshooting

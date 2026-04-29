@@ -79,7 +79,8 @@ ratio = majority / minority
 
 ## Recommended Configuration
 
-See `foundry:perf-optimizer` for throughput settings (`num_workers`, `pin_memory`, `prefetch_factor`, `persistent_workers`). Core DataLoader integrity settings:
+<!-- foundry:perf-optimizer availability: only available when foundry plugin installed. Skip throughput optimization referral if foundry absent. -->
+See `foundry:perf-optimizer` for throughput settings (`num_workers`, `pin_memory`, `prefetch_factor`, `persistent_workers`) — only available when foundry plugin installed; skip if absent. Core DataLoader integrity settings:
 
 ```python
 DataLoader(

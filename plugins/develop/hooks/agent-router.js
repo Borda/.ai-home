@@ -3,7 +3,7 @@
 //
 // 3-tier fallback when a requested agent is absent:
 //   Tier 1 — exact match in plugin cache or local agents dir → passthrough
-//   Tier 2 — LLM picks best fit from local agents (ANTHROPIC_API_KEY)
+//   Tier 2 — LLM picks best fit from local agents (ANTHROPIC_API_KEY); 5s timeout
 //   Tier 3 — reroute to general-purpose with original subagent_type in prompt
 
 "use strict";
@@ -139,7 +139,10 @@ process.stdin.on("end", async () => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (apiKey && agents.length > 0) {
       try {
-        const picked = await askLlm(agents, `${subagentType.replace(/[:\-_]/g, " ")} ${prompt.slice(0, 300)}`, apiKey);
+        const picked = await Promise.race([
+          askLlm(agents, `${subagentType.replace(/[:\-_]/g, " ")} ${prompt.slice(0, 300)}`, apiKey),
+          new Promise((resolve) => setTimeout(() => resolve("none"), 5000)),
+        ]);
         if (picked && picked !== "none" && agents.some((a) => a.name === picked)) {
           target = picked;
           note = `[Router: '${subagentType}' → '${target}' (llm)]`;

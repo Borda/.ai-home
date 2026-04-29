@@ -41,28 +41,29 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 | "The targeted test passes — that's sufficient" | The targeted test shows the bug is fixed; the full suite shows nothing else broke. Both are required. |
 | "The fix is obvious — Step 1 analysis is overkill" | Obvious causes are often symptoms. Analysis reveals the actual root cause and blast radius. |
 
-**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
-
-- status `completed` if work clearly done
-- status `deleted` if orphaned / no longer relevant
-- keep `in_progress` only if genuinely continuing
-
-**Task tracking**: immediately after Step 1 (scope known), TaskCreate for all steps before any other work. Mark each step in_progress when starting, completed when done.
+Read `$_DEV_SHARED/task-hygiene.md`.
 
 ## Project Detection
 
 Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$PYTEST_CMD` (pytest flags). Run at skill start.
 
-**Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, extract and read the plan file first:
+**Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`). Store plan path as `PLAN_FILE`.
 
 ```bash
-# Extract --plan path from arguments
-PLAN_FILE="${ARGUMENTS##*--plan }"
-PLAN_FILE="${PLAN_FILE%% *}"
-[ "$PLAN_FILE" = "$ARGUMENTS" ] && PLAN_FILE=""
+# Extract --plan path from arguments — support both `--plan path` and `--plan=path`
+PLAN_FILE=""
+if [[ "$ARGUMENTS" =~ --plan[[:space:]]+([^[:space:]]+) ]]; then
+  PLAN_FILE="${BASH_REMATCH[1]}"
+elif [[ "$ARGUMENTS" =~ --plan=([^[:space:]]+) ]]; then
+  PLAN_FILE="${BASH_REMATCH[1]}"
+fi
+# Existence guard — fail fast if path supplied but missing
+if [ -n "$PLAN_FILE" ] && [ ! -f "$PLAN_FILE" ]; then
+  echo "! BREAKING — plan file not found: $PLAN_FILE"
+  echo "Fix: pass an existing plan path via --plan <path> or --plan=<path>"
+  exit 1
+fi
 ```
-
-If `PLAN_FILE` is set: Read `$PLAN_FILE`, extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`).
 
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4), append `step: N — completed`. On skill start, check for existing `.developments/*/checkpoint.md` — offer resume from last completed step if found.
 
@@ -75,6 +76,12 @@ If `PLAN_FILE` is set: Read `$PLAN_FILE`, extract `Affected files`, `Risks`, `Su
 DIAG_FILE="${ARGUMENTS##*--diagnosis }"
 DIAG_FILE="${DIAG_FILE%% *}"
 [ "$DIAG_FILE" = "$ARGUMENTS" ] && DIAG_FILE=""
+# Existence guard — fail fast if path supplied but missing
+if [ -n "$DIAG_FILE" ] && [ ! -f "$DIAG_FILE" ]; then
+  echo "! BREAKING — diagnosis file not found: $DIAG_FILE"
+  echo "Fix: run /develop:debug first to produce a diagnosis file, or omit --diagnosis"
+  exit 1
+fi
 ```
 
 Diagnosis file format (`.plans/active/debug_<slug>.md`):
@@ -284,7 +291,7 @@ Read `$_FOUNDRY_SHARED/quality-stack.md` (if file not found → skip quality sta
 - [if no test runner: `rm <test_file>` — no test suite will re-execute it; it served the gate, now expendable]
 
 ## Confidence
-**Score**: 0.N — [high >=0.9 | moderate 0.8-0.9 | low <0.8]
+**Score**: 0.N — [high ≥0.9 | moderate 0.8–0.9 | low <0.8 ⚠]
 **Gaps**:
 - [e.g., could not reproduce locally, partial traceback only, fix not runtime-tested]
 

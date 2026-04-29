@@ -12,6 +12,8 @@ effort: high
 
 Analyze GitHub threads + repo health. Help maintainers triage, respond, decide fast. Output actionable + structured — not just summaries.
 
+NOT for implementing PR action items (use oss:resolve). NOT for multi-agent code review (use oss:review). NOT for CI pipeline diagnosis (use oss:cicd-steward).
+
 </objective>
 
 <inputs>
@@ -26,10 +28,12 @@ Analyze GitHub threads + repo health. Help maintainers triage, respond, decide f
 </inputs>
 
 <constants>
+
 <!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 7 shepherd spawn -->
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
 EXTENSION=300          # one +5 min extension if output file explains delay
+
 </constants>
 
 <workflow>
@@ -55,7 +59,7 @@ REPLY_MODE=false
 CLEAN_ARGS=$ARGUMENTS
 if [[ "$ARGUMENTS" == *"--reply"* ]]; then
     REPLY_MODE=true
-    CLEAN_ARGS="${ARGUMENTS//--reply/}"
+    CLEAN_ARGS=$(echo "$ARGUMENTS" | sed 's/ --reply\b//')
     CLEAN_ARGS="${CLEAN_ARGS#"${CLEAN_ARGS%%[![:space:]]*}"}"
 fi # timeout: 5000
 ```
@@ -79,6 +83,13 @@ TODAY=$(date +%Y-%m-%d)
 `DIRECT_PATH_MODE=true` only valid when `REPLY_MODE=true` — if combined without `--reply`, Step 2 prints error and stops.
 
 ## Step 2: Reply-mode fast-path (only when `REPLY_MODE=true`)
+
+```
+# Fast-path decision tree:
+# Step 2: item count ≤ FAST_PATH_THRESHOLD → FAST_PATH_TENTATIVE
+# Step 3: cache hit for all items → promote to FAST_PATH; cache miss → DRIFT
+# Step 4: FAST_PATH → skip deep analysis; DRIFT/TENTATIVE → run full analysis
+```
 
 Skip when `REPLY_MODE=false` and `DIRECT_PATH_MODE=false`.
 
@@ -145,17 +156,17 @@ UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M
 **Cache miss** — after fetching in `modes/thread.md`, write:
 
 ```bash
-jq -n \
+[ -n "$ITEM" ] && jq -n \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg type "$TYPE" \
     --argjson number "$CLEAN_ARGS" \
     --argjson item "$ITEM" \
     --arg comments "$COMMENTS" \
     '{"ts":$ts,"type":$type,"number":$number,"item":$item,"comments":$comments}' \
-    >"$CACHE_FILE" # timeout: 5000
+    >"$CACHE_FILE" || echo "⚠ cache write skipped — empty or malformed API response" # timeout: 5000
 ```
 
-**Stale cache** — file for same number but earlier date ignored. Old files left in place — small, provide audit history. Prune files older than 30 days: `find .cache/gh -mtime +30 -delete` # safe to delete — cache is regenerable; no confirmation needed
+**Stale cache** — file for same number but earlier date ignored. Old files left in place — small, provide audit history.
 
 Cache applies to: issue/PR/discussion primary fetch and comments. Cache does NOT apply to: `gh issue list`, `gh pr list`, `gh pr checks`, `gh pr diff`, discussion list queries, health/ecosystem modes.
 
@@ -207,21 +218,26 @@ fi
 
 ## Step 5: Mode dispatch
 
-Read `plugins/oss/skills/analyse/modes/<mode>.md` and execute all steps defined there.
+```bash
+_OSS_MODE_DIR=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/analyse/modes 2>/dev/null | sort -V | tail -1)
+[ -z "$_OSS_MODE_DIR" ] && _OSS_MODE_DIR="plugins/oss/skills/analyse/modes"
+```
+
+Read `$_OSS_MODE_DIR/<mode>.md` and execute all steps defined there.
 
 | Argument | Mode file |
 | --- | --- |
-| number (any type) | `modes/thread.md` |
-| `health` | `modes/health.md` |
-| `ecosystem` | `modes/ecosystem.md` |
+| number (any type) | `$_OSS_MODE_DIR/thread.md` |
+| `health` | `$_OSS_MODE_DIR/health.md` |
+| `ecosystem` | `$_OSS_MODE_DIR/ecosystem.md` |
 
 ## Step 6: Reply gate — STOP CHECK
 
 **Run this step before Confidence block regardless of `--reply` mode.**
 
-`REPLY_MODE=true`: response incomplete until Step 7 done and reply file written. No Confidence block here — proceed to Step 7.
+`REPLY_MODE=true`: response incomplete until Step 7 done and reply file written. Proceed to Step 7 — `## Confidence` block goes at end of Step 7 instead.
 
-`REPLY_MODE=false` — do NOT proceed to Step 7. Execute both sub-steps below:
+`REPLY_MODE=false` — do NOT proceed to Step 7. Execute both sub-steps below, then end response here.
 
 ### 6a — Follow-up gate
 
@@ -241,9 +257,9 @@ Call `AskUserQuestion` tool — do NOT write options as plain text first. Option
 - (b) label: `/oss:review <N>` — description: full code review for a specific PR
 - (c) label: `skip` — description: no action
 
-### 6b — Confidence block
+### 6b — Confidence block (REPLY_MODE=false only)
 
-End with `## Confidence` block per CLAUDE.md output standards.
+End response here with `## Confidence` block per CLAUDE.md output standards.
 
 ## Step 7: Draft contributor reply (only when --reply, thread mode only)
 
@@ -281,5 +297,6 @@ End response with `## Confidence` block per CLAUDE.md — always **absolute last
   - Issue is feature request → `/develop:feature` for TDD-first implementation
   - PR with quality concerns → `/oss:review` for comprehensive multi-agent code review
   - Draft responses → use `--reply` to auto-draft via shepherd; or invoke shepherd manually
+- Calibratable modes: thread (duplicate detection recall, PR readiness classification), health (issue health metrics accuracy), ecosystem (impact analysis accuracy).
 
 </notes>

@@ -1,6 +1,6 @@
 ---
 name: review
-description: Multi-agent code review of GitHub Pull Requests covering architecture, tests, performance, docs, lint, security, and API design.
+description: Multi-agent code review of GitHub Pull Requests (Python PRs only) covering architecture, tests, performance, docs, lint, security, and API design.
 argument-hint: '[PR number|path/to/report.md] [--reply] [--no-challenge]'
 allowed-tools: Read, Write, Edit, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 model: opus
@@ -20,15 +20,26 @@ Spawn specialized sub-agents in parallel. Consolidate findings into structured f
   - `--reply`: spawn oss:shepherd to draft contributor-facing PR comment. Path ending in `.md` → spawn oss:shepherd from that report, skip new review.
   - **Scope**: Python source only. Non-Python file → state out of scope, suggest tool, no findings.
   - **Local files**: use `/develop:review` for local files or current git diff.
+- **--plan handoff not supported** — this skill does not accept plan-mode output from `/develop:plan`.
 
 </inputs>
 
+<not-for>
+
+- Local file review or current git diff — use `/develop:review`
+- Non-Python PRs (TypeScript, Go, etc.) — state out of scope, stop
+- GitHub issue analysis or thread summarization — use `oss:analyse`
+
+</not-for>
+
 <constants>
+
 CHALLENGE_ENABLED=true  # set to false via --no-challenge
 <!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 parallel agent spawns -->
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
 EXTENSION=300          # one +5 min extension if output file explains delay
+
 </constants>
 
 <workflow>
@@ -98,6 +109,10 @@ fi
 ```
 
 ```bash
+FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED="$(git rev-parse --show-toplevel)/.claude/skills/_shared"
+```
+
+```bash
 # $CLEAN_ARGS must be a PR number — run all four in parallel:
 CHANGED_FILES=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null)  # cache for reuse in codemap block # timeout: 6000
 gh pr view $CLEAN_ARGS                                            # PR description and metadata       # timeout: 6000
@@ -158,7 +173,7 @@ Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`
 
 If `DIRECT_PATH_MODE=true`:
 
-- `REPLY_MODE=false` → use `AskUserQuestion`: "A report path was passed without `--reply`. Did you mean `/review <path.md> --reply`?" Options: (a) "Yes — continue with `--reply` mode" → set `REPLY_MODE=true` and proceed; (b) "No — review a PR instead" → print usage hint (`/review <N> | path/to/dir`) and stop.
+- `REPLY_MODE=false` → use `AskUserQuestion`: "A report path was passed without `--reply`. Did you mean `/review <path.md> --reply`?" Options: (a) "Yes — continue with `--reply` mode" → set `REPLY_MODE=true`; then re-check: `[ ! -f "$REVIEW_FILE" ] && echo "Error: review file not found at $REVIEW_FILE" && exit 1`; proceed; (b) "No — review a PR instead" → print usage hint (`/review <N> | path/to/dir`) and stop.
 - `REPLY_MODE=true` and `[ ! -f "$REVIEW_FILE" ]` → print `Error: report not found: $REVIEW_FILE` and stop.
 - `REPLY_MODE=true` and file exists → print `[direct] using $REVIEW_FILE` → **skip to Step 9**. Skip Steps 2–8.
 
@@ -181,23 +196,21 @@ claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "codex (op
 Codex available → run review on diff:
 
 ```bash
-CODEX_OUT="$RUN_DIR/codex.md"
-Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review: look for bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns. Read-only: do not apply fixes. Write findings to $RUN_DIR/codex.md.")
+CODEX_OUT="$RUN_DIR/foundry--codex.md"
+Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review: look for bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns. Read-only: do not apply fixes. Write findings to $RUN_DIR/foundry--codex.md.")
 ```
 
-After Codex writes `$RUN_DIR/codex.md`, extract seed list (≤10 items, `[{"loc":"file:line","note":"..."}]`) to inject into Step 3 agent prompts as pre-flagged issues. Codex skipped or empty → proceed with empty seed.
+After Codex writes `$RUN_DIR/foundry--codex.md`, extract seed list (≤10 items, `[{"loc":"file:line","note":"..."}]`) to inject into Step 3 agent prompts as pre-flagged issues. Codex skipped or empty → proceed with empty seed.
 
 ## Step 3: Spawn sub-agents in parallel
 
 ```bash
 # find exit code lost through pipe; fallback guard below covers empty result
-REVIEW_SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/review" -type d 2>/dev/null | head -1)"
+REVIEW_SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/review" -type d 2>/dev/null)"
 [ -z "$REVIEW_SKILL_DIR" ] && REVIEW_SKILL_DIR="plugins/oss/skills/review"
 ```
 
 **File-based handoff**: read `$FOUNDRY_SHARED/file-handoff-protocol.md`. File absent → warn the user: "file-handoff protocol not found — verify foundry plugin installed (`claude plugin list`); continuing without it." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
-
-<!-- IMPORTANT: expand $RUN_DIR to its literal string value (from Step 2) before inserting into every spawn prompt below. If $RUN_DIR is passed as a shell variable reference inside a quoted Agent prompt string, agents receive the literal text "$RUN_DIR" as a path — the write will fail or produce a file with that name. Always substitute the actual path (e.g. ".reports/review/2026-04-26T08-30-40Z") before spawning. -->
 
 **IMPORTANT**: Replace `$RUN_DIR` below with the actual literal path computed in Step 2 before inserting into any Agent spawn prompt.
 
@@ -250,6 +263,10 @@ Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severi
 
 **Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively; no Bash checkpoint polling. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
 
+```bash
+ls "$RUN_DIR/"*.md 2>/dev/null || echo "⚠ No agent output files found in $RUN_DIR — check that $RUN_DIR was expanded correctly in spawn prompts"
+```
+
 ## Step 4: Post-agent checks (run in parallel)
 
 Run these two checks simultaneously (while Step 3 agents complete):
@@ -265,7 +282,7 @@ TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $N
 # Rate-limit guard: if gh api returns HTTP 429, wait 10 seconds and retry once.
 # If still rate-limited, log "rate-limited — downstream search may be incomplete" and continue.
 # --paginate is available for large result sets but increases rate-limit exposure; omit unless completeness is critical.
-CHANGED_EXPORTS=$(git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- "src/**/__init__.py" | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u) # timeout: 3000
+CHANGED_EXPORTS=$(git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- ':(glob)src/**/__init__.py' | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u) # timeout: 3000
 for export in $CHANGED_EXPORTS; do
     echo "=== $export ==="
     gh api "search/code" --field "q=$export language:python" --jq '.items[:5] | .[].repository.full_name' 2>/dev/null # timeout: 30000
@@ -286,7 +303,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- pyproject.toml req
 git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -iE "(password|secret|api_key|token|private_key|auth_token)\s*[=:]\s*['\"]?[A-Za-z0-9+/._-]{8,}['\"]?" # timeout: 3000
 
 # Check for API stability: are public APIs being removed without deprecation?
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- "src/**/__init__.py" # timeout: 3000
+git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- ':(glob)src/**/__init__.py' # timeout: 3000
 
 # Check CHANGELOG was updated
 git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANGES.md # timeout: 3000
@@ -294,7 +311,7 @@ git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANG
 
 ## Step 5: Cross-validate critical/blocking findings
 
-Locate cross-validation protocol: `FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED=".claude/skills/_shared"`. Read `$FOUNDRY_SHARED/cross-validation-protocol.md` and follow it. File absent → warn the user: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
+Locate cross-validation protocol: Read `$FOUNDRY_SHARED/cross-validation-protocol.md` and follow it. File absent → warn the user: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
 
 **Skill-specific**: same agent type that raised finding = verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer critical finding).
 
@@ -304,13 +321,13 @@ Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | t
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
-> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `codex.md` if present — skip any that are missing). Read `$REVIEW_SKILL_DIR/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Read `.claude/skills/_shared/cross-validation-protocol.md` and apply cross-validation to all critical/blocking findings before including them (file absent → skip cross-validation, note in output). For `foundry--challenger.md`: map severity keys Blockers → critical/high, Concerns → medium, Nitpicks → low when aggregating counts.
+> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `foundry--codex.md` if present — skip any that are missing). Read `$REVIEW_SKILL_DIR/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Read `${FOUNDRY_SHARED}/cross-validation-protocol.md` and apply cross-validation to all critical/blocking findings before including them (file absent → skip cross-validation, note in output). For `foundry--challenger.md`: map severity keys Blockers → critical/high, Concerns → medium, Nitpicks → low when aggregating counts.
 >
 > **Filtering rules:**
 > - Precision gate: only include findings with a concrete, actionable location (function, line range, or variable name).
 > - Finding density: for modules under 100 lines, aim for ≤10 total findings.
 > - Ranking: within each section, order by impact (blocking > critical > high > medium > low).
-> - Codex deduplication: include `codex.md` unique findings under `### Codex Co-Review`; same file:line raised by both agent and Codex → keep agent version, mark as 'also flagged by Codex'.
+> - Codex deduplication: include `foundry--codex.md` unique findings under `### Codex Co-Review`; same file:line raised by both agent and Codex → keep agent version, mark as 'also flagged by Codex'.
 >
 > **Issue alignment (when `issue-*.md` files exist in `$RUN_DIR`):** Include a `### Issue Root Cause Alignment` section placed immediately after `### [blocking] Critical`. For each linked issue: state the root cause hypothesis, whether the PR addresses it (yes / partially / no), whether the PR description diverges from the issue's stated problem, and whether the reproduction scenario is tested. Any `root cause misalignment` or `scope divergence` finding is at least HIGH severity.
 >
@@ -392,6 +409,15 @@ Spawn with:
 End with `## Confidence` block per CLAUDE.md. Always last thing, regardless of `--reply`.
 
 </workflow>
+
+<calibration>
+
+Scenarios:
+1. FIX scope: single bug-fix PR with 1 changed file → scope=FIX, 3 agents skipped (solution-architect, perf-optimizer, challenger)
+2. FEATURE scope: new feature PR with API changes → scope=FEATURE, all 7 agents run
+3. --reply mode: existing review report + --reply flag → skip to Step 9, no agents spawned
+
+</calibration>
 
 <notes>
 

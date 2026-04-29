@@ -31,13 +31,7 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 
 **Checkpoint**: plan is single-pass — `.plans/active/<slug>` file existence serves as implicit resume signal. No `.developments/` checkpoint needed; if skill interrupted, re-run `/develop:plan` to regenerate (plan makes no code changes).
 
-**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
-
-- status `completed` if work clearly done
-- status `deleted` if orphaned / no longer relevant
-- keep `in_progress` only if genuinely continuing
-
-**Task tracking**: immediately after Step 1 (scope known), TaskCreate all steps before any other work. Mark each step in_progress when starting, completed when done.
+Read `$_DEV_SHARED/task-hygiene.md`.
 
 ## Anti-Rationalizations
 
@@ -46,8 +40,6 @@ Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 | "The plan is obvious — no need for agent feasibility review" | Feasibility review catches domain-specific blockers (missing test infrastructure, incompatible library constraints, API changes) that seem obvious in hindsight. |
 | "Codex design review is optional for small tasks" | Small tasks regularly reveal large hidden dependencies. Codex catches architectural anti-patterns before they are baked into an implementation plan. |
 | "I can scope this during implementation — no need to plan first" | Scope discovered during implementation inflates PRs and obscures intent. Plan mode exists to prevent exactly this. |
-
-## Plan Mode
 
 ## Flag parsing
 
@@ -108,10 +100,6 @@ Derive filename slug from goal: first 4-5 meaningful words, lowercase, hyphen-se
 2. <Step 2>
 3. <Step 3>
 ...
-
-### Follow-up command
-
-/develop <classification> <original goal text>
 ```
 
 ## Step 3: Agent feasibility review

@@ -5,6 +5,20 @@ Contains oracle agent orchestration, feasibility annotation, queue filtering, an
 
 > **Research run directory**: outputs (`hypotheses.jsonl`, `checkpoint.json`, `journal.md`) go to `.experiments/<run-id>/` — timestamped dir created at R0 start, distinct from `.experiments/state/<run-id>/`. Called `<RUN_DIR>` throughout. See `protocol.md` (companion file, same skill dir) for layout.
 
+**Health monitoring** (CLAUDE.md §8) — create checkpoint before spawning oracle agents:
+
+```bash
+LAUNCH_AT=$(date +%s)
+CHECKPOINT="/tmp/hypothesis-check-$LAUNCH_AT"
+touch "$CHECKPOINT"  # timeout: 3000
+```
+
+Poll every 5 min: `find <RUN_DIR> -newer "$CHECKPOINT" -type f | wc -l` (`timeout: 5000`) — new files = alive; zero = stalled.
+
+- **Hard cutoff: 15 min** no file activity → timed out
+- **One extension (+5 min)**: if `tail -20 <RUN_DIR>/oracle-researcher.md` shows active progress, grant one extension; second stall = hard cutoff
+- **On timeout**: read `tail -100 <RUN_DIR>/oracle-researcher.md`; surface with ⏱; continue with partial hypotheses or empty queue if none written
+
 1. **Build hypothesis queue** — if `--hypothesis <path>` provided, read as pre-built queue (skip oracle phase). Otherwise, spawn oracle agents per active flags — parallel if both set:
 
    **If `--researcher` is set** — spawn `research:scientist` (`maxTurns: 15`):

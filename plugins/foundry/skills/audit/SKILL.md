@@ -46,11 +46,13 @@ Run a full-sweep quality audit of the `.claude/` configuration and all `plugins/
 </inputs>
 
 <constants>
+
 <!-- Background agent health monitoring (CLAUDE.md §8) — applies to Step 3 foundry:curator spawns -->
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
 EXTENSION=300          # one +5 min extension if output file explains delay
 BATCH_SIZE=5           # max files per foundry:curator spawn in Step 3; keep small to avoid context compaction
+
 </constants>
 
 <workflow>
@@ -226,7 +228,7 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 
 ## Step 4: System-wide checks
 
-> **Template path resolution**: `.claude/skills/audit/templates/` is symlinked by `/foundry:init`. If absent, fall back to plugin cache:
+> **Template path resolution**: `.claude/skills/audit/templates/` is populated by plugin system; if absent, fall back to plugin cache:
 > ```bash
 > AUDIT_TPL=".claude/skills/audit/templates"
 > [ -d "$AUDIT_TPL" ] || AUDIT_TPL="$(find ${HOME}/.claude/plugins/cache -path "*/audit/templates" -type d 2>/dev/null | head -1)" # timeout: 5000
@@ -345,7 +347,13 @@ Main context receives only that one-liner. The orchestrator MUST NOT read `aggre
 
 ## Step 6: Cross-validate critical findings
 
-Read and follow the cross-validation protocol from `.claude/skills/_shared/cross-validation-protocol.md`.
+```bash
+_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1)  # timeout: 5000
+[ -z "$_SHARED" ] && _SHARED="plugins/foundry/skills/_shared"
+[ -f "$_SHARED/cross-validation-protocol.md" ] || { printf "⚠ WARNING: cross-validation-protocol.md not found at $_SHARED — skipping cross-validation\n"; }
+```
+
+Read and follow the cross-validation protocol from `$_SHARED/cross-validation-protocol.md` (if it exists).
 
 **Skill-specific**: the verifier agent is always **foundry:curator**.
 
@@ -396,7 +404,7 @@ Choose the fix agent based on file type:
 
 Spawn one agent per affected file, batching all findings for that file into a single subagent prompt. Issue **all spawns in a single response** for parallelism.
 
-Each subagent prompt template: Read the fix prompt template from .claude/skills/audit/templates/fix-prompt.md and use it, filling in `<file path>` and the list of findings.
+Each subagent prompt template: Read the fix prompt template from `$AUDIT_TPL/fix-prompt.md` and use it, filling in `<file path>` and the list of findings.
 
 **Preferred orchestration pattern — audit-fix sub-agent**
 
@@ -406,7 +414,7 @@ When the finding count exceeds 10 or the user picked "Fix all" from the gate, sp
 
 ```markdown
 Read `<RUN_DIR>/summary.jsonl` — this is the findings list (one JSON object per line).
-Read `.claude/skills/audit/templates/fix-prompt.md` for the per-file fix prompt template.
+Read `$AUDIT_TPL/fix-prompt.md` for the per-file fix prompt template.
 For each unique file in the findings list, spawn one fix agent (foundry:curator for .md files, foundry:sw-engineer for .js/.py files) with all findings for that file batched into a single prompt.
 Issue all fix spawns in a single response for parallelism.
 After all fix agents complete, spawn foundry:curator re-audit agents (one per changed file) to confirm fixes held.
@@ -437,7 +445,14 @@ After all subagents complete, collect their results and proceed to Step 10.
 
 After all Step 8 fix agents complete and before foundry:curator re-audit:
 
-Read `.claude/skills/_shared/codex-prepass.md` and run the Codex pre-pass on the combined diff of all fixes.
+```bash
+CODEX_AVAILABLE=$(command -v codex 2>/dev/null || find ~/.claude/plugins/cache -name "codex*" -type d 2>/dev/null | head -1)  # timeout: 5000
+_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1)  # timeout: 5000
+[ -z "$_SHARED" ] && _SHARED="plugins/foundry/skills/_shared"
+[ -f "$_SHARED/codex-prepass.md" ] || { printf "⚠ WARNING: codex-prepass.md not found at $_SHARED — skipping codex pre-pass\n"; CODEX_AVAILABLE=""; }
+```
+
+if [ -n "$CODEX_AVAILABLE" ]; then read `$_SHARED/codex-prepass.md` and run the Codex pre-pass on the combined diff of all fixes; else echo "⚠ codex plugin not available — skipping codex pass"; fi
 
 Treat any findings as additional issues entering Step 10's re-audit scope. Skip if Step 8 touched only 1 file.
 
@@ -450,17 +465,7 @@ For every file changed in Step 8, spawn **foundry:curator** again to confirm the
 grep -n "<broken-name>" <fixed-file>
 ```
 
-**Confidence re-run**: parse each confidence score from the one-line summaries (Step 3) and re-audit summaries (Step 10). For any file where **Score < 0.7**:
-
-1. Re-spawn foundry:curator on that file with the specific gap from the `Gaps:` field addressed in the prompt (e.g., "pay special attention to async error paths — previous pass flagged this as a gap")
-2. If confidence is still < 0.7 after one retry: flag to user with ⚠ and include the gap in the final report — do not silently drop it
-3. Recurring low-confidence gaps (same gap on same file across multiple audit runs) → candidate for adding to foundry:curator's `\<antipatterns_to_flag>` or the agent's own instructions
-
-```bash
-# Parse confidence scores from foundry:curator outputs (regex on task result text)
-# Score: 0.82  → extract 0.82
-# Flag any < 0.7 for targeted re-run
-```
+**Confidence re-run**: See quality-gates.md Confidence Block requirements — apply per standard protocol. Parse each confidence score from the one-line summaries (Step 3) and re-audit summaries (Step 10). For any file where **Score < 0.7**: re-spawn foundry:curator on that file with the specific gap from the `Gaps:` field addressed in the prompt; if still < 0.7 after one retry: flag to user with ⚠ and include the gap in the final report. Recurring low-confidence gaps (same gap on same file across multiple audit runs) → candidate for adding to foundry:curator's `\<antipatterns_to_flag>` or the agent's own instructions.
 
 **Convergence loop**: if the re-audit surfaces new fixable findings within the gate-selected severity threshold, loop back to Step 8. Repeat until:
 
@@ -547,7 +552,12 @@ Run `/foundry:init` to propagate clean config to ~/.claude/
 
 **Trigger**: `/audit --upgrade`
 
-Read and execute `plugins/foundry/skills/audit/modes/upgrade.md`.
+```bash
+UPGRADE_MD=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/audit/ 2>/dev/null | head -1)upgrade.md  # timeout: 5000
+[ -f "$UPGRADE_MD" ] || UPGRADE_MD="plugins/foundry/skills/audit/upgrade.md"
+```
+
+Read and execute `$UPGRADE_MD`.
 
 ## Mode: adversarial (alias: --challenge)
 
@@ -566,7 +576,14 @@ Use the same `BATCH_SIZE` grouping as Step 3 — same plugin-aware batching appl
 
 **Phase B — Codex adversarial pass** (parallel with Phase A):
 
-Read `.claude/skills/_shared/codex-prepass.md` and run Codex pass on all in-scope files. Focus Codex on: cross-file inconsistencies, circular dispatch chains, agent description ambiguities that cause routing failures, and workflow steps that assume capabilities the declared tools don't provide.
+```bash
+CODEX_AVAILABLE=$(command -v codex 2>/dev/null || find ~/.claude/plugins/cache -name "codex*" -type d 2>/dev/null | head -1)  # timeout: 5000
+_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1)  # timeout: 5000
+[ -z "$_SHARED" ] && _SHARED="plugins/foundry/skills/_shared"
+[ -f "$_SHARED/codex-prepass.md" ] || { printf "⚠ WARNING: codex-prepass.md not found at $_SHARED — skipping codex pre-pass\n"; CODEX_AVAILABLE=""; }
+```
+
+If `[ -n "$CODEX_AVAILABLE" ]`: read `$_SHARED/codex-prepass.md` and run Codex pass on all in-scope files. Focus Codex on: cross-file inconsistencies, circular dispatch chains, agent description ambiguities that cause routing failures, and workflow steps that assume capabilities the declared tools don't provide. Else: `echo "⚠ codex plugin not available — skipping codex adversarial pass"`.
 
 Codex writes per-file findings to `<RUN_DIR>/codex-adversarial-<file-basename>.md`. Return compact JSON envelope per file.
 
@@ -619,12 +636,10 @@ After completing `--upgrade` or `--adversarial` mode: also fire this gate (omit 
   - `YELLOW` (`\033[1;33m`) — warnings/medium: `⚠ MISSING`, `⚠ ORPHANED`, `⚠ DIFFERS`
   - `GREEN` (`\033[0;32m`) — pass status: `✓ OK`, `✓ IDENTICAL`
   - `CYAN` (`\033[0;36m`) — source agent name or fix hint
-- **Report before fix**: never silently mutate files — always present the findings report first (Step 7), then fix
 - **settings.json is hands-off**: missing permissions are always reported, never auto-edited — structural JSON edits risk breaking Claude Code's config loading
 - **Dead loops need human judgment**: a cycle in follow-up chains might be intentional (e.g., refactor → review → fix → refactor) — flag and explain, don't auto-remove
 - **Convergence loop replaces cycle cap**: the fix loop runs until zero fixable findings remain or the 5-pass hard limit is hit — see Step 10 for the full protocol
 - **Relationship to curator**: `foundry:curator` is a single-file reactive audit; `/audit` is the system-wide sweep that runs foundry:curator at scale and adds cross-file checks
-- `general-purpose` is a built-in Claude Code agent type (no `.claude/agents/general-purpose.md` file needed); no custom system prompt, all tools available.
 - **Paths must be portable**: `.claude/` for project-relative paths, `~/` or `$HOME/` for home paths — never a literal `/Users/<name>/` or `/home/<name>/` path (shown here as anti-examples only); this rule applies to ALL config files including `settings.json`
 - **Bash error logging**: if a bash block in Pre-flight checks or Step 4 fails unexpectedly, append a JSONL line to `.claude/logs/audit-errors.jsonl` (`{"ts":"<ISO>","check":"<N>","error":"<message>"}`) for post-mortem — do not swallow errors silently.
 - **Parallel execution rule**: After Step 2 (file collection), launch Steps 3 and 4 in the same response — all foundry:curator agent spawns AND all system-wide bash checks must be issued together. Do NOT run Step 3 first and Step 4 second. Aggregation (Step 5) waits for both to complete. The docs-freshness web-explorer (within Step 4) also launches in that same parallel batch.

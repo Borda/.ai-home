@@ -17,6 +17,9 @@ Skill domains:
 - `/codemap:scan` → synthetic Python project with known module structure; measure whether scan correctly identifies modules, dependencies, and produces valid index
 - `/codemap:integration` → synthetic project with known skill integration opportunities; measure whether integration correctly scores and ranks candidate skills
 - `/research:verify` → paper-vs-code fidelity check; inject N known deviations (hyperparams, architecture, loss function, preprocessing); score recall per dimension (F, H, E, N, C)
+- `/distill:lessons` → synthetic `.notes/lessons.md` corpus with N injected lessons of known disposition (→ rule, → agent update, → skill update, → already covered, → too narrow); measure whether distill correctly classifies each lesson and generates accurate proposals; ground truth = injected dispositions and target files
+- `/manage:create` → synthetic create-agent and create-skill directives; measure whether output file has valid frontmatter, correct structure, NOT-for clause, non-empty domain content; ground truth = structural completeness checklist
+- `/manage:update` → synthetic rename and content-edit directives against a fixture agent/skill file; measure whether cross-reference propagation is complete and description-changed flag is correctly set; ground truth = known cross-ref targets in fixture
 
 ### Step 2: Spawn skill pipeline subagents
 
@@ -24,7 +27,11 @@ Mark "Calibrate skills" in_progress. For each skill in domain table, spawn one `
 
 For skill targets (target name starts with `/`): spawn `general-purpose` subagent with skill's `SKILL.md` content prepended as context, running against synthetic input from problem. Pipeline template write-and-acknowledge pattern still applies.
 
-For mode-specific targets (`/research:plan`, `/research:judge`): prepend relevant mode file as context instead of full `SKILL.md` — read `plugins/research/skills/plan/SKILL.md` (plan wizard steps P-P0–P-P3) for `/research:plan`, and `plugins/research/skills/judge/SKILL.md` (steps J1–J6) for `/research:judge`. `<TARGET>` substitution uses kebab form without leading slash (e.g. `research-plan`, `research-judge`).
+For mode-specific targets (`/research:plan`, `/research:judge`): prepend relevant mode file as context instead of full `SKILL.md`. Resolve the skill file via installed path first, falling back to source-tree path:
+- `/research:plan`: `ls ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/plan/SKILL.md 2>/dev/null | sort -V | tail -1` — fallback: `plugins/research/skills/plan/SKILL.md`
+- `/research:judge`: `ls ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/judge/SKILL.md 2>/dev/null | sort -V | tail -1` — fallback: `plugins/research/skills/judge/SKILL.md`
+
+Read the resolved path (plan wizard steps P-P0–P-P3 for `/research:plan`; steps J1–J6 for `/research:judge`). `<TARGET>` substitution uses kebab form without leading slash (e.g. `research-plan`, `research-judge`).
 
 For `/research:judge`, calibration pattern mirrors `/audit`: inject N specific known issues into synthetic `program.md`, score recall of injected issues against judge's findings list. Ground truth = injected issues and severities (per J2 severity table: critical/high/medium/low).
 
@@ -64,13 +71,13 @@ Modes evaluated for calibration but deferred — significant barriers. `/audit` 
 | `/develop-plan` | Output is somewhat subjective; no clear ground-truth checklist beyond section presence | Structured plan schema is formalized |
 | `/distill-review` | Reads real agent/skill files; synthetic roster possible but overlaps `/audit` calibration | Distinct synthetic scenarios identified |
 | `/distill-prune` | Likely calibratable — construct a synthetic memory corpus with known entries to drop (stale, redundant, duplicated-in-CLAUDE.md), then score recall of correct drop/trim/keep decisions; ground truth is constructable | Synthetic memory corpus fixtures built |
-| `/distill-lessons` | Reads real `.notes/lessons.md`; needs realistic synthetic lesson corpus | Lesson corpus fixtures exist |
+| `/distill-lessons` | Promoted to domain table — synthetic lesson corpus calibration now defined | — |
 | `/distill-external` | Calibratable with two concrete GT fixture cases: **(1) caveman plugin** — narrow communication-mode tool, no local overlap → GT outcome: install-as-is recommendation; **(2) Karpathy autoresearch** — research automation with strong structural overlap to `research:` plugin → GT outcome: Group A candidates map to research plugin, digest recommended. Score whether adoption-table lane assignments (adopt-as-is/tweak/discuss/skip) and install-as-is flag match GT. Ground truth constructable without live external source — fixture = static snapshot of each tool's agent/skill/rule files. | GT fixture snapshots authored |
 
 **Excluded** (inherently non-calibratable — documented to avoid recurring evaluation):
 
 - `/resolve` — orchestrates live PR review, lint, push; fully external-service-dependent
-- `/manage` — CRUD on config files; no findings list to score
+- `/manage` (delete, perm ops) — CRUD on config files with no structured findings list to score; `/manage:create` and `/manage:update` promoted to domain table with structural completeness ground truth
 - `/develop:feature`/`/develop:fix`/`/develop:refactor`/`/develop:debug` — full dev lifecycle; requires git, tests, linting
 - `/research:topic` — SOTA literature search; depends on live web results; no deterministic ground truth
 - `/brainstorm` — creative ideation; no deterministic ground truth

@@ -16,8 +16,10 @@ NOT for: bug fixes (use `/develop:fix`); new features (use `/develop:feature`); 
 </objective>
 
 <constants>
+
 - MAX_INNER_CYCLES: 5 (change-test cycles per outer session — Step 4 safety break)
 - MAX_AGGREGATE_CYCLES: 10 (total change-test cycles across all outer cycles combined — Step 4 + Step 5)
+
 </constants>
 
 <workflow>
@@ -36,13 +38,7 @@ _FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_
 
 Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:linting-expert`, `foundry:challenger`.
 
-**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
-
-- status `completed` if work clearly done
-- status `deleted` if orphaned / no longer relevant
-- keep `in_progress` only if genuinely continuing
-
-**Task tracking**: immediately after Step 1 (scope known), TaskCreate all steps before any other work. Mark each step in_progress when starting, completed when done.
+Read `$_DEV_SHARED/task-hygiene.md`.
 
 ## Anti-Rationalizations
 
@@ -61,10 +57,19 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 **Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to inform Step 1 scope analysis. Skip redundant codebase exploration for already-classified files. Store plan path as `PLAN_FILE`.
 
 ```bash
-# Extract --plan path from arguments
-PLAN_FILE="${ARGUMENTS##*--plan }"
-PLAN_FILE="${PLAN_FILE%% *}"
-[ "$PLAN_FILE" = "$ARGUMENTS" ] && PLAN_FILE=""
+# Extract --plan path from arguments — support both `--plan path` and `--plan=path`
+PLAN_FILE=""
+if [[ "$ARGUMENTS" =~ --plan[[:space:]]+([^[:space:]]+) ]]; then
+  PLAN_FILE="${BASH_REMATCH[1]}"
+elif [[ "$ARGUMENTS" =~ --plan=([^[:space:]]+) ]]; then
+  PLAN_FILE="${BASH_REMATCH[1]}"
+fi
+# Existence guard — fail fast if path supplied but missing
+if [ -n "$PLAN_FILE" ] && [ ! -f "$PLAN_FILE" ]; then
+  echo "! BREAKING — plan file not found: $PLAN_FILE"
+  echo "Fix: pass an existing plan path via --plan <path> or --plan=<path>"
+  exit 1
+fi
 ```
 
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4, 5), append `step: N — completed`. On skill start, check for existing `.developments/*/checkpoint.md` — offer resume from last completed step if found.
@@ -225,10 +230,10 @@ For each change:
    ```bash
    $PYTEST_CMD --tb=short <test_files> -v
    ```
-3. Tests pass: proceed to next change
-4. Tests fail: revert, try different approach
+3. Tests pass: increment `TOTAL_CYCLES=$(( TOTAL_CYCLES + 1 ))`; proceed to next change
+4. Tests fail: revert, try different approach; increment `TOTAL_CYCLES=$(( TOTAL_CYCLES + 1 ))`
 
-**Safety break**: max 5 change-test cycles per session. After 5, stop — report what succeeded, what broke, what remains.
+**Safety break**: after `MAX_INNER_CYCLES` change-test cycles, stop — report what succeeded, what broke, what remains.
 
 > **Aggregate ceiling**: max 10 total change-test cycles across all outer cycles combined (inner Step 4 + outer Step 5). After 10 total cycles, stop — report what succeeded, what remains, ask user whether to continue or accept current state.
 

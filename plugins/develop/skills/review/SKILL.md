@@ -1,7 +1,7 @@
 ---
 name: review
-description: Multi-agent code review of local files, directories, or the current git diff covering architecture, tests, performance, docs, lint, security, and API design.
-argument-hint: '[file|dir]'
+description: Multi-agent code review of local Python files, directories, or the current git diff covering architecture, tests, performance, docs, lint, security, and API design. Python files only — non-Python files are out of scope.
+argument-hint: '[python-file|dir] [--no-challenge]'
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 context: fork
 model: opus
@@ -19,21 +19,33 @@ NOT for: GitHub PR review (use `/oss:review <PR#>`); GitHub thread analysis or P
 <inputs>
 
 - **$ARGUMENTS**: optional file path or directory to review. Supports `--no-challenge` flag to skip adversarial review (challenger runs by default).
-  - Integer (positive number): use `AskUserQuestion`: "Looks like you passed a PR/issue number. Did you mean to run `/oss:review $ARGUMENTS` to review that PR?" Options: (a) "Yes — launch `/oss:review $ARGUMENTS`" → invoke the oss:review skill with the number; (b) "No — review local code at a path instead" → ask for the path to review
   - Path given: review those files
   - Omitted: review current git diff (`git diff HEAD` — staged + unstaged vs HEAD)
   - **Scope**: reviews Python source only. Non-Python file (YAML, JSON, shell script, etc.) → state out of scope, suggest appropriate tool. No findings.
 
+**Integer detection gate** (execute BEFORE Step 1): if `$ARGUMENTS` is a positive integer or matches `#\d+`:
+
+```bash
+if [[ "$ARGUMENTS" =~ ^#?[0-9]+$ ]]; then
+    echo "Integer argument detected — invoking AskUserQuestion"
+fi
+```
+
+Call `AskUserQuestion` tool: "Looks like you passed a PR/issue number. Did you mean to run `/oss:review $ARGUMENTS` to review that PR?" Options: (a) "Yes — launch `/oss:review $ARGUMENTS`" → invoke `oss:review` skill with the number; (b) "No — review local code at a path instead" → ask for the path to review.
+
 </inputs>
 
 <constants>
+
 CHALLENGE_ENABLED=true  # set to false via --no-challenge
-<!-- Note: timeout thresholds below are targets for framework-level enforcement only — the skill
-     cannot actively poll between synchronous Agent calls. If an agent appears stalled, read
-     $RUN_DIR/<agent-name>.md for partial output and mark ⏱ in the final report. -->
-MONITOR_INTERVAL=300   # 5 min — framework target only (advisory)
-HARD_CUTOFF=900        # 15 min — framework target only (advisory)
-EXTENSION=300          # +5 min extension — framework target only (advisory)
+<!-- Note: timeout thresholds below are reference values for documentation and health-monitoring
+     guidance only — the skill cannot actively poll between synchronous Agent calls. These are
+     NOT active enforcement timers. If an agent appears stalled, read $RUN_DIR/<agent-name>.md
+     for partial output and mark ⏱ in the final report. -->
+MONITOR_INTERVAL_ADVISORY=300   # 5 min — reference only; not enforced by skill
+HARD_CUTOFF_ADVISORY=900        # 15 min — reference only; not enforced by skill
+EXTENSION_ADVISORY=300          # +5 min extension — reference only; not enforced by skill
+
 </constants>
 
 <workflow>
@@ -113,11 +125,9 @@ if command -v scan-query >/dev/null 2>&1 && [ -f ".cache/scan/${PROJ}.json" ]; t
     done
 fi
 if [ -z "$CODEMAP_CONTEXT" ]; then
-    echo "⚠ No codemap context: files outside src/ layout (scripts/, tools/, tests/) are not indexed — structural impact analysis unavailable for these files"
+    : # No codemap context — proceed silently per codemap-context.md contract
 fi
 ```
-
-When the warning fires, include it in the final review report header (under `### Coverage Notes` if a section exists, otherwise prepend to Step 5 consolidator prompt) so reviewers know the structural-context section is intentionally empty for non-src files.
 
 Codemap returns results → prepend `## Structural Context (codemap)` block to **Agent 1 (foundry:sw-engineer)** spawn prompt. Include:
 
@@ -181,7 +191,7 @@ fi
 
 ```bash
 if command -v jq >/dev/null 2>&1; then
-    OSS_ROOT=$(jq -r 'to_entries[] | select(.key | test("oss@")) | .value.installPath' ${HOME}/.claude/plugins/installed_plugins.json 2>/dev/null | head -1)  # timeout: 5000
+    OSS_ROOT=$(jq -r 'to_entries[] | select(.key | test("oss@")) | .value.installPath' ${HOME}/.claude/plugins/installed_plugins.json 2>/dev/null | head -1) || OSS_ROOT=""  # timeout: 5000; jq parse failure → empty string, handled below
     if [ -z "$OSS_ROOT" ]; then
         echo "⚠ oss plugin checklist unavailable — review will proceed without severity anchors; install oss plugin for full coverage"
         REVIEW_CHECKLIST=""
@@ -199,9 +209,9 @@ fi
 
 Replace `$REVIEW_CHECKLIST` in Agent 1 and consolidator spawn prompts below with resolved path. **If empty, omit the checklist instruction from those prompts entirely** — do not pass an empty path.
 
-**Visible-degradation rule** — `$REVIEW_CHECKLIST` is empty → the consolidator prompt (Step 5) **must** insert the following note into the final report under Findings: "Review checklist not applied (oss plugin not available) — severity anchors may be inconsistent." Silent degradation hides the gap from reviewers and makes severity drift invisible.
+**Pre-expansion required**: `$REVIEW_CHECKLIST` must be substituted with its literal resolved value before inserting into any Agent spawn prompt string — same as `$RUN_DIR_LITERAL`. Never pass the bare variable name `$REVIEW_CHECKLIST` inside a quoted Agent prompt; the agent subshell will not expand it.
 
-<!-- Note: $REVIEW_CHECKLIST must be pre-expanded before inserting into spawn prompts — replace with the literal path string from the bash block above, same as $RUN_DIR. -->
+**Visible-degradation rule** — `$REVIEW_CHECKLIST` is empty → the consolidator prompt (Step 5) **must** insert the following note into the final report under Findings: "Review checklist not applied (oss plugin not available) — severity anchors may be inconsistent." Silent degradation hides the gap from reviewers and makes severity drift invisible.
 
 Launch agents simultaneously with Agent tool (security augmentation folded into Agent 1 — not separate spawn; Agent 6 optional). Every agent prompt must end with:
 
@@ -246,13 +256,19 @@ Read review checklist (Read tool → `$REVIEW_CHECKLIST`) — apply CRITICAL/HIG
 
 **Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the diff. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"blockers":0,"concerns":1},"file":"$RUN_DIR/challenger.md","confidence":0.88}`.
 
-**Health monitoring**: Agent calls are synchronous — the framework awaits each response natively. No Bash checkpoint polling is possible during an active Agent call. The `$HARD_CUTOFF` and `$EXTENSION` constants document the intended timeout behavior for the framework, not for active polling.
+**Health monitoring**: Agent calls are synchronous — the framework awaits each response natively. No Bash checkpoint polling is possible during an active Agent call. `$HARD_CUTOFF_ADVISORY` and `$EXTENSION_ADVISORY` are reference values only — not active timers.
 
-If an agent does not return within `$HARD_CUTOFF` seconds: use the Read tool on `$RUN_DIR/<agent-name>.md` to surface any partial results written so far. Mark timed-out agents with ⏱ in the final report. Grant one `$EXTENSION` if the output file tail explains the delay. Never silently omit timed-out agents.
+If an agent does not return within `$HARD_CUTOFF_ADVISORY` seconds: use the Read tool on `$RUN_DIR/<agent-name>.md` to surface any partial results written so far. Mark timed-out agents with ⏱ in the final report. Grant one `$EXTENSION_ADVISORY` extension if the output file tail explains the delay. Never silently omit timed-out agents.
 
 ## Step 4: Cross-validate critical/blocking findings
 
-Read and follow cross-validation protocol from `$_FOUNDRY_SHARED/cross-validation-protocol.md`. File absent → skip Step 4.
+```bash
+if [ ! -f "$_FOUNDRY_SHARED/cross-validation-protocol.md" ]; then
+    echo "⚠ cross-validation-protocol.md not found at $_FOUNDRY_SHARED — Step 4 skipped; critical findings are unverified. Install foundry plugin or verify _FOUNDRY_SHARED path."
+fi
+```
+
+If file present: read and follow cross-validation protocol from `$_FOUNDRY_SHARED/cross-validation-protocol.md`. File absent → skip Step 4 (warning printed above).
 
 **Skill-specific**: use **same agent type** that raised finding as verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer's critical finding).
 
@@ -266,11 +282,16 @@ Spawn **foundry:sw-engineer** consolidator with prompt:
 
 Main context receives only one-liner verdict.
 
-Report format: read `templates/review-report.md` in this skill directory and use it as the output structure.
+Report format: read the review report template — resolve path first:
+
+```bash
+_REVIEW_TEMPLATE=$(ls ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/review/templates/review-report.md 2>/dev/null | head -1)
+[ -z "$_REVIEW_TEMPLATE" ] && _REVIEW_TEMPLATE="plugins/develop/skills/review/templates/review-report.md"
+```
+
+Pass `$_REVIEW_TEMPLATE` (pre-expanded literal) into the consolidator spawn prompt: "Read `<resolved-template-path>` and use it as the output structure."
 
 After parsing confidence scores: any agent scored < 0.7 → prepend **⚠ LOW CONFIDENCE** to that agent's findings section, explicitly state gap. Never silently drop uncertain findings.
-
-<!-- Extended Fields live in $_FOUNDRY_SHARED/terminal-summaries.md — if that file is absent, omit the extended fields block -->
 
 Print terminal block: read `---` header from top of `.temp/output-review-$BRANCH-$DATE.md` (lines 1–12, up to and including closing `---`), append `→ saved to .temp/output-review-$BRANCH-$DATE.md`, print to terminal. Report file already contains the block — no separate prepend step needed.
 
@@ -315,6 +336,6 @@ Print `### Codex Delegation` section to terminal only when tasks actually delega
   - Security findings in auth/input/deps → run `pip-audit` for dependency CVEs; address OWASP issues inline via `/develop:fix`
   - Mechanical issues beyond Step 5 findings → `/codex:codex-rescue <task>` to delegate
   - Contributor-facing review of GitHub PR → use `/oss:review <PR#>` instead
-- **Parallel agent cleanup**: after all 6 sub-agents complete, review `TaskList` — delete any tasks created by sub-agents (not by the lead orchestrator). Sub-agent task creation is unintended and can leave zombie tasks.
+- **Parallel agent cleanup**: after all 7 agents complete, review `TaskList` — delete any tasks created by sub-agents (not by the lead orchestrator). Sub-agent task creation is unintended and can leave zombie tasks.
 
 </notes>

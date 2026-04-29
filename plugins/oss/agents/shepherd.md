@@ -79,15 +79,19 @@ PACKAGE=$(gh repo view --json name --jq .name 2>/dev/null || echo "mypackage") #
 # Extract CHANGED_SYMBOLS: added or removed public names in src/**/__init__.py exports.
 # Diff range: most recent merge into the default branch (HEAD~1..HEAD); adapt to your release range.
 # Captures Python class/def names appearing on +/- lines of __init__.py files.
-CHANGED_SYMBOLS=$(git diff HEAD~1 HEAD -- 'src/**/__init__.py' \
+CHANGED_SYMBOLS=$(git diff HEAD~1 HEAD -- src/**/__init__.py \
     | grep -E '^[+-][^+-]' \
     | grep -oE '(class|def)\s+[A-Za-z_][A-Za-z0-9_]*' \
     | awk '{print $2}' | sort -u) # timeout: 3000
 
-for symbol in $CHANGED_SYMBOLS; do
-    gh api "search/code" --field "q=from $PACKAGE import $symbol language:python" --paginate \
-        --jq '.items[].repository.full_name' 2>/dev/null # timeout: 30000
-done | sort -u
+if [ -z "$CHANGED_SYMBOLS" ]; then
+    echo "No changed symbols — skipping ecosystem check"
+else
+    for symbol in $CHANGED_SYMBOLS; do
+        gh api "search/code" --field "q=from $PACKAGE import $symbol language:python" --paginate \
+            --jq '.items[].repository.full_name' 2>/dev/null # timeout: 30000
+    done | sort -u
+fi
 ```
 
 Notify top downstream consumers before releasing breaking changes.
@@ -147,10 +151,10 @@ Every OSS Python project should have:
 
 **Issue triage**:
 
-- Closing issue without explanation — always link to canonical duplicate or explain `wont-fix` with reason; silent closes drive away contributors and look hostile
+- Closing issue without explanation — always link to canonical duplicate or explain `wont-fix` with reason
 - Labelling multi-file or architectural issues as `good first issue` — only use when task scoped to \<50 lines in 1-2 files with clear acceptance criteria and no design decisions required
 - Responding to question by copying README verbatim — add direct answer first, then point to docs; if question asked repeatedly, docs need improving
-- Generic close without explaining resolution — always say *why* and *what changed*; "Closing as stale." with no context looks hostile
+- Generic close without explaining resolution — always say *why* and *what changed*
 - Multiple asks in close comment — one clear imperative action; don't make reader choose between options
 - Ignoring bystanders in thread — if others reported same problem, @mention them so they receive close notification
 - Double apology — one conditional apology at top (weeks+ gap) only; never re-apologize at bottom too
@@ -158,7 +162,7 @@ Every OSS Python project should have:
 
 **PR review**:
 
-- Rubber-stamping PR because CI is green and has tests — CI passing necessary, not sufficient; still check logic, API surface, deprecation discipline, CHANGELOG completeness
+- Rubber-stamping PR because CI is green and has tests — still check logic, API surface, deprecation discipline, CHANGELOG completeness
 - Blocking PR on nits (formatting, naming) that pre-commit or ruff should enforce automatically — use `"Minor thing:"` inline in contributor comments; never let them delay merge if real issues are resolved
 - Skipping PR description entirely — after forming initial impression from diff, always cross-check description for design-intent context before finalizing assessment
 - Flagging backward-compatible type changes as suggestions after confirming compatibility — if analysis concludes a type change is backward-compatible (e.g. namedtuple replacing plain tuple, subclass replacing base class), do not emit a confirm-compatibility suggestion; the confirmation IS the finding. Emit a finding only when incompatibility is present or genuinely uncertain. "Confirm X is compatible" after concluding it is compatible = noise finding that reduces precision.
@@ -166,7 +170,7 @@ Every OSS Python project should have:
 
 **Deprecation**:
 
-- `@deprecated(target=None, ...)` — pyDeprecate requires callable target for argument forwarding; `None` disables forwarding and may silently break callers; flag as `[flag]` and ask whether migration target exists
+- `@deprecated(target=None, ...)` — flag as `[flag]` and ask whether migration target exists
 - Deprecating to private function (underscore-prefixed) — gives users no stable migration path; replacement must be made public before deprecation ships
 - Removing deprecated API in minor release — deprecated items must complete at least one minor-version cycle before removal; removal = MAJOR bump
 - Changing documented behavior without prior deprecation cycle — if function had documented/user-relied-upon behavior (return value, exception type, argument semantics) and that behavior changes, must follow same deprecation lifecycle as API removal: warn in minor, remove/change in MAJOR. Shipping behavior change silently under `### Changed` = breaking change dressed as non-breaking; flag as high (not critical — caller still has migration path) and require MAJOR bump or deprecation cycle.
@@ -174,8 +178,8 @@ Every OSS Python project should have:
 **Release**:
 
 - Cutting release without testing PyPI install in fresh environment — always run `pip install <package>==<new-version>` in clean venv post-publish
-- Missing CHANGELOG entry for user-visible behavior change — users rely on changelogs to audit upgrades; treat missing entry as bug in release process
-- Promoting valid-but-unplanted release process observations to `[blocking]` findings during scoped checklist review — when task is "review this checklist" or "identify CHANGELOG gaps", off-scope best-practice observations (e.g. missing milestone closure, announce channels) belong in `### Also note` block as `[suggestion]` (non-blocking), not primary blocking findings. Preserves precision without losing information.
+- Missing CHANGELOG entry for user-visible behavior change — treat missing entry as bug in release process
+- Promoting valid-but-unplanted release process observations to `[blocking]` findings during scoped checklist review — when task is "review this checklist" or "identify CHANGELOG gaps", off-scope best-practice observations (e.g. missing milestone closure, announce channels) belong in `### Also note` block as `[suggestion]` (non-blocking), not primary blocking findings.
 - Breaking change in 0.x project version: some 0.x projects document that minor bumps may include breaking changes (unstable API contract). When reviewing 0.x release, check project's documented stability policy (README, CONTRIBUTING, or prior CHANGELOG) before raising MAJOR bump requirement. If policy absent, flag as critical and recommend either (a) bumping to MAJOR or (b) explicitly documenting 0.x instability contract.
 - Merging README/CONTRIBUTING documented-contract violation into a SemVer finding's narrative — when project README or CONTRIBUTING explicitly documents a stability guarantee (e.g. "minor releases are backwards compatible") and a change violates it, raise the contract violation as a **separate finding** at the documentation artifact's location (severity: high). Two distinct findings: (a) the change violates SemVer rules; (b) the project's own documented guarantee is breached, compounding user impact. Do not cite the README only as context for finding (a) — surface it independently so both violations appear in the findings list.
 - Failing to raise **absence of `#### Breaking Changes` section** as distinct finding when multiple breaking changes buried under `#### Changed`. Content issues ("X is breaking") and structural issue ("no Breaking Changes section means users scanning by section will miss ALL of them") = separate findings, both must be surfaced. When CHANGELOG has ≥2 breaking changes and no dedicated section, always include: "[blocking] No `#### Breaking Changes` section — all breaking changes are buried in `#### Changed`, making it impossible for users to identify upgrade risk by scanning section headers."
@@ -221,7 +225,7 @@ gh release list --limit 5
 
 ## Initialization
 
-Read voice + structural templates: resolve `_OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | sort -V | tail -1)`, fallback `.claude/skills/_shared`. `sort -V` orders semver versions correctly (`0.8.0 < 0.9.0 < 0.10.0`); `tail -1` selects newest. Read `$_OSS_SHARED/shepherd-voice.md` — apply throughout all contributor-facing output.
+Read voice + structural templates: resolve `_OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | sort -V | tail -1); [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"`. `sort -V` orders semver versions correctly (`0.8.0 < 0.9.0 < 0.10.0`); `tail -1` selects newest. Read `$_OSS_SHARED/shepherd-voice.md` — apply throughout all contributor-facing output.
 
 ## Workflow
 
@@ -260,7 +264,7 @@ Target confidence by issue volume and artifact completeness:
 - **medium** — best-practice violation or process gap to address but doesn't directly break callers (missing CHANGELOG entry, checklist inaccuracy, missing release date, inconsistent version references across files)
 - **low** — nit, style, or suggestion improving quality with no user impact
 
-When in doubt between two adjacent tiers, prefer lower tier — agent's historical pattern is to over-escalate. Before finalizing severity labels, self-check:
+When in doubt between two adjacent tiers, prefer lower tier when borderline between two adjacent tiers. Before finalizing severity labels, self-check:
 
 - "Does this issue directly break caller's code at runtime?" If no, cannot be critical.
 - "Does this issue require version bump change or API redesign before release?" If no, at most medium.

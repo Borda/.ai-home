@@ -13,6 +13,8 @@ Validate agents and skills by measuring outputs against synthetic problems with 
 
 Calibration data drives improvement loop: systematic gaps → instruction updates; persistent overconfidence → adjusted re-run thresholds in MEMORY.md.
 
+NOT for: static routing overlap analysis (use /foundry:audit); manually reviewing skill output quality (use /develop:review).
+
 </objective>
 
 <inputs>
@@ -96,7 +98,15 @@ Domain tables per mode: see `modes/agents.md`, `modes/skills.md`, `modes/routing
 
 From `$ARGUMENTS`, determine:
 
-- **Strip flags first**: extract `--fast`, `--full`, `--ab-test`, `--apply`, `--skip-gate` before scope resolution; validate mutual exclusion (error and stop on conflict)
+- **Strip flags first**: extract `--fast`, `--full`, `--ab-test`, `--apply`, `--skip-gate` before scope resolution; validate mutual exclusion (error and stop on conflict). Strip all flags from ARGUMENTS before scope token resolution:
+  ```bash
+  ARGUMENTS="${ARGUMENTS//--fast/}"
+  ARGUMENTS="${ARGUMENTS//--full/}"
+  ARGUMENTS="${ARGUMENTS//--ab-test/}"
+  ARGUMENTS="${ARGUMENTS//--apply/}"
+  ARGUMENTS="${ARGUMENTS//--skip-gate/}"
+  ARGUMENTS="${ARGUMENTS#"${ARGUMENTS%%[![:space:]]*}"}"
+  ```
 - **Target list** — remaining tokens after flag-strip; union of resolved targets:
   - `all` or omitted → all agents + `/audit` + `/oss:review` + routing + communication + all rules
   - `agents` → all agents (full agent list in `modes/agents.md`)
@@ -145,17 +155,23 @@ For each target mode in resolved target list, read corresponding mode file and e
 
 | Target mode | Mode file | Task to mark in_progress |
 | --- | --- | --- |
-| agents | `.claude/skills/calibrate/modes/agents.md` | "Calibrate agents" |
-| skills | `.claude/skills/calibrate/modes/skills.md` | "Calibrate skills" |
-| routing | `.claude/skills/calibrate/modes/routing.md` | "Calibrate routing" |
-| communication | `.claude/skills/calibrate/modes/communication.md` | "Calibrate communication" |
-| rules | `.claude/skills/calibrate/modes/rules.md` | "Calibrate rules" |
+| agents | `$CALIB_MODES_DIR/agents.md` | "Calibrate agents" |
+| skills | `$CALIB_MODES_DIR/skills.md` | "Calibrate skills" |
+| routing | `$CALIB_MODES_DIR/routing.md` | "Calibrate routing" |
+| communication | `$CALIB_MODES_DIR/communication.md` | "Calibrate communication" |
+| rules | `$CALIB_MODES_DIR/rules.md` | "Calibrate rules" |
 | plugins or `<plugin-name>` (tier 2) | expand to per-agent + per-skill pipelines: glob `plugins/<name>/agents/*.md` and calibratable `plugins/<name>/skills/*/SKILL.md`; spawn one pipeline per resolved target using the appropriate mode file (agents.md for agents, skills.md for calibratable skills); task name "Calibrate <plugin-name>" | "Calibrate <plugin-name>" |
 | `<agent-name>` / `<skill-name>` (tier 3) | single-file pipeline: use agents.md or skills.md mode file with `<TARGET>` = resolved name; task name "Calibrate <name>" | "Calibrate <name>" |
 
 For multiple tokens, merge resolved targets into per-mode groups before spawning — one pipeline per unique mode file needed, each carrying its full target list.
 
-Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instructions for pipeline subagent. Pipeline template lives at `.claude/skills/calibrate/templates/pipeline-prompt.md`. **N override**: `communication` caps at fast=3 / full=5 (not global FULL_N=10) to prevent pipeline context overflow — read `modes/communication.md` for details. **`rules` mode** spawns one `general-purpose` subagent per rule file (not standard pipeline template) — read `modes/rules.md` for direct-spawn approach.
+Before spawning the skills pipeline (when target includes `skills` or `all`), check oss plugin availability:
+```bash
+OSS_AVAILABLE=$(find ~/.claude/plugins/cache -name "oss" -type d 2>/dev/null | head -1)  # timeout: 5000
+```
+Only include `/oss:review` scenarios if `$OSS_AVAILABLE` is non-empty; otherwise note "oss plugin not installed — skipping /oss:review calibration" and exclude it from the skills pipeline target list.
+
+Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instructions for pipeline subagent. Pipeline template lives at `$CALIB_MODES_DIR/../templates/pipeline-prompt.md`. **N override**: `communication` caps at fast=3 / full=5 (not global FULL_N=10) to prevent pipeline context overflow — read `$CALIB_MODES_DIR/communication.md` for details. **`rules` mode** spawns one `general-purpose` subagent per rule file (not standard pipeline template) — read `$CALIB_MODES_DIR/rules.md` for direct-spawn approach.
 
 ## Step 3: Collect results and print combined report
 
@@ -163,27 +179,29 @@ Each mode file defines `<TARGET>`, `<DOMAIN>`, any N overrides, and extra instru
 
 ```bash
 # Initialise checkpoints after all pipeline spawns
+# Replace SPACE_SEPARATED_TARGETS with space-separated target names from the current run scope (e.g. "agents skills routing")
 LAUNCH_AT=$(date +%s)
-for TARGET in <target-list>; do touch /tmp/calibrate-check-$TARGET; done
+RUN_TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+for batch_target in $SPACE_SEPARATED_TARGETS; do touch /tmp/calibrate-check-$batch_target; done
 
 # Use extended timeout for dual-source runs (Codex active in agents/skills modes)
 EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN
-for T in agents skills; do [ "$TARGET" = "$T" ] && EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN_DUAL; done
+for T in agents skills; do [ "$batch_target" = "$T" ] && EFFECTIVE_TIMEOUT_MIN=$PIPELINE_TIMEOUT_MIN_DUAL; done
 
 # Every HEALTH_CHECK_INTERVAL_MIN (5 min): check each still-running pipeline
-NEW=$(find .reports/calibrate/<TIMESTAMP>/$TARGET/ -newer /tmp/calibrate-check-$TARGET -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS; timeout: 5000
-touch /tmp/calibrate-check-$TARGET
+NEW=$(find .reports/calibrate/$RUN_TS/$batch_target/ -newer /tmp/calibrate-check-$batch_target -type f 2>/dev/null | wc -l | tr -d ' ')  # tr -d strips leading spaces from wc -l on macOS; timeout: 5000
+touch /tmp/calibrate-check-$batch_target
 ELAPSED=$(( ($(date +%s) - LAUNCH_AT) / 60 ))
 if [ "$NEW" -gt 0 ]; then
-    echo "✓ $TARGET active"
+    echo "✓ $batch_target active"
 elif [ "$ELAPSED" -ge "$EFFECTIVE_TIMEOUT_MIN" ]; then
-    echo "⏱ $TARGET TIMED OUT (hard limit)"
+    echo "⏱ $batch_target TIMED OUT (hard limit)"
 elif [ "$ELAPSED" -ge "$HEALTH_CHECK_INTERVAL_MIN" ]; then
-    OUTPUT_FILE=".reports/calibrate/<TIMESTAMP>/$TARGET/pipeline.jsonl"
+    OUTPUT_FILE=".reports/calibrate/$RUN_TS/$batch_target/pipeline.jsonl"
     if tail -20 "$OUTPUT_FILE" 2>/dev/null | grep -qi 'delay\|wait\|slow'; then
-        echo "⏸ $TARGET: extension granted (+5 min)"
+        echo "⏸ $batch_target: extension granted (+5 min)"
     else
-        echo "⏱ $TARGET TIMED OUT"
+        echo "⏱ $batch_target TIMED OUT"
     fi
 fi
 ```

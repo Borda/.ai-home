@@ -39,20 +39,66 @@
 //   pre-commit 1 → auto-fix applied (file changed) → exits 2 so Claude re-reads
 //   pre-commit 2 → errors found → exits 2 so Claude sees the diagnostics
 //
+// ASYNC SPAWN
+//   Uses child_process.spawn (async) with explicit SIGTERM kill-on-timeout so
+//   Claude Code's hook pipeline is never blocked by a stalled pre-commit run.
+//   The hook process waits for the child via a Promise and exits with the
+//   correct code once pre-commit finishes or the timer fires.
+//
+// CROSS-SESSION LOCK
+//   A project-scoped lock at /tmp/claude-precommit-<project-hash>.lock prevents
+//   parallel Claude terminals from running pre-commit on the same project
+//   simultaneously (which would race pre-commit's own internal lock file and
+//   produce spurious failures). Lock is acquired after all early-exit checks and
+//   released in every exit path. Stale locks (>20 s) are stolen automatically.
+//
 // TIMEOUT
-//   60 s hard limit per invocation.  Heavy hooks (mypy, eslint full project)
-//   should be configured with `--show-diff-on-failure` or `pass_filenames: false`
-//   in .pre-commit-config.yaml to avoid slow single-file runs.
+//   15 s hard limit per single-file invocation.  Heavy hooks (mypy, eslint full
+//   project) should be configured with `--show-diff-on-failure` or
+//   `pass_filenames: false` in .pre-commit-config.yaml to avoid slow runs.
 //
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn } = require("child_process");
+
+function runPrecommit(configPath, filePath, root, timeoutMs) {
+  return new Promise((resolve) => {
+    const child = spawn("pre-commit", ["run", "--config", configPath, "--files", filePath], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "",
+      stderr = "";
+    child.stdout.on("data", (d) => {
+      stdout += d;
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d;
+    });
+
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolve({ timedOut: true, stdout, stderr, status: null });
+    }, timeoutMs);
+
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      resolve({ timedOut: false, stdout, stderr, status: code, signal });
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ error: err, stdout, stderr, status: null });
+    });
+  });
+}
 
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (d) => (raw += d));
-process.stdin.on("end", () => {
+process.stdin.on("end", async () => {
+  let crossLockAcquired = false;
+  let crossLock = null;
   try {
     const data = JSON.parse(raw);
     const { hook_event_name, tool_name, tool_input, session_id } = data;
@@ -94,20 +140,52 @@ process.stdin.on("end", () => {
       fs.writeFileSync(lockFile, String(process.pid));
     } catch (_) {}
 
-    // Run pre-commit on the specific file
-    const result = spawnSync("pre-commit", ["run", "--config", configPath, "--files", filePath], {
-      cwd: root,
-      encoding: "utf8",
-      timeout: 60_000, // 60s max — some hooks (mypy, eslint) can be slow
-    });
+    // Cross-session lock: one pre-commit run per project at a time.
+    // Key by project root to avoid blocking unrelated projects.
+    const projectHash = root.replace(/[^a-zA-Z0-9]/g, "_").slice(-40);
+    crossLock = path.join("/tmp", `claude-precommit-${projectHash}.lock`);
+    const CROSS_LOCK_TTL = 20_000; // 20s — covers 15s timeout + startup overhead
+
+    try {
+      const fd = fs.openSync(crossLock, "wx"); // atomic exclusive create
+      fs.writeSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      crossLockAcquired = true;
+    } catch (e) {
+      if (e.code === "EEXIST") {
+        // Lock exists — check if stale
+        try {
+          const age = Date.now() - fs.statSync(crossLock).mtimeMs;
+          if (age < CROSS_LOCK_TTL) {
+            process.exit(0); // Another session running pre-commit — skip
+          }
+          // Stale lock — steal it
+          fs.writeFileSync(crossLock, String(process.pid));
+          crossLockAcquired = true;
+        } catch (_) {
+          process.exit(0); // Can't determine state — skip safely
+        }
+      }
+    }
+
+    // Run pre-commit on the specific file (async, 15s timeout)
+    const result = await runPrecommit(configPath, filePath, root, 15_000);
+
+    if (crossLockAcquired) {
+      try {
+        fs.unlinkSync(crossLock);
+      } catch (_) {}
+      crossLockAcquired = false;
+    }
+
+    if (result.timedOut) {
+      process.exit(0); // Timeout — don't block Claude
+    }
 
     if (result.error) {
       // Missing pre-commit binary should not block Claude.
       if (result.error.code === "ENOENT") process.exit(0);
-      const errMsg =
-        result.error.code === "ETIMEDOUT"
-          ? "pre-commit timed out after 60s"
-          : `pre-commit failed to run: ${result.error.message}`;
+      const errMsg = `pre-commit failed to run: ${result.error.message}`;
       const out = [result.stdout, result.stderr, errMsg].filter(Boolean).join("\n").trim();
       process.stderr.write(out);
       process.exit(2);
@@ -132,6 +210,11 @@ process.stdin.on("end", () => {
     process.exit(0);
   } catch (_) {
     // Never block Claude — swallow all errors
+    if (crossLockAcquired && crossLock) {
+      try {
+        fs.unlinkSync(crossLock);
+      } catch (_) {}
+    }
     process.exit(0);
   }
 });

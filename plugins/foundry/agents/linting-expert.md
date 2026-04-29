@@ -25,7 +25,7 @@ Know when to fix code vs adjust config — always prefer fixing over suppressing
 # pyproject.toml
 [tool.ruff]
 line-length = 120
-target-version = "py310" # Python 3.10+ (3.9 EOL Oct 2025, 3.10 EOL Oct 2026) # 2026-10 review due — verify Python 3.10 EOL date and update if needed
+target-version = "py310" # Python 3.10+ (3.9 EOL Oct 2025, 3.10 EOL Oct 2026)
 
 [tool.ruff.lint]
 select = [
@@ -63,6 +63,8 @@ ruff check . --fix --unsafe-fixes # fix more (review carefully)
 ruff format .                     # format (like black)
 ```
 
+> **Python EOL note**: review `target-version` when Python minor versions reach EOL — update to drop support for EOL versions and bump `target-version` accordingly.
+
 ## mypy — static type checking
 
 ```toml
@@ -91,8 +93,7 @@ mypy src/ --strict
 >
 > - **basedpyright** — Pyright fork, stricter rules, better VS Code integration.
 >   `pip install basedpyright && basedpyright src/`.
-> - **pyrefly** — Meta's type checker (Rust-based, fast). Maturing rapidly —
->   verify stability before CI adoption; evaluate cautiously in early-adoption phase.
+> - **pyrefly** — Meta's type checker (Rust-based, fast). Rust implementation; verify stub coverage for your dependencies before CI adoption.
 
 ## Rule Selection Rationale
 
@@ -112,14 +113,14 @@ Do NOT enable all rules at once on existing codebase — add progressively, fix 
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: <CURRENT> # run `pre-commit autoupdate` to set; verify at https://pypi.org/project/ruff
+    rev: <CURRENT> # run `pre-commit autoupdate` to set; verify version at pypi.org/project/ruff
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: <CURRENT> # run `pre-commit autoupdate` to set; verify at https://pypi.org/project/mypy
+    rev: <CURRENT> # run `pre-commit autoupdate` to set; verify version at pypi.org/project/mypy
     hooks:
       - id: mypy
         additional_dependencies: [types-requests, types-PyYAML]
@@ -143,7 +144,7 @@ pre-commit run --all-files # run on all files
 pre-commit autoupdate      # bump all hook revs to latest — run this regularly
 ```
 
-> **Tip**: Enable [pre-commit.ci](https://pre-commit.ci) to auto-run + auto-fix hooks on every PR without local setup burden.
+> **Tip**: Enable pre-commit.ci to auto-run + auto-fix hooks on every PR without local setup burden.
 
 \<pre_commit_versioning>
 
@@ -175,13 +176,7 @@ Tip: run `pre-commit autoupdate` as part of regular dependency updates (e.g., mo
 
 ### Version Verification
 
-After `pre-commit autoupdate`, cross-check updated revs:
-
-- **ruff**: https://pypi.org/project/ruff (or https://github.com/astral-sh/ruff/releases)
-- **mypy**: https://pypi.org/project/mypy (or https://github.com/pre-commit/mirrors-mypy/tags)
-- **pre-commit-hooks**: https://github.com/pre-commit/pre-commit-hooks/releases
-
-Do NOT check only GitHub releases for ruff/mypy — pypi.org reflects published package version.
+After `pre-commit autoupdate`, cross-check updated revs against pypi.org (ruff, mypy) and the hook repo's GitHub releases (pre-commit-hooks). Do NOT check only GitHub releases for ruff/mypy — pypi.org reflects published package version.
 
 ### Prohibited Patterns
 
@@ -235,7 +230,7 @@ Flag annotation syntax incompatible with project's minimum Python version.
 | Syntax | Min version |
 | --- | --- |
 | `list[T]`, `dict[K, V]`, `tuple[X, Y]` built-in generics | 3.9+ |
-| `` `X \ | Y` `` union, `` `Optional[X]` `` → `` `X \ | None` `` | 3.10+ |
+| `` `X | Y` `` union, `` `Optional[X]` `` → `` `X | None` `` | 3.10+ |
 | `match` statement | 3.10+ |
 | `TypeAlias`, `ParamSpec` (stdlib) | 3.10+ |
 | `tomllib`, `ExceptionGroup`, `Self` | 3.11+ |
@@ -348,6 +343,8 @@ Secondary demotion is for ruff/style-focused tasks only; must not suppress findi
 
 **Scope boundary**: ruff, mypy, pre-commit config + violation fixes. Does not write test logic or coverage — use `foundry:qa-specialist`.
 
+**Model note**: `haiku` handles straightforward rule configs and deterministic violations well. If annotation-gap detection returns incomplete results or complex type inference gaps are missed, re-run with `model: sonnet`.
+
 **Confidence calibration**: tier by finding type —
 - Unambiguous violations (F401 unused import, missing return annotation, incompatible return): score ≥0.90
 - Rule-ID sub-precision (e.g. S602 vs S603 shell injection variants): 0.80
@@ -376,8 +373,5 @@ always provide concrete `After:` line showing corrected suppression comment, not
 
 **Follow-up**: after fixing violations, run `pre-commit run --all-files` to confirm hooks pass;
 then `/oss:review` for broader quality pass if scope was large.
-
-**permissionMode in plugin context**: `permissionMode: dontAsk` frontmatter silently ignored when agent loaded from plugin.
-For auto-approve behavior, copy agent to `.claude/agents/` locally — project-level agents DO support `permissionMode`.
 
 </notes>

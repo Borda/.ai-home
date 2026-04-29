@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial Codex review for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop:debug) or config quality (/foundry:audit).
+description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial review (Codex or foundry:challenger) for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop:debug) or config quality (/foundry:audit).
 argument-hint: <symptom, question, or failing command> [--fast]
 allowed-tools: Read, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
@@ -104,22 +104,38 @@ Common categories:
 
 ## Step 4: Auxiliary review (optional)
 
-If `$CODEX_AVAILABLE` is `true` (from Step 2) AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
+If `$CODEX_OK` is non-empty (set below) AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
 
-```text
-Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review of hypothesis quality: [provide symptom, signals, and hypothesis table]. Challenge the top hypothesis, identify blindspots, and surface alternative root causes. Read-only.")
+```bash
+CODEX_OK=$(command -v codex 2>/dev/null || find ~/.claude/plugins/cache -name "codex*" -type d 2>/dev/null | head -1)  # timeout: 5000
 ```
 
-Provide Codex: symptom (Step 1), key signals (Step 2), ranked hypothesis table (Step 3). Ask it to: identify blindspots not in table, challenge top hypothesis, surface alternative root causes.
+```bash
+INVESTIGATE_RUN=".investigate/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+mkdir -p "$INVESTIGATE_RUN"  # timeout: 5000
+CODEX_OUT="$INVESTIGATE_RUN/codex-review.md"
+```
 
-- Add any Codex alternative hypotheses as new rows in Step 3 table
-- Re-rank if Codex provides stronger evidence for lower-ranked candidate
-- If Codex identifies category not in common list, add it
+If `[ -n "$CODEX_OK" ]`:
 
-**Skip when**:
+```text
+Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review of hypothesis quality: substitute <issue-description> with the full issue text from Step 1 — symptom: <full symptom text>, signals: <key signals from Step 2>, hypothesis table: <ranked table from Step 3>. Challenge the top hypothesis, identify blindspots, and surface alternative root causes. Read-only. Write full findings to $CODEX_OUT using the Write tool. Return ONLY: {\"status\":\"done\",\"file\":\"<path>\",\"findings\":N,\"confidence\":0.N}")
+```
+
+Else (Codex unavailable): spawn `foundry:challenger` for adversarial review:
+
+```text
+Agent(subagent_type="foundry:challenger", prompt="Adversarial review of hypothesis quality for this investigation — symptom: <full symptom text from Step 1>, signals: <key signals from Step 2>, hypothesis table: <ranked table from Step 3>. Challenge the top hypothesis, identify blindspots, and surface alternative root causes. Read-only analysis only. Write full findings to $INVESTIGATE_RUN/challenger-review.md using the Write tool. Return ONLY: {\"status\":\"done\",\"file\":\"<path>\",\"findings\":N,\"confidence\":0.N}")
+```
+
+- Add any challenger alternative hypotheses as new rows in Step 3 table
+- Re-rank if challenger provides stronger evidence for lower-ranked candidate
+- If challenger identifies category not in common list, add it
+
+**Skip when** (set `CODEX_OK=""` or do not spawn):
 
 - Top hypothesis already has strong direct evidence (confidence clearly high)
-- `codex` plugin not available (`claude plugin list` shows no `codex@openai-codex`)
+- Both Codex and foundry:challenger are unavailable
 - User requested speed or `/investigate --fast` specified
 
 ## Step 5: Probe top hypotheses

@@ -3,9 +3,17 @@
     "name": "Jirka",
     "url": "https://github.com/Borda/AI-Rig"
   },
-  "description": "OSS maintenance skills: analyse, resolve, review, release",
+  "description": "OSS maintenance plugin: agents (shepherd, cicd-steward) and skills (analyse, resolve, review, release)",
+  "keywords": [
+    "oss",
+    "github",
+    "ci",
+    "release",
+    "review",
+    "maintenance"
+  ],
   "license": "MIT",
   "name": "oss",
   "repository": "https://github.com/Borda/AI-Rig",
-  "version": "0.4.2"
+  "version": "0.4.3"
 }

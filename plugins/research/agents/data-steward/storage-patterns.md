@@ -3,7 +3,7 @@
 Loaded by data-steward agent in `acquisition` mode before Step 2.
 Contains: DVC versioning, Polars tabular loading, HuggingFace datasets, 3D volumetric data loading.
 
-\<storage_and_loading_patterns>
+<storage_and_loading_patterns>
 
 ## Data Version Control (DVC)
 
@@ -51,17 +51,7 @@ ds = load_from_disk("data/processed/")
 
 ## 3D Volumetric Data Loading (medical imaging)
 
-```python
-class VolumetricDataset(Dataset):
-    """Patch-based 3D dataset — random crop for train, center crop for val/test."""
-
-    def __init__(
-        self, volumes: list[np.ndarray], patch_size: tuple[int, int, int] = (64, 64, 64)
-    ): ...
-    def __getitem__(
-        self, idx: int
-    ) -> dict[str, np.ndarray]: ...  # returns {"image": patch}
-```
+Patch-based 3D Dataset pattern: init stores `self.volumes` and `self.patch_size`; `__getitem__` extracts random patch for train, center crop for val/test — returns `{"image": patch_array}`.
 
 Key considerations for volumetric data:
 
@@ -74,11 +64,14 @@ Key considerations for volumetric data:
   # HDF5 (h5py) — optimal chunk alignment for patch extraction
   import h5py
 
-  with h5py.File("data.h5", "r") as f:
+  # Create/write: use 'w' mode
+  with h5py.File("data.h5", "w") as f:
       # Align chunk size to your patch size (e.g., 64x64x64) for minimal partial reads
-      ds = f.create_dataset(
-          "volumes", shape=(N, D, H, W), chunks=(1, 64, 64, 64), dtype="float32"
-      )
+      f.create_dataset("volumes", shape=(N, D, H, W), chunks=(1, 64, 64, 64), dtype="float32")
+
+  # Read patches: use 'r' mode
+  with h5py.File("data.h5", "r") as f:
+      ds = f["volumes"]
       patch = ds[idx, z : z + 64, y : y + 64, x : x + 64]  # reads exactly one chunk
   ```
 
@@ -88,4 +81,4 @@ Key considerations for volumetric data:
 
 - **Spacing**: resample to isotropic voxel spacing if model expects uniform resolution
 
-\</storage_and_loading_patterns>
+</storage_and_loading_patterns>

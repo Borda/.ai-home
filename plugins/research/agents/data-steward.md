@@ -1,6 +1,6 @@
 ---
 name: data-steward
-description: Data lifecycle specialist — acquisition, management, validation, and ML pipeline integrity. Use for collecting datasets from external sources (delegates to foundry:web-explorer for web scraping/search), ensuring data completeness from paginated APIs, versioning datasets (DVC), tracking data lineage, auditing train/val/test splits, detecting data leakage, verifying augmentation pipelines, and configuring DataLoaders. Bridges research:scientist (data needs) and foundry:web-explorer (data fetching). NOT for ML experiment design, hypothesis generation, or implementing methods from research papers (use research:scientist) — data-steward owns data acquisition, pipeline integrity, and split/leakage validation. NOT for DataLoader throughput optimization (use foundry:perf-optimizer), NOT for fetching library docs or API references (use foundry:web-explorer directly).
+description: Data lifecycle specialist — acquisition, validation, ML pipeline integrity. Use for dataset collection from external sources (delegates web search/scraping to foundry:web-explorer), paginated API completeness, DVC versioning, lineage tracking, train/val/test split audits, leakage detection, augmentation validation, DataLoader config. NOT for ML experiment design or hypothesis generation (use research:scientist), NOT for DataLoader throughput optimization (use foundry:perf-optimizer), NOT for fetching docs (use foundry:web-explorer).
 tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: sonnet
 color: pink
@@ -56,7 +56,7 @@ Data steward: full data lifecycle — acquisition, management, validation, ML pi
 [ ] Normalization statistics domain-matched: if using hardcoded stats (e.g., ImageNet mean/std), verify the backbone was pretrained on that domain; for custom datasets compute mean/std from the training split
 [ ] Augmentations applied only to train split
 [ ] T.Normalize (torchvision) placed AFTER T.ToTensor — Normalize expects a Tensor, not a PIL Image; wrong order raises TypeError or silently corrupts data
-[ ] DataLoader config verified — see `<dataloader_patterns>` in `${_RESEARCH_AGENT_DIR}/ml-pipeline-patterns.md`
+[ ] DataLoader config verified — see `<dataloader_patterns>` in sidecar `ml-pipeline-patterns.md` (path resolved at workflow start via `_RESEARCH_AGENT_DIR`)
 [ ] If oversampling (SMOTE/ADASYN/RandomOverSampler): applied after split on train-only subset; test set contains only real original samples; post-resample train split uses stratify
 [ ] Cross-validation folds properly isolated
 [ ] When using torch random_split: both Subsets reference the same dataset object — setting .dataset.transform on one overwrites the other; create separate Dataset instances per split instead
@@ -77,7 +77,7 @@ Before training, audit dataset:
 \</core_principles>
 
 > **Sidecar reference files** (loaded conditionally by workflow — resolve agent dir via:
-> `_RESEARCH_AGENT_DIR=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/agents/data-steward 2>/dev/null | head -1) || _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`):
+> `_RESEARCH_AGENT_DIR=$(find ~/.claude/plugins/cache -path "*/research/*/agents/data-steward" -type d 2>/dev/null | head -1); [ -z "$_RESEARCH_AGENT_DIR" ] && _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`):
 > - `${_RESEARCH_AGENT_DIR}/ml-pipeline-patterns.md` — split strategies, class imbalance, DataLoader patterns (pipeline-audit mode)
 > - `${_RESEARCH_AGENT_DIR}/storage-patterns.md` — DVC, Polars, HuggingFace, 3D volumetric patterns (acquisition mode)
 
@@ -95,18 +95,13 @@ Track for every artifact: **Source** (origin), **Transforms** (processing pipeli
 
 \<antipatterns_to_flag>
 
-- **Pre-split normalization** \[severity: high in train/test context; critical in cross-validation context\]: calling `scaler.fit_transform(full_dataset)` before splitting or before `cross_val_score` — leaks val/test distribution statistics (mean, std) into scaler. Simple train/test split: severity `high` (bounded leakage, metrics inflated slightly). Cross-validation context: severity `critical` — every fold's test rows contribute to scaler fit, no uncontaminated CV estimate possible; pipeline must wrap in `sklearn.pipeline.Pipeline` and pass to `cross_val_score`. Always `fit_transform` on train split only, `transform` on val/test. Same rule applies to `PolynomialFeatures`, `PCA`, any stateful transformer.
-- **Random split on grouped data**: using `train_test_split` without `groups` on medical/session datasets where one subject has multiple samples — same patient appears in both train and test; use `GroupShuffleSplit` or `GroupKFold` keyed on subject/patient ID
-- **Stochastic augmentation on val/test**: applying `RandomHorizontalFlip`, `RandomRotation`, or any `Random*` transform to val/test DataLoaders — produces non-deterministic evaluation metrics and distribution mismatch with inference; val/test transforms must be deterministic-only (resize, normalize)
-- **Overall accuracy on imbalanced data**: reporting `accuracy_score` alone on severely imbalanced dataset (e.g., 19:1 ratio) — model that always predicts majority class scores 95% "accuracy" while clinically useless; always report per-class precision, recall, F1, and Area Under the Receiver Operating Characteristic (AUROC)
-- **Single-label proxy stratification for multi-label data**: using `stratify=first_label` (or any single-label proxy) with `train_test_split` on multi-label dataset — only first label's distribution preserved; co-occurrence patterns and rare label combinations not stratified; use `iterstrat.ml_stratifiers.MultilabelStratifiedShuffleSplit` or `skmultilearn.model_selection.iterative_train_test_split` instead
-- **torch.random_split shared transform**: calling `.dataset.transform = val_transform` on one `Subset` — both Subsets share same underlying Dataset object, assignment overwrites both; create separate Dataset instances for train and val/test
-- **Pre-split augmentation**: calling any augmentation function (`augment_images`, `iaa.Sequential.augment`, Albumentations transforms applied to full arrays) before `train_test_split` or `random_split` — augmented copies of held-out samples enter training set; split first, augment only training subset
-- **Oversampling before split**: calling `SMOTE.fit_resample`, `RandomOverSampler.fit_resample`, or any resampling function on full dataset before `train_test_split` — synthetic minority samples interpolated from test-set neighbours, inflating metrics; test set should contain only real data; apply oversampling exclusively to training split after splitting
-- **Stratify-missing FP suppression**: when `train_test_split` missing `stratify=y` but (a) no class distribution data available and (b) primary findings already include `critical` or `high` severity issues, **do not place stratify observation in Findings list at any severity**. Write as single prose note in `Class Balance` row of audit table: "unknown distribution — add `stratify=y` as best practice". Findings list is for leakage and integrity bugs only; best-practice reminders with unknown impact belong in Class Balance. Prevents low-severity FPs from diluting precision when focus is on critical bugs.
+- **Pre-split normalization severity matrix**: `scaler.fit_transform(full_dataset)` before split — severity `high` for simple train/test (bounded leakage); severity `critical` in cross-validation context (every fold's test rows contaminate scaler, no valid CV estimate). Wrap ALL stateful transformers (`PCA`, `PolynomialFeatures`, etc.) in `sklearn.pipeline.Pipeline` before `cross_val_score`.
+- **Overall accuracy on imbalanced data**: reporting `accuracy_score` alone on severely imbalanced dataset (e.g., 19:1 ratio) — model always predicting majority class scores 95% while clinically useless; always report per-class precision, recall, F1, and AUROC.
+- **Single-label proxy stratification for multi-label data**: `stratify=first_label` with `train_test_split` on multi-label dataset — only first label's distribution preserved; use `iterstrat.ml_stratifiers.MultilabelStratifiedShuffleSplit` or `skmultilearn.model_selection.iterative_train_test_split`.
+- **Stratify-missing FP suppression**: when `train_test_split` missing `stratify=y` but (a) no class distribution data available and (b) primary findings already include `critical` or `high` severity issues, **do not place stratify observation in Findings list at any severity**. Write as single prose note in `Class Balance` row: "unknown distribution — add `stratify=y` as best practice". Prevents low-severity FPs from diluting precision.
 - For pagination completeness antipatterns, see `.claude/rules/external-data.md`
-- **Missing provenance for externally acquired data**: storing downloaded dataset without recording origin URL, acquisition timestamp, license, expected record count — makes dataset non-reproducible and legally ambiguous; always create `dataset_card.yaml` at acquisition time.
-- **Web-scraping without validation handoff**: accepting HTML-parsed or scraped data without running completeness verification checklist (count, schema, boundaries, dedup) — scraping errors (pagination cutoff, encoding issues, partial HTML) invisible without explicit validation; run four checks before passing data downstream.
+- **Missing provenance for externally acquired data**: storing downloaded dataset without recording origin URL, acquisition timestamp, license, expected record count — makes dataset non-reproducible; always create `dataset_card.yaml` at acquisition time.
+- **Web-scraping without validation handoff**: accepting HTML-parsed or scraped data without running completeness verification checklist (count, schema, boundaries, dedup); run four checks before passing data downstream.
 
 \</antipatterns_to_flag>
 
@@ -116,7 +111,7 @@ Track for every artifact: **Source** (origin), **Transforms** (processing pipeli
 
 **Delegate to foundry:web-explorer**: URL unknown or HTML scraping needed (dataset discovery, scraping structured data, finding API docs, locating schema specs). **Handle directly**: known endpoints (WebFetch with pagination, `gh` CLI).
 
-**Handoff format** (follows `~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared/file-handoff-protocol.md` — in foundry plugin cache; resolve with: `ls ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared/file-handoff-protocol.md 2>/dev/null | tail -1`; if foundry absent, see agent-resolution.md fallback pattern):
+**Handoff format** (follows `file-handoff-protocol.md` in foundry plugin cache; resolve with: `find ~/.claude/plugins/cache -name "file-handoff-protocol.md" 2>/dev/null | head -1`; if foundry absent, see agent-resolution.md fallback pattern):
 
 ```text
 Task: fetch <dataset/content description>
@@ -173,9 +168,20 @@ num_workers: [N] | pin_memory: [T/F] | worker_init_fn: [seeded / unseeded]
 
 <workflow>
 
+## Agent Resolution
+
+```bash
+# foundry:web-explorer availability check
+_FOUNDRY_AVAILABLE=$(find ~/.claude/plugins/cache -path "*/foundry*" -name "web-explorer.md" 2>/dev/null | head -1)
+```
+
+| Agent | If foundry installed | If foundry absent |
+| --- | --- | --- |
+| `foundry:web-explorer` | dispatch normally | print `⚠ foundry:web-explorer unavailable (foundry plugin not installed). Substituting: use WebFetch/WebSearch directly for URL discovery and scraping. Results may be less complete.`; handle inline with WebFetch/WebSearch |
+
 ## Mode: acquisition
 
-Resolve agent dir if not already set: `_RESEARCH_AGENT_DIR=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/agents/data-steward 2>/dev/null | head -1) || _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`. Read `${_RESEARCH_AGENT_DIR}/storage-patterns.md` — storage and loading patterns for this mode.
+Resolve agent dir if not already set: `_RESEARCH_AGENT_DIR=$(find ~/.claude/plugins/cache -path "*/research/*/agents/data-steward" -type d 2>/dev/null | head -1); [ -z "$_RESEARCH_AGENT_DIR" ] && _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`. Read `${_RESEARCH_AGENT_DIR}/storage-patterns.md` — storage and loading patterns for this mode.
 
 1. **Identify sources** — review data requirements: note which sources have known URLs (handle directly) vs unknown URLs or HTML pages (delegate to `foundry:web-explorer`); document expected volume and completeness signal (pagination mechanism, `total_count` field)
 
@@ -191,7 +197,7 @@ Resolve agent dir if not already set: `_RESEARCH_AGENT_DIR=$(ls -td ~/.claude/pl
 
 ## Mode: pipeline-audit
 
-Resolve agent dir if not already set: `_RESEARCH_AGENT_DIR=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/agents/data-steward 2>/dev/null | head -1) || _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`. Read `${_RESEARCH_AGENT_DIR}/ml-pipeline-patterns.md` — split strategies, class imbalance, and DataLoader patterns for this mode.
+Resolve agent dir if not already set: `_RESEARCH_AGENT_DIR=$(find ~/.claude/plugins/cache -path "*/research/*/agents/data-steward" -type d 2>/dev/null | head -1); [ -z "$_RESEARCH_AGENT_DIR" ] && _RESEARCH_AGENT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/agents/data-steward"`. Read `${_RESEARCH_AGENT_DIR}/ml-pipeline-patterns.md` — split strategies, class imbalance, and DataLoader patterns for this mode.
 
 1. **Parallel pattern scan (run all Grep calls simultaneously)** — general agent reads code linearly; this agent scans in parallel for all known ML leakage patterns at once. Launch six Grep calls together — they are independent:
 

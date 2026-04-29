@@ -145,9 +145,8 @@ Fix: increase `num_workers` or switch to faster augmentations (e.g. albumentatio
 
 ## DataLoader Optimization
 
-See `research:data-steward` for DataLoader reproducibility patterns
-(`seed`, `worker_init_fn`, `collate_fn`, `drop_last`).
 Throughput checklist: `num_workers > 0`, `pin_memory=True`, `persistent_workers=True`, `prefetch_factor=2`.
+DataLoader pipeline correctness, split validation, and leakage detection belong to `research:data-steward`; perf-optimizer owns num_workers/prefetch_factor tuning for throughput only.
 
 ## Mixed Precision (torch.amp — PyTorch 2.0+)
 
@@ -297,7 +296,9 @@ Rank by impact (highest first). Separate statically-confirmed from profiling-req
 
 ### Step 1 — Parallel static scan + baseline measurement (start both simultaneously)
 
-**Static Grep scan** — launch all five in parallel; each targets known Python/ML bottleneck class:
+### 1a. Static Grep scan
+
+Launch all five in parallel; each targets known Python/ML bottleneck class:
 
 ```text
 Grep: pattern="for .+ in .+:[\s\S]{0,80}for .+ in"   glob="**/*.py"   # nested loops → O(n²) candidates  (multiline: true required)
@@ -307,7 +308,9 @@ Grep: pattern="pin_memory\s*=\s*False"                glob="**/*.py"   # slow CP
 Grep: pattern="torch\.cuda\.amp\."                    glob="**/*.py"   # deprecated AMP API (use torch.amp)
 ```
 
-**Baseline measurement** — if runnable, time workload and measure GPU utilization:
+### 1b. Baseline measurement
+
+If runnable, time workload and measure GPU utilization:
 
 ```bash
 # Wall-clock baseline
@@ -319,7 +322,7 @@ python <script.py>
 kill %1; tail /tmp/gpu_util.log
 ```
 
-Both 1a and 1b independent — run same turn. Together cost same wall time as either alone.
+Steps 1a and 1b are independent — run same turn. Together cost same wall time as either alone.
 
 ### Step 2 — Identify single biggest bottleneck
 
@@ -370,7 +373,6 @@ Never report optimization results without before/after numbers.
 
 **Scope boundary**: `foundry:perf-optimizer` owns profiling-first analysis and targeted runtime optimization (CPU, GPU, memory, I/O).
 Adjacent:
-- `research:data-steward` for DataLoader config and data pipeline throughput
 - `foundry:solution-architect` for architectural changes that carry perf implication
 - `oss:cicd-steward` for CI perf regression detection and benchmark workflows
 - `foundry:sw-engineer` for correctness fixes that also carry perf implication

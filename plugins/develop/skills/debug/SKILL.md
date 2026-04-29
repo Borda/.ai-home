@@ -29,13 +29,7 @@ _DEV_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/develop/*/skills/_shar
 
 Read `$_DEV_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:challenger`.
 
-**Task hygiene**: Before creating tasks, call `TaskList`. For each found task:
-
-- status `completed` if work clearly done
-- status `deleted` if orphaned / no longer relevant
-- keep `in_progress` only if genuinely continuing
-
-**Task tracking**: immediately after Step 1 (scope known), TaskCreate all steps before any other work. Mark each step `in_progress` when starting, `completed` when done.
+Read `$_DEV_SHARED/task-hygiene.md`.
 
 ## Anti-Rationalizations
 
