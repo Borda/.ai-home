@@ -1,6 +1,6 @@
 ---
 name: analyse
-description: Analyze GitHub issues, Pull Requests (PRs), Discussions, and repo health for an Open Source Software (OSS) project. For any specific item, casts a wide net — finds and lists all related open and closed issues/PRs/discussions, explicitly flags duplicates. Also summarizes long threads, assesses PR readiness, extracts reproduction steps, and generates repo health stats. Uses gh Command Line Interface (CLI) for GitHub Application Programming Interface (API) access. Complements shepherd agent.
+description: Analyze GitHub issues, Pull Requests (PRs), Discussions, and repo health for an Open Source Software (OSS) project. For any specific item, casts a wide net — finds and lists all related open and closed issues/PRs/discussions, explicitly flags duplicates. Summarizes long threads, extracts reproduction steps, and generates repo health stats. Uses gh Command Line Interface (CLI) for GitHub Application Programming Interface (API) access. Complements shepherd agent. NOT for PR readiness assessment or code review (use oss:review).
 argument-hint: <N|health|ecosystem|path/to/report.md> [--reply]
 allowed-tools: Read, Bash, Write, Agent, AskUserQuestion
 context: fork
@@ -33,6 +33,7 @@ NOT for implementing PR action items (use oss:resolve). NOT for multi-agent code
 MONITOR_INTERVAL=300   # 5 minutes between polls
 HARD_CUTOFF=900        # 15 minutes of no file activity → declare timed out
 EXTENSION=300          # one +5 min extension if output file explains delay
+FAST_PATH_THRESHOLD=7200  # seconds (2 hours) — item counts updated within this window qualify for fast-path
 
 </constants>
 
@@ -49,7 +50,7 @@ _OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>
 [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
 
 FOUNDRY_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | sort -V | tail -1)
-[ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED=".claude/skills/_shared"
+[ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/skills/_shared"
 ```
 
 ## Step 1: Flag parsing
@@ -80,16 +81,9 @@ fi # timeout: 5000
 TODAY=$(date +%Y-%m-%d)
 ```
 
-`DIRECT_PATH_MODE=true` only valid when `REPLY_MODE=true` — if combined without `--reply`, Step 2 prints error and stops.
+`DIRECT_PATH_MODE=true` only valid when `REPLY_MODE=true` — if combined without `--reply`, Step 2 invokes AskUserQuestion and stops; execution never reaches Step 5 mode dispatch.
 
 ## Step 2: Reply-mode fast-path (only when `REPLY_MODE=true`)
-
-```
-# Fast-path decision tree:
-# Step 2: item count ≤ FAST_PATH_THRESHOLD → FAST_PATH_TENTATIVE
-# Step 3: cache hit for all items → promote to FAST_PATH; cache miss → DRIFT
-# Step 4: FAST_PATH → skip deep analysis; DRIFT/TENTATIVE → run full analysis
-```
 
 Skip when `REPLY_MODE=false` and `DIRECT_PATH_MODE=false`.
 
@@ -104,7 +98,11 @@ Remaining fast-path logic (TODAY, REPORT_FILE auto-construction, drift check) on
 When `REPLY_MODE=true`, check if fresh report already exists before any API calls:
 
 ```bash
-REPORT_FILE=".reports/analyse/thread/output-analyse-thread-$CLEAN_ARGS-$TODAY.md"
+# REPORT_FILE assigned here only for numeric (thread) mode.
+# health/ecosystem modes: REPORT_FILE set inside modes/health.md and modes/ecosystem.md respectively.
+# DIRECT_PATH_MODE: REPORT_FILE already set from $CLEAN_ARGS above.
+SUBDIR="thread"  # default for numeric args; overridden for health/ecosystem in their mode files
+REPORT_FILE=".reports/analyse/$SUBDIR/output-analyse-$SUBDIR-$CLEAN_ARGS-$TODAY.md"
 DRIFT=false
 FAST_PATH=false
 FAST_PATH_TENTATIVE=false
@@ -137,7 +135,8 @@ mkdir -p "$CACHE_DIR" # timeout: 5000
 - `FAST_PATH_TENTATIVE=true`: run lightweight drift check now that `TYPE` is known, then skip Step 4 type-detection API calls:
 
 ```bash
-# Cache hit + FAST_PATH_TENTATIVE: check current GitHub state (cache data is stale)
+# Cache hit + FAST_PATH_TENTATIVE: one lightweight API call to get updatedAt, then apply drift check
+# Drift check pattern (shared with Step 4): UPDATED_TS > REPORT_MTIME → DRIFT=true → full re-analysis
 if [ "$TYPE" = "discussion" ]; then
     UPDATED_AT=$(gh api graphql \
         -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){discussion(number:$number){updatedAt}}}' \
@@ -146,7 +145,7 @@ if [ "$TYPE" = "discussion" ]; then
 else
     UPDATED_AT=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" --jq '.updated_at' 2>/dev/null)  # timeout: 6000
 fi
-UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000
 [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
 [ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
 ```
@@ -168,6 +167,8 @@ UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M
 
 **Stale cache** — file for same number but earlier date ignored. Old files left in place — small, provide audit history.
 
+> **mtime reliability caveat**: `stat` mtime is unreliable after `rsync`/copy, in CI with frozen clocks, or on HFS+ (1-second granularity). If drift check produces unexpected fast-path hits, verify report mtime is correct with `stat "$REPORT_FILE"`. Workaround: delete the cached report to force full re-analysis.
+
 Cache applies to: issue/PR/discussion primary fetch and comments. Cache does NOT apply to: `gh issue list`, `gh pr list`, `gh pr checks`, `gh pr diff`, discussion list queries, health/ecosystem modes.
 
 ## Step 4: Auto-Detection (numeric arguments only)
@@ -182,10 +183,10 @@ ITEM=$(gh api "repos/{owner}/{repo}/issues/$CLEAN_ARGS" 2>/dev/null) # timeout: 
 
 if [ -n "$ITEM" ]; then
     TYPE=$(echo "$ITEM" | jq -r 'if .pull_request then "pr" else "issue" end')  # timeout: 5000
-    # Drift check — updated_at already in $ITEM; no extra API call
+    # Apply drift check (pattern per Step 3 comment): updated_at already in $ITEM; no extra API call
     if [ "$FAST_PATH_TENTATIVE" = "true" ]; then
         UPDATED_AT=$(echo "$ITEM" | jq -r '.updated_at' 2>/dev/null)
-        UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+        UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000
         [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
         [ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
     fi
@@ -200,10 +201,10 @@ else
     DISC_TITLE=$(echo "$DISC_JSON" | jq -r '.data.repository.discussion.title // empty' 2>/dev/null)
     if [ -n "$DISC_TITLE" ]; then
         TYPE="discussion"
-        # Drift check — updatedAt from same GraphQL response; no extra API call
+        # Apply drift check (pattern per Step 3 comment): updatedAt from same GraphQL response
         if [ "$FAST_PATH_TENTATIVE" = "true" ]; then
             UPDATED_AT=$(echo "$DISC_JSON" | jq -r '.data.repository.discussion.updatedAt' 2>/dev/null)
-            UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000 — macOS/Linux portable
+            UPDATED_TS=$(date -d "$UPDATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED_AT" +%s 2>/dev/null)  # timeout: 5000
             [ "$UPDATED_TS" -gt "$REPORT_MTIME" ] && DRIFT=true
             [ "$DRIFT" = "false" ] && FAST_PATH=true && echo "[resume] reusing existing report for #$CLEAN_ARGS"
         fi
@@ -292,11 +293,12 @@ End response with `## Confidence` block per CLAUDE.md — always **absolute last
 - Don't post responses without explicit user instruction — only draft them
 - **Forked context**: skill runs with `context: fork` — no access to current conversation history. All required context must be in skill argument or prompt. Tool availability is NOT affected — `AskUserQuestion` IS callable.
 - **`--reply` drafts only** — shepherd produces a draft file; it does NOT auto-post to GitHub. User posts manually. Write access to the repo is not required to use `--reply`; it is required only if user subsequently posts the draft via `gh issue comment` or `gh pr comment`.
+- **Follow-up context gap**: skill runs with `context: fork` — follow-up chains (`/develop:fix`, `/oss:review`) receive no analysis context from this run. Pass the report path explicitly or re-summarize key findings in the follow-up invocation.
 - Follow-up chains:
   - Issue with confirmed bug → `/develop:fix` to diagnose, reproduce with test, apply targeted fix
   - Issue is feature request → `/develop:feature` for TDD-first implementation
   - PR with quality concerns → `/oss:review` for comprehensive multi-agent code review
   - Draft responses → use `--reply` to auto-draft via shepherd; or invoke shepherd manually
-- Calibratable modes: thread (duplicate detection recall, PR readiness classification), health (issue health metrics accuracy), ecosystem (impact analysis accuracy).
+- Calibratable modes: thread (duplicate detection recall), health (issue health metrics accuracy), ecosystem (impact analysis accuracy).
 
 </notes>

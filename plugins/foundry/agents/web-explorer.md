@@ -1,5 +1,5 @@
 ---
-name: foundry-web-explorer
+name: web-explorer
 description: Fetches web pages, API docs, and external package/release information for use by orchestrators and other agents. Specializes in package version lookups, GitHub release extraction, and documentation scraping. NOT for code analysis or implementation (use foundry:sw-engineer), NOT for ML paper analysis or experiment design (use research:scientist), NOT for writing or auditing docstrings (use foundry:doc-scribe), NOT for dependency upgrade lifecycle decisions (use oss:shepherd), NOT for ML dataset acquisition or data pipeline management (use research:data-steward).
 tools: Read, Write, Bash, Grep, Glob, WebSearch, WebFetch, TaskCreate, TaskUpdate
 model: sonnet

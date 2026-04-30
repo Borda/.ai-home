@@ -283,9 +283,11 @@ SemVer-disciplined release pipeline. Six modes covering every step from generati
 /oss:release notes --changelog --summary --migration  # all four outputs
 /oss:release prepare v2.1.0                         # full pipeline: audit → all artifacts
 /oss:release audit                                  # readiness check before tagging
+/oss:release demo                                   # story-telling notebook for the release
+/oss:release demo v1.2->v2.0                        # demo scoped to explicit range
 ```
 
-Range notation: `v1->v2` (e.g. `v1.2->v2.0`). Omit range → defaults to `last-tag..HEAD`.
+Range notation: `v1->v2` (e.g. `v1.2->v2.0`). Omit range → defaults to `last-tag..HEAD`. Pre-release tags (`rcN`, `devN`, `alphaN`, `betaN`) are excluded from tag detection automatically.
 
 **Modes and flags:**
 
@@ -295,29 +297,31 @@ Range notation: `v1->v2` (e.g. `v1.2->v2.0`). Omit range → defaults to `last-t
 | `--changelog` | CHANGELOG.md entry (no shepherd review)                                                     |
 | `--summary`   | Internal summary saved to `.temp/`                                                          |
 | `--migration` | Migration guide for breaking changes saved to `.temp/` (shepherd review)                    |
-| `prepare`     | Full pipeline: audit → all four artifacts in `releases/<version>/`                          |
+| `prepare`     | Full pipeline: audit → all four artifacts + `demo.py` in `releases/<version>/`              |
 | `audit`       | Readiness checklist: tests green, changelog present, version bumped, no uncommitted changes |
+| `demo`        | Story-telling jupytext notebook (`demo.py`) highlighting most significant contributions     |
 
 **What each mode does:**
 
-| Primitive             | `notes`       | `prepare` | `audit` |
-| --------------------- | ------------- | --------- | ------- |
-| Read git log + PRs    | full          | diff      | full    |
-| Classify changes      | ✓             | ✓         | -       |
-| Explore codebase      | full          | diff      | full    |
-| Shepherd voice review | ✓             | ✓         | -       |
-| PUBLIC-NOTES.md       | write         | write     | -       |
-| CHANGELOG.md          | `--changelog` | write     | -       |
-| SUMMARY.md            | `--summary`   | write     | -       |
-| MIGRATION.md          | `--migration` | write¹    | -       |
-| Working tree          | -             | ✓         | ✓       |
-| CI status             | -             | ✓         | ✓       |
-| Open issues / PRs     | -             | ✓         | ✓       |
-| Docs alignment        | -             | diff      | full    |
-| Version consistency   | -             | ✓         | ✓       |
-| CVEs                  | -             | ✓         | ✓       |
+| Primitive             | `notes`       | `prepare` | `audit` | `demo` |
+| --------------------- | ------------- | --------- | ------- | ------ |
+| Read git log + PRs    | full          | diff      | full    | full   |
+| Classify changes      | ✓             | ✓         | -       | ✓      |
+| Explore codebase      | full          | diff      | full    | diff   |
+| Shepherd voice review | ✓             | ✓         | -       | -      |
+| PUBLIC-NOTES.md       | write         | write     | -       | -      |
+| CHANGELOG.md          | `--changelog` | write     | -       | -      |
+| SUMMARY.md            | `--summary`   | write     | -       | -      |
+| MIGRATION.md          | `--migration` | write¹    | -       | -      |
+| demo.py               | -             | -         | -       | write² |
+| Working tree          | -             | ✓         | ✓       | -      |
+| CI status             | -             | ✓         | ✓       | -      |
+| Open issues / PRs     | -             | ✓         | ✓       | -      |
+| Docs alignment        | -             | diff      | full    | -      |
+| Version consistency   | -             | ✓         | ✓       | -      |
+| CVEs                  | -             | ✓         | ✓       | -      |
 
-Flag mark = output produced only when that flag is passed. ¹ Full guide when breaking changes detected; single-line stub otherwise.
+Flag mark = output produced only when that flag is passed. ¹ Full guide when breaking changes detected; single-line stub otherwise. ² Jupytext percent-format Python script with `# %%` code cells and `# %% [markdown]` narrative cells; self-contained with references to additional resources.
 
 **SemVer enforcement:**
 
@@ -330,14 +334,14 @@ Flag mark = output produced only when that flag is passed. ¹ Full guide when br
 **CHANGELOG section ordering** (strict, enforced):
 
 ```text
-Added → Breaking Changes → Changed → Deprecated → Removed → Fixed
+Added → Breaking Changes → Changed → Deprecated → Removed → Fixed → 🔒 Security
 ```
 
 **Deprecation tracking:** Uses `pyDeprecate` for the deprecation lifecycle. Migration guides include a before/after table with argument mapping for all renamed or removed parameters.
 
 **Shepherd review** applies to release notes and migration guides. CHANGELOG entries and summaries are written directly without review.
 
-**Output location:** `releases/<version>/` for `prepare` mode; `.temp/` for individual modes.
+**Output location:** `releases/<version>/` for `prepare` mode (including `demo.py` when version tag is stable); `.temp/` for individual modes and demo on non-release branches.
 
 ______________________________________________________________________
 

@@ -121,9 +121,10 @@ fi
 
 If gh missing or not authenticated: stop (error printed above).
 
-Codex missing: set `CODEX_AVAILABLE=false`, continue — Steps 3–7 work without Codex; Step 8 skipped with notice: `⚠ codex not found — skipping action items. Install: /plugin marketplace add openai/codex-plugin-cc && /plugin install codex@openai-codex && /reload-plugins`
-
-**Degradation for simple items**: for simple, single-file action items, Claude can implement directly in-process without codex — use Step 8 in-process fallback: spawn `foundry:sw-engineer` directly without codex wrapper.
+Codex missing: set `CODEX_AVAILABLE=false`, continue — Steps 3–7 work without Codex. Step 8 degradation (applied in priority order):
+1. Simple, single-file action items → implement in-process via `foundry:sw-engineer` (no Codex wrapper)
+2. Complex or multi-file items → skip with notice; print: `⚠ codex not found — skipping complex item #<id>. Install: /plugin marketplace add openai/codex-plugin-cc && /plugin install codex@openai-codex && /reload-plugins`
+3. No items fall through both (all items are either simple or complex) — proceed to Step 9 after processing
 
 ### Review-handoff auto-detect (when $ARGUMENTS is empty)
 
@@ -146,7 +147,7 @@ Read `$REVIEW_FILE`. Extract PR number from header:
 
 PR found → set `$ARGUMENTS = <N>`, proceed PR mode. Print: `→ Resolved PR #<N> from review output.`
 
-No PR number extractable → print: "Review output does not reference a PR — provide a PR number explicitly: `/resolve <PR#>`" and exit 1.
+No PR number extractable → print: "Review output does not reference a PR — provide a PR number explicitly: `/oss:resolve <PR#>`" and exit 1.
 
 Parse $ARGUMENTS:
 
@@ -180,11 +181,11 @@ TaskUpdate(task_id=<task_id_from_above>, status="in_progress")
 
 *Skip to Step 3b (PR intelligence) when in pr mode or pr + report mode.*
 
+<!-- Sources block template (used in 3a/3b/3c): fields GitHub and Report vary by mode -->
+
 When mode == **report**:
 
-### Sources confirmation
-
-Print before parsing findings:
+Print Sources block before parsing findings:
 
 ```markdown
 ## Resolve — sources
@@ -488,44 +489,21 @@ Store returned task ID in each `ACTION_ITEMS` entry as `task_id`.
 
 ! IMPORTANT — invoke `AskUserQuestion` tool directly. Never write options as plain text.
 
-Pending items = all ACTION_ITEMS where type ≠ `[done]` and type ≠ `[info]`. If zero pending items → set `SELECTED_ITEMS` = all pending item IDs (implement all) and skip to Step 4.
+Pending items = ACTION_ITEMS where type ≠ `[done]` and type ≠ `[info]`. Zero pending → set `SELECTED_ITEMS` = all pending IDs, skip to Step 4.
 
-Sort pending items: `[gh][req]` / `[report][req]` first, then `[gh][suggest]` / `[report][suggest]`.
+Sort: `[req]` first, then `[suggest]`. Constraint: max 4 options/question, max 4 questions/call (3 item-group + 1 bulk-action).
 
-**`AskUserQuestion` constraint**: max 4 options per question, max 4 questions per call. Item checkboxes fill up to 3 questions (≤12 items); a fixed bulk-action question is always the last (4th).
+Split items into groups of ≤4, one `multiSelect: true` question per group. Labels: `<type> #<id>: <summary>` (≤55 chars); description: `<file:line> · @<author>`.
 
-### Building the call
+Last question (single-select, always): "Or choose a bulk action:" — "Apply selected" / "Apply all [req]" / "Apply all" / "Skip all".
 
-Split pending items into groups of ≤4 items, one group per question, `multiSelect: true`:
+>12 pending items: two calls — call 1: `[req]` groups + bulk-action; call 2: `[suggest]` groups + bulk-action; merge selections.
 
-- `question`: "Which items to implement? (check all that apply)"
-- `header`: `"Required"` for `[req]` groups (suffix `" 2"`, `" 3"` when multiple), `"Suggested"` for `[suggest]` groups
-- `multiSelect`: **true**
-- Options (one per item, up to 4):
-  - `label`: `<type> #<id>: <summary>` (truncate summary at 55 chars if needed)
-  - `description`: `<file:line or "—"> · @<author>`
-
-Always append one final **bulk-action question** (single-select):
-
-- `question`: "Or choose a bulk action (overrides item selections above):"
-- `header`: `"Bulk action"`
-- `multiSelect`: false
-- Options:
-  - `label`: "Apply selected" · `description`: "Implement only the checked items above (select none = skip)"
-  - `label`: "Apply all [req]" · `description`: "All required items, ignore selections"
-  - `label`: "Apply all" · `description`: "All [req] + [suggest] items, ignore selections"
-  - `label`: "Skip all" · `description`: "No implementation — proceed to lint + QA only"
-
-If pending items > 12 (would need >3 item-group questions): use **two `AskUserQuestion` calls** — first call covers `[req]` items (up to 3 questions) + bulk-action; second call covers `[suggest]` items (up to 3 questions) + bulk-action. Merge selections from both calls before setting `SELECTED_ITEMS`.
-
-### Resolving selections
-
-Set `SELECTED_ITEMS` from response:
-
-- "Skip all" → `SELECTED_ITEMS` = [] → **skip Steps 4–8, jump to Step 9 on current branch**
-- "Apply all" → `SELECTED_ITEMS` = all pending item IDs
-- "Apply all [req]" → `SELECTED_ITEMS` = all pending `[req]` item IDs only
-- "Apply selected" (or no bulk-action answer) → `SELECTED_ITEMS` = items checked across all item-group questions; if none checked → `SELECTED_ITEMS` = [] → **skip Steps 4–8, jump to Step 9**
+Resolve `SELECTED_ITEMS`:
+- "Skip all" or no selections → `[]` → skip Steps 4–8, jump to Step 9
+- "Apply all [req]" → all `[req]` IDs
+- "Apply all" → all pending IDs
+- "Apply selected" → checked IDs from item questions
 
 ## Step 4: Checkout PR branch
 
@@ -729,9 +707,10 @@ Authorize commits for this workflow:
 ```bash
 SENTINEL="/tmp/claude-commit-auth-$(git rev-parse --show-toplevel | xargs basename | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')-$(git branch --show-current | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/-$//')"
 touch "$SENTINEL"  # timeout: 3000
+trap 'rm -f "$SENTINEL"' EXIT INT TERM  # ensure cleanup even if workflow crashes
 ```
 
-If `CODEX_AVAILABLE=false`: mark all items `⚠ skipped — codex not installed`, skip to Step 9.
+If `CODEX_AVAILABLE=false`: apply degradation rules from Step 1 (simple items → foundry:sw-engineer; complex items → skip with notice). Never blanket-skip all items.
 
 > **Conflict gate**: verify all Step 5a conflict tasks `completed` before any action item. Still `pending`/`in_progress` → stop, surface list, wait. Items on unresolved conflicts compound diff.
 
@@ -764,12 +743,10 @@ git diff HEAD --stat  # timeout: 3000
 Code changed → commit:
 
 ```bash
-# Prerequisite: working tree must be clean before Step 7 Codex calls; verify with git diff --stat HEAD before proceeding.
 # Stage tracked modifications + new files from Codex (never git add -A)
 git add $(git diff HEAD --name-only)                                                     # timeout: 3000
-git ls-files --others --exclude-standard | grep . | xargs git add -- 2>/dev/null || true # grep . filters empty output (macOS-portable; xargs -r is GNU-only); permission matcher sees 'git ls-files' as first token  # timeout: 3000
-# IMPORTANT: replace all <placeholder> tokens below with actual values before committing
-# timeout: 3000 — git commit (local operation); include co-author trailer per git-commit.md
+git ls-files --others --exclude-standard | grep . | xargs git add -- 2>/dev/null || true # timeout: 3000
+# Replace all <placeholder> tokens with actual values before committing
 git commit -m "$(
 	cat <<'EOF'
 <imperative short summary of the change>
@@ -781,7 +758,7 @@ git commit -m "$(
 Co-authored-by: Claude Code <noreply@anthropic.com>
 Co-authored-by: OpenAI Codex <codex@openai.com>
 EOF
-)"
+)"  # timeout: 3000
 ```
 
 No code changed (already done or non-actionable) → record Codex's reason; do NOT create empty commit.
@@ -805,14 +782,16 @@ git stash list --quiet | grep -q "resolve-pre-item" && git stash pop  # timeout:
 ```bash
 RUN_DIR=".reports/resolve/$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # IMPORTANT: expand $RUN_DIR to its literal value in each prompt string below — agents receive text, not shell context; un-expanded $RUN_DIR means literal string in instructions
 mkdir -p "$RUN_DIR" # timeout: 5000
+# Compute BASE_REF merge base for accurate diff range in agent prompts
+BASE_REF_MERGE=$(git merge-base HEAD "origin/$BASE_REF" 2>/dev/null || echo "origin/$BASE_REF")
 ```
 
 Spawn both in parallel:
 
 ```text
-Agent(subagent_type="foundry:linting-expert", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF>. List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}.")
+Agent(subagent_type="foundry:linting-expert", maxTurns=15, prompt="Review all files changed in the current branch since $BASE_REF_MERGE (expand to literal SHA before spawning). List every lint/type violation. Apply inline fixes for any that are auto-fixable. Write your full findings to $RUN_DIR/linting-expert-step9.md using the Write tool, then return ONLY a compact JSON envelope: {fixed: N, remaining: N, files: [...]}.")
 
-Agent(subagent_type="foundry:qa-specialist", maxTurns=15, prompt="Review all files changed in the current branch since origin/<BASE_REF> for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}.")
+Agent(subagent_type="foundry:qa-specialist", maxTurns=15, prompt="Review all files changed in the current branch since $BASE_REF_MERGE (expand to literal SHA before spawning) for correctness, edge cases, and regressions. Flag any blocking issues (bugs, broken contracts, missing test coverage for the changed logic). Write your full findings to $RUN_DIR/qa-specialist-step9.md using the Write tool, then return ONLY a compact JSON envelope: {blocking: N, warnings: N, issues: [...]}.")
 ```
 
 > **Health monitoring**: synchronous. No response ~15 min → surface partial results from `$RUN_DIR` ⏱.

@@ -1,9 +1,11 @@
-**Re: Compress markdown to caveman format**
-
 ```bash
 TARGET=$(echo "$ARGUMENTS" | awk '{print $2}') # optional target version
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
-RANGE="$LAST_TAG..HEAD"
+# Accept $RANGE from caller if already set (branch-aware detection in skill's Shared setup)
+# Fallback: simple git describe with stable-tag-only filter — consistent with skill's detection logic
+if [ -z "$RANGE" ]; then
+    LAST_TAG=$(git describe --tags --abbrev=0 --exclude='*rc*' --exclude='*dev*' --exclude='*alpha*' --exclude='*beta*' 2>/dev/null || git rev-list --max-parents=0 HEAD)
+    RANGE="$LAST_TAG..HEAD"
+fi
 ```
 
 ### Pre-flight: gh authentication
@@ -37,11 +39,12 @@ gh run list --branch "$(git rev-parse --abbrev-ref HEAD)" --limit 5 \
 
 ```bash
 # Issues with blocker or bug labels (high-severity candidates)
-gh issue list --state open --limit 30 \
+gh issue list --state open --limit 100 \
     --json number,title,labels 2>/dev/null || echo "[]"
 
-# Open PRs targeting main — anything that should land before the release?
-gh pr list --state open --base main --limit 20 \
+# Open PRs targeting default branch — anything that should land before the release?
+TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | { read -r _ _ val; echo "${val:-main}"; })
+gh pr list --state open --base "${TRUNK:-main}" --limit 20 \
     --json number,title,draft,reviewDecision 2>/dev/null || echo "[]"
 ```
 
@@ -106,7 +109,7 @@ Date: [date] | Range: [last-tag]..HEAD ([N] commits)
 ### Verdict
 **READY** — no blockers. Run `/release prepare <version>` to write artifacts.
 — or —
-**NEEDS ATTENTION** — N items before release:
+**NEEDS_ATTENTION** — N items before release:
 - ❌ [blocking item]
 - ⚠️ [recommended item]
 

@@ -2,7 +2,7 @@
 name: review
 description: Multi-agent code review of GitHub Pull Requests (Python PRs only) covering architecture, tests, performance, docs, lint, security, and API design.
 argument-hint: '[PR number|path/to/report.md] [--reply] [--no-challenge]'
-allowed-tools: Read, Write, Edit, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Grep, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion
 model: opus
 effort: high
 ---
@@ -28,7 +28,7 @@ Spawn specialized sub-agents in parallel. Consolidate findings into structured f
 
 - Local file review or current git diff — use `/develop:review`
 - Non-Python PRs (TypeScript, Go, etc.) — state out of scope, stop
-- GitHub issue analysis or thread summarization — use `oss:analyse`
+- Standalone GitHub issue analysis or thread summarization — use `oss:analyse`. Note: oss:review performs inline linked-issue analysis (root-cause alignment check in Step 1) as part of PR review — this is within scope and does not conflict.
 
 </not-for>
 
@@ -61,6 +61,8 @@ Ensures `Agent` (sub-agent spawning), `AskUserQuestion` (follow-up gate), and `T
 # sort -V orders semver correctly (0.9.0 < 0.10.0); tail -1 picks newest
 _OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | sort -V | tail -1)
 [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+# Verify $_OSS_SHARED is resolved before any step that uses it (Step 9 reads shepherd-reply-protocol.md)
+[ -z "$_OSS_SHARED" ] && echo "⚠ Could not resolve _OSS_SHARED — Step 9 --reply will fail; verify oss plugin installed" || true
 ```
 
 Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`, `foundry:doc-scribe`, `foundry:linting-expert`, `foundry:solution-architect`.
@@ -103,24 +105,44 @@ CLEAN_ARGS="${CLEAN_ARGS#\#}"
 ```bash
 DIRECT_PATH_MODE=false
 if [[ "$CLEAN_ARGS" == *.md ]]; then
+    # Guard: reject plan files — shepherd must not draft replies from plan content
+    if [[ "$CLEAN_ARGS" == .plans/* ]] || [[ "$CLEAN_ARGS" == *todo_*.md ]]; then
+        echo "Error: plan files cannot be used as review report input. Pass a review report from .temp/output-review-*.md or a PR number."
+        exit 1
+    fi
     DIRECT_PATH_MODE=true
     REVIEW_FILE="$CLEAN_ARGS"
 fi
 ```
 
 ```bash
-FOUNDRY_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | head -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED="$(git rev-parse --show-toplevel)/.claude/skills/_shared"
+FOUNDRY_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | sort -V | tail -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/skills/_shared"
 ```
 
 ```bash
-# $CLEAN_ARGS must be a PR number — run all four in parallel:
+# $CLEAN_ARGS must be a non-empty numeric PR number — guard first:
+if [ -z "$CLEAN_ARGS" ] || ! [[ "$CLEAN_ARGS" =~ ^[0-9]+$ ]]; then
+    echo "Error: PR number required. Usage: /oss:review <PR number> [--reply] [--no-challenge]"
+    exit 1
+fi
+# Run all four in parallel:
 CHANGED_FILES=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null)  # cache for reuse in codemap block # timeout: 6000
 gh pr view $CLEAN_ARGS                                            # PR description and metadata       # timeout: 6000
 gh pr checks $CLEAN_ARGS                                          # CI status — don't review if CI is red # timeout: 15000
 gh pr view $CLEAN_ARGS --json reviews,labels,milestone            # timeout: 6000
 ```
 
-CI red → report without full review.
+**CI RED GATE**: if `gh pr checks` shows any required check failing → print `⛔ CI is red — skipping full review. Fix failing CI first, then re-run /oss:review.` and `exit 0`. Do NOT proceed to Steps 2–8.
+
+### Python file pre-check
+
+```bash
+PY_FILES=$(echo "$CHANGED_FILES" | grep '\.py$' || true)
+if [ -z "$PY_FILES" ]; then
+    echo "No Python files changed in PR #$CLEAN_ARGS — skipping Python-specific review (oss:review is Python-only)"
+    exit 0
+fi
+```
 
 ### Scope pre-check
 
@@ -132,7 +154,7 @@ Before spawning agents, classify diff:
 
 Use classification to skip optional agents:
 
-- FIX scope → skip Agent 3 (perf-optimizer) and Agent 6 (solution-architect)
+- FIX scope → skip Agent 3 (perf-optimizer), Agent 6 (solution-architect), and Agent 7 (challenger — low value for targeted fixes)
 - REFACTOR scope → skip Agent 6 (solution-architect)
 - FEATURE/MIXED → spawn all agents
 
@@ -159,7 +181,7 @@ Agent 1 uses this to prioritize: high `rdep_count` modules warrant deeper scruti
 
 Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract to `ISSUE_NUMS`. Cap 3.
 
-`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **concurrently in Step 2, alongside Codex co-review** (both run after `$RUN_DIR` is initialized — issue agents and Codex are parallel, not sequential). Each issue agent:
+`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **concurrently in Step 2, alongside Codex co-review** (both run after `$RUN_DIR` is initialized — issue agents and Codex are parallel, not sequential). **Synchronization**: Step 3 agents must NOT spawn until all issue agents have returned (confirmed by checking `$RUN_DIR/issue-<N>.md` exists for each N). Wait for all issue agent completions before proceeding to Step 3. Each issue agent:
 
 - Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
 - Fetch comments: `gh issue view <N> --comments`
@@ -212,7 +234,7 @@ REVIEW_SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/review" -type d 2
 
 **File-based handoff**: read `$FOUNDRY_SHARED/file-handoff-protocol.md`. File absent → warn the user: "file-handoff protocol not found — verify foundry plugin installed (`claude plugin list`); continuing without it." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
 
-**IMPORTANT**: Replace `$RUN_DIR` below with the actual literal path computed in Step 2 before inserting into any Agent spawn prompt.
+**IMPORTANT**: Replace `$RUN_DIR` with its actual literal computed value (e.g. `.reports/review/2026-04-30T17-21-36Z`) in every Agent spawn prompt below. Do NOT pass `$RUN_DIR` as a shell variable — agents receive text, not shell context. Un-expanded `$RUN_DIR` creates a directory literally named `$RUN_DIR` in the project root.
 
 Launch agents simultaneously. Security augmentation folded into Agent 1. Agent 6 optional. Every agent prompt must end with:
 
@@ -251,7 +273,7 @@ Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severi
 
 **Agent 4 — foundry:doc-scribe**: Check doc completeness. Public APIs without docstrings, missing Google style sections, outdated README, CHANGELOG gaps. Verify examples run.
 
-- **Algorithmic accuracy check**: Functions computing math results — verify docstring claims match implementation. Output shape/length match? Standard name (e.g. "moving average") match behavior (expanding vs sliding window)? Deviates from convention → MEDIUM (docstring must document deviation). **Deprecation check**: Check stdlib deprecated in Python 3.10+ (e.g., `datetime.utcnow()` deprecated in 3.12, `os.path` vs `pathlib`). Flag deprecated usage as MEDIUM with replacement.
+- **Algorithmic accuracy check**: Functions computing math results — verify docstring claims match implementation. Output shape/length match? Standard name (e.g. "moving average") match behavior (expanding vs sliding window)? Deviates from convention → MEDIUM (docstring must document deviation). **Deprecation check**: Check stdlib deprecated (e.g., `datetime.utcnow()` deprecated in Python 3.12+, `os.path` vs `pathlib`). Flag deprecated usage as MEDIUM with replacement. Route to `foundry:linting-expert` if ruff/mypy can catch it automatically — avoid duplicate findings.
 
 **Agent 5 — foundry:linting-expert**: Static analysis. Check ruff/mypy pass. Type annotation gaps on public APIs, suppressed violations without explanation, missing pre-commit hooks. Flag mismatched Python version.
 
@@ -259,9 +281,9 @@ Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severi
 
 **Agent 6 — foundry:solution-architect (optional, PRs touching public API boundaries)**: Diff touches `__init__.py` exports, adds/modifies Protocols/ABCs, changes module structure, or new public classes → evaluate API design, coupling, backward compat. Skip if internal only.
 
-**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: write full findings to `$RUN_DIR/foundry--challenger.md`. Return JSON: `{"status":"done","findings":N,"severity":{"critical":0,"high":1,"medium":1,"low":0},"file":"$RUN_DIR/foundry--challenger.md","confidence":0.88}`. Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
+**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: per preamble above (output to `foundry--challenger.md`). Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
 
-**Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively; no Bash checkpoint polling. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
+**Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
 
 ```bash
 ls "$RUN_DIR/"*.md 2>/dev/null || echo "⚠ No agent output files found in $RUN_DIR — check that $RUN_DIR was expanded correctly in spawn prompts"
@@ -273,16 +295,26 @@ Run these two checks simultaneously (while Step 3 agents complete):
 
 ```bash
 TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $NF}') # timeout: 6000  # shared by 4a and 4b
+
+# Shallow-clone guard: git merge-base fails silently on shallow clones, returning empty output
+# that looks like "nothing changed" — causes false-negative in security scan and ecosystem check.
+IS_SHALLOW=$(git rev-parse --is-shallow-repository 2>/dev/null || echo "unknown")
+if [ "$IS_SHALLOW" = "true" ]; then
+    echo "⚠ Shallow clone detected — running: git fetch --unshallow to enable merge-base checks"
+    git fetch --unshallow 2>/dev/null || echo "⚠ git fetch --unshallow failed — Step 4 checks may be incomplete"
+fi
+PR_BASE=$(git merge-base HEAD "origin/${TRUNK:-main}" 2>/dev/null || echo "origin/${TRUNK:-main}")
 ```
 
 ### 4a: Ecosystem impact check (for libraries with downstream users)
+
+> **Scope disclosure**: this check searches public GitHub code globally. Results may include unrelated projects that coincidentally use the same symbol names — treat as signal, not proof. Rate-limited responses (HTTP 429, empty results) may indicate limitation, not absence of usage.
 
 ```bash
 # Check if changed APIs are used by downstream projects
 # Rate-limit guard: if gh api returns HTTP 429, wait 10 seconds and retry once.
 # If still rate-limited, log "rate-limited — downstream search may be incomplete" and continue.
-# --paginate is available for large result sets but increases rate-limit exposure; omit unless completeness is critical.
-CHANGED_EXPORTS=$(git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- ':(glob)src/**/__init__.py' | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u) # timeout: 3000
+CHANGED_EXPORTS=$(git diff $PR_BASE HEAD -- ':(glob)src/**/__init__.py' | grep "^[-+]" | grep -v "^[-+][-+]" | grep -oP '\w+' | sort -u) # timeout: 3000
 for export in $CHANGED_EXPORTS; do
     echo "=== $export ==="
     gh api "search/code" --field "q=$export language:python" --jq '.items[:5] | .[].repository.full_name' 2>/dev/null # timeout: 30000
@@ -290,30 +322,32 @@ for export in $CHANGED_EXPORTS; do
 done
 
 # Check if deprecated APIs have migration guides
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -A2 "deprecated" # timeout: 3000
+git diff $PR_BASE HEAD | grep -A2 "deprecated" # timeout: 3000
 ```
 
 ### 4b: OSS checks
 
 ```bash
 # Check for new dependencies — license compatibility
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- pyproject.toml requirements*.txt # timeout: 3000
+git diff $PR_BASE HEAD -- pyproject.toml requirements*.txt # timeout: 3000
 
-# Check for secrets accidentally committed
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD | grep -iE "(password|secret|api_key|token|private_key|auth_token)\s*[=:]\s*['\"]?[A-Za-z0-9+/._-]{8,}['\"]?" # timeout: 3000
+# Check for secrets accidentally committed — scoped to .py files only (oss:review is Python-only)
+git diff $PR_BASE HEAD -- '*.py' | grep -iE "(password|secret|api_key|token|private_key|auth_token)\s*[=:]\s*['\"]?[A-Za-z0-9+/._-]{8,}['\"]?" # timeout: 3000
 
 # Check for API stability: are public APIs being removed without deprecation?
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- ':(glob)src/**/__init__.py' # timeout: 3000
+git diff $PR_BASE HEAD -- ':(glob)src/**/__init__.py' # timeout: 3000
 
 # Check CHANGELOG was updated
-git diff $(git merge-base HEAD origin/${TRUNK:-main}) HEAD -- CHANGELOG.md CHANGES.md # timeout: 3000
+git diff $PR_BASE HEAD -- CHANGELOG.md CHANGES.md # timeout: 3000
 ```
 
 ## Step 5: Cross-validate critical/blocking findings
 
-Locate cross-validation protocol: Read `$FOUNDRY_SHARED/cross-validation-protocol.md` and follow it. File absent → warn the user: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
+Read `$FOUNDRY_SHARED/cross-validation-protocol.md`. File absent → warn: "cross-validation protocol not found — verify foundry plugin installed (`claude plugin list`); skipping Step 5." Then skip Step 5.
 
-**Skill-specific**: same agent type that raised finding = verifier (e.g., foundry:sw-engineer verifies foundry:sw-engineer critical finding).
+**Independence requirement**: cross-validation must run as a separate spawned agent — same type as the finding's origin (e.g., `foundry:sw-engineer` verifies `foundry:sw-engineer` critical finding). Do NOT validate in orchestrator context; in-context verification violates independence.
+
+Spawn verifier agent per critical/blocking finding. Agent reads the relevant finding file from `$RUN_DIR` and the referenced code, then returns: `{"finding_id":"<id>","verdict":"CONFIRMED|REFUTED","rationale":"<one sentence>"}`. REFUTED → downgrade finding severity or remove before consolidation.
 
 ## Step 6: Consolidate findings
 
@@ -348,8 +382,6 @@ Report format: read `templates/review-report.md` in this skill directory and use
 
 After parsing confidence: agent < 0.7 → prepend **⚠ LOW CONFIDENCE** to findings section, state gap explicitly. Never drop uncertain findings.
 
-<!-- Extended Fields live in $FOUNDRY_SHARED/terminal-summaries.md (foundry plugin shared dir, resolved in Step 5) -->
-
 Print terminal block: read `---` header from top of `.temp/output-review-$BRANCH-$DATE.md` (lines 1–12, up to and including closing `---`), append `→ saved to .temp/output-review-$BRANCH-$DATE.md`, print to terminal. Report file already contains the block — no separate prepend step needed.
 
 ## Step 7: Delegate implementation follow-up (optional)
@@ -375,9 +407,9 @@ Print `### Codex Delegation` only when tasks delegated — omit if nothing deleg
 
 ## Step 8: Reply gate — STOP CHECK
 
-**Run this step before the Confidence block regardless of `--reply` mode.**
+**Confidence block ownership**: `REPLY_MODE=true` → Confidence block written by Step 9 (always last). `REPLY_MODE=false` → Confidence block written here in Step 8b (Step 9 not reached).
 
-`REPLY_MODE=true`: response incomplete until Step 9 done and reply file written. No Confidence block — proceed to Step 9.
+`REPLY_MODE=true`: proceed to Step 9 — no Confidence block here.
 
 `REPLY_MODE=false` — do NOT proceed to Step 9. Execute both sub-steps below:
 
@@ -391,6 +423,14 @@ Print `### Codex Delegation` only when tasks delegated — omit if nothing deleg
 - (d) label: `walk through findings` — description: go through each finding interactively
 - (e) label: `skip` — description: no action
 
+**Follow-through** (per `quality-gates.md` follow-up gate rule) — in the same response turn as AskUserQuestion:
+- Option (a) selected → `Skill(skill="oss:resolve", args="$CLEAN_ARGS")`
+- Option (b) selected → `Skill(skill="oss:resolve", args="report")`
+- Option (c) selected → `Skill(skill="oss:resolve", args="$CLEAN_ARGS report")`
+- Options (d) or (e) → no `Skill` call; handle inline or stop
+
+Never narrate intent ("I will now run /oss:resolve") — call `Skill` directly or stop.
+
 ### 8b — Confidence block
 
 End with `## Confidence` block per CLAUDE.md output standards.
@@ -399,7 +439,16 @@ End with `## Confidence` block per CLAUDE.md output standards.
 
 `REPLY_MODE` not set → skip.
 
-Read `$_OSS_SHARED/shepherd-reply-protocol.md` — apply invocation pattern and terminal summary format.
+```bash
+# Check oss:shepherd availability before dispatching (mirrors release/SKILL.md guard)
+SHEPHERD_AVAILABLE=0
+find ~/.claude/plugins -name "shepherd.md" -path "*/oss/agents/*" 2>/dev/null | grep -q . && SHEPHERD_AVAILABLE=1
+[ -f ".claude/agents/shepherd.md" ] && SHEPHERD_AVAILABLE=1
+```
+
+If `$SHEPHERD_AVAILABLE` equals 0: print `⚠ oss:shepherd not available — skipping contributor reply draft. Install the oss plugin to enable --reply.` and skip shepherd spawn.
+
+If `$SHEPHERD_AVAILABLE` equals 1: read `$_OSS_SHARED/shepherd-reply-protocol.md` — apply invocation pattern and terminal summary format.
 
 Spawn with:
 - Report path: review output file from Step 6
@@ -413,7 +462,7 @@ End with `## Confidence` block per CLAUDE.md. Always last thing, regardless of `
 <calibration>
 
 Scenarios:
-1. FIX scope: single bug-fix PR with 1 changed file → scope=FIX, 3 agents skipped (solution-architect, perf-optimizer, challenger)
+1. FIX scope: single bug-fix PR with 1 changed file → scope=FIX, 3 agents skipped: perf-optimizer (scope), solution-architect (scope), challenger (low value for targeted fixes, scope-based skip). Remaining: sw-engineer, qa-specialist, doc-scribe, linting-expert = 4 agents run. Note: challenger also skipped when `CHALLENGE_ENABLED=false` flag — that is a flag-based skip, independent of scope.
 2. FEATURE scope: new feature PR with API changes → scope=FEATURE, all 7 agents run
 3. --reply mode: existing review report + --reply flag → skip to Step 9, no agents spawned
 
