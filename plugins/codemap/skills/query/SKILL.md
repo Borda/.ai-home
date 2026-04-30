@@ -51,6 +51,8 @@ NOT for: building or rebuilding index (use `/codemap:scan`).
 
 **Common mistake**: tasks asking "which modules need updating if X changes?" mean `rdeps` (callers), NOT `deps` (what X imports). `deps` returns the wrong direction and gives 0% recall.
 
+**Query budget**: max 3 calls per task. Stop after 3 even if not exhaustive — report what you found.
+
 Run `scan-query` via Bash:
 
 ```bash
@@ -97,7 +99,9 @@ Symbol names accept: bare name (`authenticate`), qualified name (`MyClass.authen
 | `fn-central` | `fn_central` array | `count module::function`, one per line |
 | `fn-blast` | `blast_radius` array | `depth module::function`, sorted by depth then name |
 
-**exhaustive: true — stop immediately:** When `rdeps` or `deps` result contains `"exhaustive": true`, the list is complete and authoritative. Do NOT run grep, bash, or Glob passes to verify or extend it.
+**exhaustive: true — STOP ALL TOOL CALLS:** When `rdeps` or `deps` result contains `"exhaustive": true`, the list is complete and authoritative. Write your answer immediately. Do NOT call codemap again. Do NOT run grep, bash, or Glob passes to verify or extend it. No exceptions.
+
+**Non-exhaustive result — convergence rule**: if after 3 calls the result is still non-exhaustive, stop and report what you have. Do NOT switch to grep/bash to continue — the index covers what it covers.
 
 `{"error": "..."}`: surface error, suggest re-running `/codemap:scan`.
 

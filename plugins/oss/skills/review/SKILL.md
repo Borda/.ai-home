@@ -177,6 +177,10 @@ Codemap returns results: prepend `## Structural Context (codemap)` block to **Ag
 
 Agent 1 uses this to prioritize: high `rdep_count` modules warrant deeper scrutiny on API compat, error handling, correctness — downstream callers outside diff not otherwise visible. Codemap absent → skip silently.
 
+**Semble companion** (in-agent, optional): include this in Agent 1 spawn prompt:
+
+> If `mcp__semble__search` is available in your tools and any changed module's codemap result was non-exhaustive (`"exhaustive": false`) or codemap was absent: call `mcp__semble__search` with `query="<module> import"` and `repo=<git_root>`, `top_k=20` for each such module. Stop per module when two consecutive queries return no new importers. Merge with codemap results. Skip entirely if all codemap results were exhaustive.
+
 ### Linked issue analysis (PR mode only)
 
 Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract to `ISSUE_NUMS`. Cap 3.

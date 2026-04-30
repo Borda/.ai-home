@@ -64,15 +64,30 @@ scan-query central --top 5         # which modules are highest risk overall?
 scan-query rdeps mypackage.auth    # what breaks if auth changes?
 ```
 
-That output is prepended to the agent spawn prompt as structural context. The agent starts the refactor already knowing full blast radius — no cold exploration, no mid-refactor surprise that `middleware.py` also imports `auth`. Benchmark results across 48 runs on pytorch-lightning:
+That output is prepended to the agent spawn prompt as structural context. The agent starts the refactor already knowing full blast radius — no cold exploration, no mid-refactor surprise that `middleware.py` also imports `auth`. Benchmark results across 96 runs on pytorch-lightning (4 arms × 3 models × 8 tasks):
 
-| Metric             |  Haiku   |  Sonnet  |   Opus   |
-| :----------------- | :------: | :------: | :------: |
-| Elapsed time       | **−51%** | **−60%** | **−71%** |
-| Tool result tokens | **−85%** | **−84%** | **−93%** |
-| Tool calls         | **−43%** | **−61%** | **−77%** |
+| Arm                 | erec  | rrec  | tokens | calls |
+| :------------------ | :---: | :---: | :----: | :---: |
+| plain               | 87.0% | 86.1% | 425.7k | 29.2  |
+| codemap             | 95.6% | 95.6% | 456.2k | 12.8  |
+| semble _(optional)_ | 96.1% | 89.6% | 419.0k |  7.7  |
 
-Zero codemap timeouts. Three plain-arm timeouts.
+- **erec** — exposure recall: fraction of reverse-dependencies (rdeps) surfaced in agent tool results
+- **rrec** — report recall: fraction of rdeps present in the agent's final written answer
+- **tokens** — total tool result tokens consumed
+- **calls** — total tool calls made
+
+codemap more than halves tool calls vs plain while lifting both recall metrics above 95%. Semble, when available, reduces calls further and slightly boosts erec at a modest rrec trade-off.
+
+When the semble MCP server is available, agents also get `mcp__semble__search` as an optional semantic search tool — useful when the codemap index is non-exhaustive.
+
+Zero codemap timeouts. Plain-arm agents hit the 300-second hard timeout on several tasks.
+
+> **⚠ Integration quality matters — poor wiring can make things worse.**
+>
+> codemap injects a rich dependency graph into every agent prompt. On weaker models or tasks with large blast-radius graphs, this extra context can overwhelm the model and cause it to fall back to grep-heavy loops — performing *worse* than plain arm. The benchmark labels this failure mode `degenerate_grep_loop`.
+>
+> Good integration requires three things: (1) **skill-first protocol** — the agent calls `/codemap:query` before any Grep/Glob; (2) **bounded call budget** — max 3 codemap queries per task; (3) **hard stop on `exhaustive: true`** — when the index says the list is complete, write the answer immediately, no more tool calls. Skipping any of these — especially ignoring the exhaustive flag — is the primary cause of regressions that flip the codemap benefit into a liability. Use `/codemap:integration init` to wire integration correctly rather than injecting context manually.
 
 ______________________________________________________________________
 

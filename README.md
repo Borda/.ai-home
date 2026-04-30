@@ -564,6 +564,14 @@ Without the plugin: pre-pass review is skipped gracefully (skills check with `cl
 
 → Enable: add `"colab-mcp"` to `enabledMcpjsonServers` in `settings.local.json`
 
+### Semble (semantic code search)
+
+[semble](https://github.com/MinishLab/semble) runs a local MCP server that adds hybrid semantic + lexical search across any repo. When available, the `develop` and `oss` skills automatically expose `mcp__semble__search` to agents as a gap-fill tool — used when the codemap index is non-exhaustive. No cloud, no API key; runs fully local via `uvx`.
+
+→ Install (global, all projects): `claude mcp add semble -s user -- uvx --from "semble[mcp]" semble`
+
+→ Install (this project only): `claude mcp add semble -s project -- uvx --from "semble[mcp]" semble`
+
 ### Caveman
 
 [caveman](https://github.com/JuliusBrussee/caveman) makes Claude respond in compressed "caveman speak" — cutting ~75% of output tokens while retaining full technical accuracy. Adjustable intensity levels (lite → full → ultra → 文言文) and a compression tool that also cuts ~46% of input tokens per session.

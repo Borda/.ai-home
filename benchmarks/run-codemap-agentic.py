@@ -123,8 +123,8 @@ reducing tool call count, elapsed time, and context consumption.
 
 ## Terminal output (one line per completed run)
 
-  Each run prints a coloured summary line to stdout via tqdm.write:
-    [NN/TT] TASK_ID (type) | model  | arm       | elapsed=  NNN.Ns | tokens= NNN.Nk |
+    Each run prints a coloured summary line to stdout via tqdm.write:
+    [NN/TT] TASK_ID (type/difficulty) | model  | arm       | elapsed=  NNN.Ns | tokens= NNN.Nk |
     calls= N (grep= N; glob= N; bash= N; skill= N)
     | erec= N% rrec= N%  sc= N%   ← quality=n/a when no ground truth
   Quality fields:
@@ -214,6 +214,7 @@ import sys
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -355,6 +356,7 @@ class Task:
     type: str
     prompt: str
     primary_module: str = ""
+    difficulty: str = "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -734,36 +736,61 @@ unless the import block alone is not enough:
 
     _CODEMAP_SUPPLEMENT = """
 
-## codemap plugin installed
+## codemap plugin installed — follow these steps exactly
 
-You have the /codemap:query skill available. It answers import-graph questions
-instantly from a pre-built index — one call replaces many grep passes.
+You have /codemap:query. It answers import-graph questions from a pre-built index.
 
 **SYNTAX — colon separator, never a space:**
   Skill tool name: codemap:query      ← correct
   NOT: codemap query                  ← wrong — will fail silently
 
-Commands:
-  /codemap:query rdeps <module>    — what imports this module?
-  /codemap:query deps <module>     — what does this module import?
-  /codemap:query central --top 10  — most-imported modules (blast radius ranking)
-  /codemap:query coupled --top 10  — most-coupled modules
-  /codemap:query path <from> <to>  — shortest import path between two modules
+### STEP 1 — One rdeps query (max 3 codemap calls total)
 
-The result includes an "exhaustive": true field. When present, the index is
-complete and authoritative — the list is final. Stop. Do NOT run any grep,
-bash, or Glob verification pass after seeing exhaustive: true.
+Call:
+  /codemap:query rdeps <primary_module> [--exclude-tests]
+
+Read the result immediately:
+- If "exhaustive": true → list is complete and authoritative. Count the entries.
+  Your final list MUST contain exactly that many modules. Go to STEP 2 NOW.
+  Do NOT grep. Do NOT call codemap again. Do NOT read files to verify.
+- If NOT exhaustive → record the list as your working set. You may make 1-2 more
+  codemap calls (e.g. deps or central for context). Then go to STEP 2.
+
+Maximum 3 /codemap:query calls total across all steps.
+
+If /codemap:query returns <tool_use_error>: skip to STEP 2 with an empty list.
+
+### STEP 2 — Write the report (no more tool calls after this point)
+
+Once you reach STEP 2, do NOT call any tool. Write the answer immediately.
 
 **Hard rules — no exceptions:**
-1. NEVER use Grep, Glob, or Bash to investigate import relationships, including
-   running grep/rg/find via Bash shell commands.
-2. NEVER spawn sub-agents (no Agent tool calls) for import-graph questions.
-   Sub-agents do not have this skill — call /codemap:query directly yourself.
-3. If /codemap:query returns <tool_use_error>, that is a test-harness permission
-   gap — NOT a broken index. Do NOT call codemap:scan or codemap:integration check.
-   Fall back to Grep for that one question only. The index itself is intact.
+1. NEVER use Grep, Glob, or Bash to verify or extend codemap results — the index is authoritative. Exception: rule 5 (tool error fallback).
+2. After seeing "exhaustive": true, your tool calls are complete. Write the report.
+3. Maximum 3 codemap:query calls — stop even if not exhaustive after 3 calls.
+4. NEVER spawn sub-agents for import-graph questions.
+5. If /codemap:query returns <tool_use_error>: do NOT call codemap:scan. Fall back to Grep for that query only.
 
-Grep/Glob/Bash are permitted only for reading source code (finding a literal string)."""
+Grep/Glob/Bash are permitted only for reading source code (finding a literal string in files).
+
+## Required answer format
+
+Your final answer MUST end with this section:
+
+## Reverse Dependencies Found
+
+Count: <N> distinct modules found.
+
+- lightning.pytorch.trainer.trainer
+- lightning.pytorch.loops.fit_loop
+- ... (one line per module)
+
+Rules:
+- Write "Count: N distinct modules found." where N = exact number in your list
+- Full dotted paths only — no shortened names, no file paths, no aliases
+- Copy EVERY module from the codemap result — no omissions
+- If nothing found: write "Count: 0" and "(none found)"
+- This section must be the LAST thing in your answer"""
 
     _SEMBLE_SUPPLEMENT = """
 
@@ -1178,6 +1205,10 @@ def _median_metrics(rlist: list[BenchmarkRun]) -> dict[str, float]:
         "tool_result_tokens": statistics.median([r.tool_result_tokens for r in ok]),
         "tool_elapsed_s": statistics.median([r.tool_elapsed_s for r in ok]),
         "elapsed_s": statistics.median([r.elapsed_s for r in ok]),
+        "rrec": statistics.median([r.quality.rrec for r in ok]),
+        "erec": statistics.median([r.quality.erec for r in ok]),
+        "delta": statistics.median([r.quality.delta for r in ok]),
+        "success_rate": len(ok) / len(rlist),
     }
 
 
@@ -1265,6 +1296,7 @@ class Report:
         """Produce the full markdown report string."""
         models_label = ", ".join(self.model_tiers) if self.model_tiers else self.metadata.get("models", "n/a")
 
+        repeat = self.metadata.get("repeat", 1)
         lines = [
             f"# Codemap Skill Benchmark Report — {self.metadata.get('date', 'n/a')}",
             "",
@@ -1272,6 +1304,7 @@ class Report:
             f"**Repo**: {self.metadata.get('repo', 'n/a')}  ",
             f"**Index**: {self.metadata.get('index', 'n/a')}  ",
             f"**Tasks**: {len(self.task_ids)}  ",
+            f"**Repeat runs**: {repeat}  ",
             "",
             "> Savings = 1 − (arm / plain) per task; positive = arm needs less.",
             "",
@@ -1312,6 +1345,15 @@ class Report:
 
         return "\n".join(lines)
 
+    def _arm_cells(self, arm: str, bv, iv, fmt) -> dict[str, str]:
+        have_pair = bv is not None and iv is not None and bv > 0
+        saved = f"{1.0 - iv / bv:.0%}" if have_pair else "—"
+        arrow = ("↓" if iv < bv else "↑") if have_pair else ""
+        return {
+            arm.capitalize(): fmt(iv) if iv is not None else "—",
+            f"{arm.capitalize()} savings": f"{saved} {arrow}".strip(),
+        }
+
     def _savings_summary(self, agg: dict) -> list[dict]:
         """Build savings rows for one model's aggregated results, one row per arm × metric."""
         baseline = self._BASELINE
@@ -1320,12 +1362,13 @@ class Report:
         rows = []
         for arm in injected_arms:
             for key, label, _ in self._METRICS:
-                savings_per_task = []
-                for tid in self.task_ids:
-                    bv = agg.get(tid, {}).get(baseline, {}).get(key)
-                    iv = agg.get(tid, {}).get(arm, {}).get(key)
-                    if bv and iv and bv > 0:
-                        savings_per_task.append(1.0 - iv / bv)
+                savings_per_task = [
+                    1.0 - iv / bv
+                    for tid in self.task_ids
+                    for bv in [agg.get(tid, {}).get(baseline, {}).get(key)]
+                    for iv in [agg.get(tid, {}).get(arm, {}).get(key)]
+                    if bv and iv and bv > 0
+                ]
                 if not savings_per_task:
                     continue
                 rows.append(
@@ -1354,11 +1397,7 @@ class Report:
                 row = {"Task": tid, "Type": t.type if t else "?", "Plain": fmt(bv) if bv is not None else "—"}
                 for arm in injected_arms:
                     iv = agg.get(tid, {}).get(arm, {}).get(key)
-                    have_pair = bv is not None and iv is not None and bv > 0
-                    saved = f"{1.0 - iv / bv:.0%}" if have_pair else "—"
-                    arrow = ("↓" if iv < bv else "↑") if have_pair else ""
-                    row[arm.capitalize()] = fmt(iv) if iv is not None else "—"
-                    row[f"{arm.capitalize()} savings"] = f"{saved} {arrow}".strip()
+                    row.update(self._arm_cells(arm, bv, iv, fmt))
                 rows.append(row)
             lines += [f"### {label}", "", pd.DataFrame(rows).to_markdown(index=False), ""]
         return lines
@@ -1407,8 +1446,9 @@ def _run_line(run_n: int, total_runs: int, task: Task, model_short: str, arm: st
         degenerate_note = " ⚑degenerate?"
     task_num = task.id.lstrip("T")
     task_type = task.type.replace("feature", "feat").replace("refactor", "refac").replace("review", "rev")
+    difficulty = task.difficulty
     return (
-        f"[{run_n:0{len(str(total_runs))}}/{total_runs}] {task_num} ({task_type:<5}) | {model_short:<6} | {arm:<8}"
+        f"[{run_n:0{len(str(total_runs))}}/{total_runs}] {task_num} ({task_type}/{difficulty}) | {model_short:<6} | {arm:<8}"
         f"\t| elapsed={result.elapsed_s:7.1f}s"
         f" | tokens={result.input_tokens / 1000:7.1f}k"
         f" | calls={result.tools.total:3}"
@@ -1416,6 +1456,19 @@ def _run_line(run_n: int, total_runs: int, task: Task, model_short: str, arm: st
         f"{quality_suffix}"
         f"{error_suffix}{degenerate_note}"
     )
+
+
+def _iter_combos(
+    tasks: list[Task],
+    models: list[tuple[str, str]],
+    arms: list[str],
+    repeat: int,
+) -> Iterator[tuple[Task, str, str, str, int]]:
+    for task in tasks:
+        for model_short, model_id in models:
+            for arm in arms:
+                for rep in range(repeat):
+                    yield task, model_short, model_id, arm, rep
 
 
 # ---------------------------------------------------------------------------
@@ -1439,6 +1492,7 @@ class Benchmark:
         index_path: Path,
         output_path: Path,
         log_path: Path,
+        repeat: int = 1,
     ) -> None:
         self.tasks = tasks
         self.arms = arms
@@ -1446,70 +1500,90 @@ class Benchmark:
         self.repo_path = repo_path
         self.output_path = output_path
         self.log_path = log_path
+        self.repeat = max(1, repeat)
         self.gt = GroundTruth(index_path, tasks)
         self.results: list[BenchmarkRun] = []
 
+    def _iter_combos(self) -> Iterator[tuple[Task, str, str, str, int]]:
+        return _iter_combos(self.tasks, self.models, self.arms, self.repeat)
+
+    def _run_single(
+        self,
+        task: Task,
+        model_short: str,
+        model_id: str,
+        arm: str,
+        run_n: int,
+        total_runs: int,
+        pbar: tqdm,
+        metadata: dict,
+    ) -> BenchmarkRun:
+        pbar.set_description(f"{task.id} | {model_short} | {arm}")
+        runner = ModelRunner(model_short, model_id, self.repo_path, timeout=_MODEL_TIMEOUT.get(model_short, 300))
+        result = runner.run(task, arm)
+        # Build corpora for v2 quality scoring
+        exposure_corpus = (
+            result.output_text + "\n" + "\n".join(result.codemap_results) + "\n" + "\n".join(result.semble_results)
+        )
+        report_corpus = result.output_text[result.last_tool_text_offset :]
+        result.quality = self.gt.score(
+            task_id=task.id,
+            output_text=result.output_text,
+            exposure_corpus=exposure_corpus,
+            report_corpus=report_corpus,
+            tool_calls=result.tools.total,
+            skill_result_text=result.skill_result_text or None,
+        )
+        # Codemap arm that never invoked the Skill tool is a failure —
+        # it fell back to grep/bash entirely, defeating the purpose.
+        if arm == "codemap" and result.tools.skill == 0 and result.success:
+            result.success = False
+            result.error = "codemap skill never called"
+        # Semble arm: failure if never called semble, or all calls were permission-blocked.
+        if arm == "semble" and result.success:
+            effective_semble = result.tools.semble - result.tools.blocked
+            if result.tools.semble == 0:
+                result.success = False
+                result.error = "semble tool never called"
+            elif effective_semble <= 0:
+                result.success = False
+                result.error = "semble tool called but all invocations were blocked (permission denied)"
+        # Combined arm: failure if no structural tool was ever called or all semble were blocked.
+        if arm == "combined" and result.success:
+            effective_semble = result.tools.semble - result.tools.blocked
+            if result.tools.skill == 0 and result.tools.semble == 0:
+                result.success = False
+                result.error = "combined arm: neither codemap skill nor semble tool called"
+            elif result.tools.skill == 0 and effective_semble <= 0:
+                result.success = False
+                result.error = "combined arm: all semble calls were blocked (permission denied)"
+        # Degenerate-loop detection: codemap arm that spent ≥70% of calls on Grep
+        # ignored the index and fell into a grep loop — mark as failure.
+        if result.arm == "codemap" and result.success:
+            total_calls = result.tools.total
+            grep_like = result.tools.grep + result.tools.bash_for_imports
+            if total_calls > 0 and result.tools.skill == 0 and grep_like / total_calls >= 0.70:
+                result.success = False
+                result.error_type = "degenerate_grep_loop"
+                result.error = (
+                    f"codemap arm used no codemap skill; fell back to grep "
+                    f"({grep_like}/{total_calls} grep-like calls = {grep_like / total_calls:.0%}); "
+                    f"index not used"
+                )
+        self._write_tool_log(result)
+        color = _COLOR_FAIL if not result.success else _ARM_COLOR.get(arm, "")
+        tqdm.write(f"{color}{_run_line(run_n, total_runs, task, model_short, arm, result)}{_COLOR_RESET}")
+        pbar.update(1)
+        self._save_snapshot(metadata)
+        return result
+
     def run(self, metadata: dict) -> list[BenchmarkRun]:
         """Execute all benchmark runs and return the accumulated results."""
-        total_runs = len(self.tasks) * len(self.arms) * len(self.models)
-        run_n = 0
+        total_runs = len(self.tasks) * len(self.arms) * len(self.models) * self.repeat
         pbar = tqdm(total=total_runs, unit="run", dynamic_ncols=True)
-        for task in self.tasks:
-            for model_short, model_id in self.models:
-                for arm in self.arms:
-                    run_n += 1
-                    pbar.set_description(f"{task.id} | {model_short} | {arm}")
-                    runner = ModelRunner(
-                        model_short, model_id, self.repo_path, timeout=_MODEL_TIMEOUT.get(model_short, 300)
-                    )
-                    result = runner.run(task, arm)
-                    # Build corpora for v2 quality scoring
-                    exposure_corpus = (
-                        result.output_text
-                        + "\n"
-                        + "\n".join(result.codemap_results)
-                        + "\n"
-                        + "\n".join(result.semble_results)
-                    )
-                    report_corpus = result.output_text[result.last_tool_text_offset :]
-                    result.quality = self.gt.score(
-                        task_id=task.id,
-                        output_text=result.output_text,
-                        exposure_corpus=exposure_corpus,
-                        report_corpus=report_corpus,
-                        tool_calls=result.tools.total,
-                        skill_result_text=result.skill_result_text or None,
-                    )
-                    # Codemap arm that never invoked the Skill tool is a failure —
-                    # it fell back to grep/bash entirely, defeating the purpose.
-                    if arm == "codemap" and result.tools.skill == 0 and result.success:
-                        result.success = False
-                        result.error = "codemap skill never called"
-                    # Semble arm: failure if never called semble, or all calls were permission-blocked.
-                    if arm == "semble" and result.success:
-                        effective_semble = result.tools.semble - result.tools.blocked
-                        if result.tools.semble == 0:
-                            result.success = False
-                            result.error = "semble tool never called"
-                        elif effective_semble <= 0:
-                            result.success = False
-                            result.error = "semble tool called but all invocations were blocked (permission denied)"
-                    # Combined arm: failure if no structural tool was ever called or all semble were blocked.
-                    if arm == "combined" and result.success:
-                        effective_semble = result.tools.semble - result.tools.blocked
-                        if result.tools.skill == 0 and result.tools.semble == 0:
-                            result.success = False
-                            result.error = "combined arm: neither codemap skill nor semble tool called"
-                        elif result.tools.skill == 0 and effective_semble <= 0:
-                            result.success = False
-                            result.error = "combined arm: all semble calls were blocked (permission denied)"
-                    self.results.append(result)
-                    self._write_tool_log(result)
-                    color = _COLOR_FAIL if not result.success else _ARM_COLOR.get(arm, "")
-                    tqdm.write(f"{color}{_run_line(run_n, total_runs, task, model_short, arm, result)}{_COLOR_RESET}")
-                    pbar.update(1)
-                    self._save_snapshot(metadata)
-
+        for run_n, (task, model_short, model_id, arm, _) in enumerate(self._iter_combos(), start=1):
+            result = self._run_single(task, model_short, model_id, arm, run_n, total_runs, pbar, metadata)
+            self.results.append(result)
         pbar.close()
         return self.results
 
@@ -1553,19 +1627,23 @@ def main() -> None:
         help="Task definition file (default: benchmarks/tasks-agentic.json)",
     )
     parser.add_argument(
-        "--model",
-        choices=list(MODELS.keys()),
-        help="Run a single model tier (default: all three — haiku / sonnet / opus)",
+        "--model", choices=list(MODELS.keys()), help="Run a single model tier (default: all — haiku/sonnet/opus)"
     )
     parser.add_argument(
-        "--arm",
-        choices=["plain", "codemap", "semble", "combined"],
-        help="Run only one arm (default: all four)",
+        "--arm", choices=["plain", "codemap", "semble", "combined"], help="Run only one arm (default: all four)"
     )
     parser.add_argument("--all", action="store_true", help="Run all tasks in both arms")
     parser.add_argument("--tasks", nargs="+", metavar="ID", help="Run specific task IDs only")
     parser.add_argument("--report", action="store_true", help="Write markdown report alongside JSON")
     parser.add_argument("--output", type=Path, help="JSON output path (auto-named if omitted)")
+    parser.add_argument(
+        "-r",
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Repeat runs per (task, arm, model) cell (default: 1); median aggregated",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print plan without running claude")
     args = parser.parse_args()
 
@@ -1577,7 +1655,13 @@ def main() -> None:
         sys.exit(f"Tasks file not found: {args.tasks_file}")
     with args.tasks_file.open() as f:
         all_tasks: list[Task] = [
-            Task(id=t["id"], type=t["type"], prompt=t["prompt"], primary_module=t.get("primary_module", ""))
+            Task(
+                id=t["id"],
+                type=t["type"],
+                prompt=t["prompt"],
+                primary_module=t.get("primary_module", ""),
+                difficulty=t.get("difficulty", "unknown"),
+            )
             for t in json.load(f)
         ]
     if args.tasks:
@@ -1593,8 +1677,9 @@ def main() -> None:
 
     if "semble" in arms or "combined" in arms:
         check_semble_mcp()
+    repeat = max(1, args.repeat)
     models_to_run: list[tuple[str, str]] = [(args.model, MODELS[args.model])] if args.model else list(MODELS.items())
-    total_runs = len(all_tasks) * len(arms) * len(models_to_run)
+    total_runs = len(all_tasks) * len(arms) * len(models_to_run) * repeat
 
     model_names = ", ".join(m for m, _ in models_to_run)
 
@@ -1609,15 +1694,13 @@ def main() -> None:
     print(f"[→ repo:        {repo_path}]")
     print(f"[→ index:       {index_path}]")
     print(f"[→ models:      {model_names}]")
-    print(f"[→ tasks:       {len(all_tasks)}, arms: {len(arms)}, models: {len(models_to_run)}]")
+    print(f"[→ tasks:       {len(all_tasks)}, arms: {len(arms)}, models: {len(models_to_run)}, repeat: {repeat}]")
     print(f"[→ total runs:  {total_runs}]")
     print(f"[→ tool log:    {log_path}]")
 
     if args.dry_run:
-        for task in all_tasks:
-            for model_short, _ in models_to_run:
-                for arm in arms:
-                    print(f"  [DRY RUN] {task.id} ({task.type}) | {model_short} | {arm}")
+        for task, model_short, _, arm, rep in _iter_combos(all_tasks, models_to_run, arms, repeat):
+            print(f"  [DRY RUN] {task.id} ({task.type}) | {model_short} | {arm} | rep={rep + 1}/{repeat}")
         return
 
     if "codemap" in arms:
@@ -1637,6 +1720,7 @@ def main() -> None:
         "repo": str(repo_path),
         "index": str(index_path),
         "task_count": len(all_tasks),
+        "repeat": repeat,
     }
 
     # ── Construct benchmark and show ground truth info ────────────────────
@@ -1648,6 +1732,7 @@ def main() -> None:
         index_path=index_path,
         output_path=output_path,
         log_path=log_path,
+        repeat=repeat,
     )
     print(f"[→ quality gt:   {len(benchmark.gt.expected)} tasks with rdep ground truth]")
 
