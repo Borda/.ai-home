@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/rtk-enforce.js\"",
+            "command": "node \"${CODEX_HOME:-$HOME/.codex}/hooks/rtk-enforce.js\"",
             "statusMessage": "Checking RTK routing",
             "type": "command"
           }

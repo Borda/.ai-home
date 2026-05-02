@@ -51,22 +51,22 @@ cp -r .codex/ ~/.codex/      # activate globally
 
 ### Reference table
 
-All agents are standardized on `gpt-5.4-mini`. Differentiation is via reasoning effort and role instructions.
+All agents are standardized on `gpt-5.4-mini` with `xhigh` reasoning effort. Differentiation is via role instructions.
 
 | Agent                  | Effort | Purpose                                                                 |
 | ---------------------- | ------ | ----------------------------------------------------------------------- |
-| **sw-engineer**        | high   | SOLID implementation, doctest-driven dev, ML pipeline architecture      |
+| **sw-engineer**        | xhigh  | SOLID implementation, doctest-driven dev, ML pipeline architecture      |
 | **qa-specialist**      | xhigh  | Edge-case matrix, The Borda Standard, adversarial test review           |
-| **squeezer**           | high   | Profile-first optimization, GPU throughput, memory efficiency           |
-| **doc-scribe**         | medium | 6-point Google/Napoleon docstrings, README stewardship, CHANGELOG       |
+| **squeezer**           | xhigh  | Profile-first optimization, GPU throughput, memory efficiency           |
+| **doc-scribe**         | xhigh  | 6-point Google/Napoleon docstrings, README stewardship, CHANGELOG       |
 | **security-auditor**   | xhigh  | OWASP Python, ML supply chain, secrets, CI/CD hygiene *(read-only)*     |
-| **data-steward**       | high   | Split leakage, DataLoader reproducibility, augmentation correctness     |
-| **cicd-steward**       | medium | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
-| **linting-expert**     | medium | ruff, mypy, pre-commit config, rule progression, suppression discipline |
-| **oss-shepherd**       | high   | Issue triage, PR review, SemVer, pyDeprecate, release checklist         |
-| **solution-architect** | high   | System design, ADRs, API compatibility, migration planning              |
-| **web-explorer**       | medium | External docs/release-note extraction and evidence gathering            |
-| **curator**            | medium | Config quality checks, drift/leak detection, workflow hygiene           |
+| **data-steward**       | xhigh  | Split leakage, DataLoader reproducibility, augmentation correctness     |
+| **cicd-steward**       | xhigh  | GitHub Actions, trusted PyPI publishing, pre-commit, flaky tests        |
+| **linting-expert**     | xhigh  | ruff, mypy, pre-commit config, rule progression, suppression discipline |
+| **oss-shepherd**       | xhigh  | Issue triage, PR review, SemVer, pyDeprecate, release checklist         |
+| **solution-architect** | xhigh  | System design, ADRs, API compatibility, migration planning              |
+| **web-explorer**       | xhigh  | External docs/release-note extraction and evidence gathering            |
+| **curator**            | xhigh  | Config quality checks, drift/leak detection, workflow hygiene           |
 
 ### Spawn rules
 
@@ -98,11 +98,7 @@ Session defaults:
 
 Reasoning allocation:
 
-| Effort     | Roles                                                                 | Why                                                    |
-| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
-| **xhigh**  | qa-specialist, security-auditor                                       | Adversarial: exhaustive search for what could go wrong |
-| **high**   | sw-engineer, squeezer, data-steward, oss-shepherd, solution-architect | Analytical: depth without unbounded budget             |
-| **medium** | doc-scribe, cicd-steward, linting-expert, web-explorer, curator       | Writing/config/research balance                        |
+All configured `gpt-5.4-mini` agents currently use `xhigh`, so there is no active effort tiering to summarize here.
 
 ### Profiles
 
@@ -169,6 +165,8 @@ Configured hook files:
 
 - `.codex/hooks.json`
 - `.codex/hooks/rtk-enforce.js`
+
+The hook launcher resolves the installed copy from `${CODEX_HOME:-$HOME/.codex}` so it still loads when Codex runs outside a Git repository.
 
 Behavior:
 

@@ -1,7 +1,7 @@
 name                    = "solution-architect"
 description             = "System design and API planning: ADRs, interface contracts, migration plans, coupling and compatibility analysis."
 model                   = "gpt-5.4-mini"
-model_reasoning_effort  = "high"
+model_reasoning_effort  = "xhigh"
 model_reasoning_summary = "auto"
 approval_policy         = "on-request"
 sandbox_mode            = "workspace-write"
