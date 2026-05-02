@@ -115,6 +115,14 @@
             "type": "command"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/commit-guard.js\"",
+            "type": "command"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -186,6 +194,14 @@
         "hooks": [
           {
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/task-log.js\"",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/commit-guard.js\"",
             "type": "command"
           }
         ]

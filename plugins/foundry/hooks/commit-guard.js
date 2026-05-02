@@ -1,4 +1,4 @@
-// commit-guard.js — PreToolUse hook
+// commit-guard.js — multi-event hook
 //
 // PURPOSE
 //   Claude must never commit autonomously. The commit discipline rule
@@ -17,14 +17,17 @@
 //   TTL: 15 min — auto-expires if a skill crashes before cleanup.
 //
 // HOW IT WORKS
-//   1. Only fires on Bash tool calls containing `git commit`.
-//   2. Derives repo slug (basename of git root) and branch slug.
-//   3. Checks sentinel path exists and is younger than TTL.
-//   4. Sentinel valid → exit 0 (allow). Missing or expired → exit 2 (block).
+//   1. PreToolUse(Bash): only fires on `git commit` calls.
+//      Derives repo slug + branch slug → checks sentinel path present and fresh.
+//      Sentinel valid → exit 0 (allow). Missing or expired → exit 2 (block).
+//   2. SessionStart: wipes all /tmp/claude-commit-auth-<repo>-* sentinels so
+//      authorizations from a previous session never carry over to a new one.
+//   3. UserPromptSubmit: if the user submits `/clear`, wipes all sentinel files
+//      for the current repo so the authorisation is reset mid-session.
 //
 // EXIT CODES
-//   0  Sentinel present and fresh — commit allowed.
-//   2  No sentinel or expired — commit blocked; stderr shown to Claude.
+//   0  Allow (sentinel present and fresh, or non-commit event handled).
+//   2  Block — no sentinel or expired; stderr shown to Claude.
 
 "use strict";
 
@@ -36,6 +39,18 @@ const TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function toSlug(s) {
   return s.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
+}
+
+function getRepoSlug() {
+  try {
+    const root = execSync("git rev-parse --show-toplevel", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return toSlug(path.basename(root));
+  } catch {
+    return null;
+  }
 }
 
 function getSentinelPath() {
@@ -57,6 +72,25 @@ function getSentinelPath() {
   }
 }
 
+// Wipe all /tmp/claude-commit-auth-<prefix>-* sentinel files.
+// Called on SessionStart (prefix = repo slug) and UserPromptSubmit /clear (prefix = empty = all).
+function wipeCommitSentinels(prefix) {
+  try {
+    const files = fs.readdirSync("/tmp");
+    for (const f of files) {
+      if (f.startsWith(prefix ? `claude-commit-auth-${prefix}-` : "claude-commit-auth-")) {
+        try {
+          fs.unlinkSync(path.join("/tmp", f));
+        } catch {
+          // best-effort
+        }
+      }
+    }
+  } catch {
+    // /tmp not readable — ignore
+  }
+}
+
 let raw = "";
 process.stdin.on("data", (chunk) => (raw += chunk));
 process.stdin.on("end", () => {
@@ -67,12 +101,29 @@ process.stdin.on("end", () => {
     process.exit(0);
   }
 
-  const { tool_name, tool_input } = data;
+  const { hook_event_name, tool_name, tool_input } = data;
 
+  // --- SessionStart: wipe leftover sentinels from prior sessions ---
+  if (hook_event_name === "SessionStart") {
+    const repoSlug = getRepoSlug();
+    if (repoSlug) wipeCommitSentinels(repoSlug);
+    process.exit(0);
+  }
+
+  // --- UserPromptSubmit: wipe sentinels when user runs /clear ---
+  if (hook_event_name === "UserPromptSubmit") {
+    const prompt = (data.prompt || data.user_message || "").trim();
+    if (/^\/clear\b/.test(prompt)) {
+      const repoSlug = getRepoSlug();
+      if (repoSlug) wipeCommitSentinels(repoSlug);
+    }
+    process.exit(0);
+  }
+
+  // --- PreToolUse: guard git commit ---
   if (tool_name !== "Bash") process.exit(0);
 
   const command = (tool_input && tool_input.command) || "";
-
   if (!/^\s*git commit\b/.test(command)) process.exit(0);
 
   const sentinel = getSentinelPath();
