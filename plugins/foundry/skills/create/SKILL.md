@@ -1,7 +1,7 @@
 ---
 name: create
 description: Interactive outline co-creation for developer advocacy content — collects format, audience profile, story arc (Problem→Journey→Insight→Action), and voice/tone; detects out-of-scope requests (FAQs, comparison tables); surfaces conflicts between user brief and audience needs. Writes approved outline to .plans/content/<slug>-outline.md for foundry:creator to execute. Use when starting a blog post, Marp slide deck, social thread, talk abstract, or lightning talk.
-argument-hint: [topic]
+argument-hint: '[topic]'
 allowed-tools: Read, Write, TaskCreate, TaskUpdate, AskUserQuestion
 ---
 

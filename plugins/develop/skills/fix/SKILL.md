@@ -1,7 +1,7 @@
 ---
 name: fix
 description: Reproduce-first bug resolution — capture bug in failing regression test, apply minimal fix, run quality stack and review loop.
-argument-hint: <symptom or issue # (plain 123 or #123)> [--plan <path>] [--diagnosis <path>] [--no-challenge] [--codemap] [--semble]
+argument-hint: '<symptom or issue # (plain 123 or #123)> [--plan <path>] [--diagnosis <path>] [--no-challenge] [--codemap] [--semble]'
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
@@ -94,6 +94,20 @@ Diagnosis file format (`.plans/active/debug_<slug>.md`):
 **Set `CHALLENGE_ENABLED=true`**. If `--no-challenge` present in `$ARGUMENTS`, set `CHALLENGE_ENABLED=false`.
 **Set `CODEMAP_ENABLED=false`**. If `--codemap` present in `$ARGUMENTS`, set `CODEMAP_ENABLED=true`.
 **Set `SEMBLE_ENABLED=false`**. If `--semble` present in `$ARGUMENTS`, set `SEMBLE_ENABLED=true`.
+
+**Preflight** — if `CODEMAP_ENABLED=true`:
+
+```bash
+if ! command -v scan-query >/dev/null 2>&1; then
+    printf "! --codemap requested but codemap plugin not installed.\n  Install: claude plugin install codemap@borda-ai-rig\n"; exit 1
+fi
+_PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename)  # timeout: 3000
+if [ ! -f ".cache/scan/${_PROJ}.json" ]; then
+    printf "! --codemap requested but no index found for project '%s'.\n  Build index: /codemap:scan\n" "$_PROJ"; exit 1
+fi
+```
+
+If `SEMBLE_ENABLED=true`: verify `mcp__semble__search` is in your available tools. If not: print `! --semble requested but semble MCP server not configured. Configure: claude mcp add semble -s user -- uvx --from "semble[mcp]" semble` and stop.
 
 ## Step 1: Understand the problem
 

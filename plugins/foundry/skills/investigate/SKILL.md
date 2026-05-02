@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Systematic diagnosis for unknown failures — local environment, tool setup, CI vs local divergence, hook misbehavior, and runtime anomalies. Gathers signals broadly, ranks hypotheses, uses adversarial review (Codex or foundry:challenger) for ambiguous cases, probes each, and reports root cause with a recommended next action. NOT for known code bugs (/develop:debug) or config quality (/foundry:audit).
-argument-hint: <symptom, question, or failing command> [--fast]
+argument-hint: '<symptom, question, or failing command> [--fast]'
 allowed-tools: Read, Bash, Grep, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
 ---

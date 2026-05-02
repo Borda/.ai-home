@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Interactive wizard that scans the codebase, proposes a metric/guard/agent config, and writes a program.md run spec. Also runs cProfile on a file path to surface bottlenecks before prompting for optimization goal.
-argument-hint: <goal> | <file.py> [out.md] [--team]
+argument-hint: '<goal> | <file.py> [out.md] [--team]'
 effort: medium
 allowed-tools: Read, Write, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true

@@ -1,7 +1,7 @@
 ---
 name: integration
 description: Manage codemap integration — 'check' audits installation health (scan-query reachable, index fresh, injection present), 'init' onboards codemap by discovering skills/agents, recommending injection sites, and wiring them in.
-argument-hint: check | init [--approve]
+argument-hint: 'check | init [--approve]'
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 model: sonnet

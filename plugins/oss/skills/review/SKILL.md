@@ -117,6 +117,21 @@ fi
 ```
 
 ```bash
+# Preflight: fail early if requested tool not available
+if [ "$CODEMAP_ENABLED" = "true" ]; then
+    if ! command -v scan-query >/dev/null 2>&1; then
+        printf "! --codemap requested but codemap plugin not installed.\n  Install: claude plugin install codemap@borda-ai-rig\n"; exit 1
+    fi
+    _PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename)  # timeout: 3000
+    if [ ! -f ".cache/scan/${_PROJ}.json" ]; then
+        printf "! --codemap requested but no index found for project '%s'.\n  Build index: /codemap:scan\n" "$_PROJ"; exit 1
+    fi
+fi
+```
+
+If `SEMBLE_ENABLED=true`: verify `mcp__semble__search` is in your available tools. If not: print `! --semble requested but semble MCP server not configured. Configure: claude mcp add semble -s user -- uvx --from "semble[mcp]" semble` and stop.
+
+```bash
 # Strip leading '#' so both '123' and '#123' work
 CLEAN_ARGS="${CLEAN_ARGS#\#}"
 ```

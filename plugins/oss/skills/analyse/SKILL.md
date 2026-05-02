@@ -1,7 +1,7 @@
 ---
 name: analyse
 description: Analyze GitHub issues, Pull Requests (PRs), Discussions, and repo health for an Open Source Software (OSS) project. For any specific item, casts a wide net — finds and lists all related open and closed issues/PRs/discussions, explicitly flags duplicates. Summarizes long threads, extracts reproduction steps, and generates repo health stats. Uses gh Command Line Interface (CLI) for GitHub Application Programming Interface (API) access. Complements shepherd agent. NOT for PR readiness assessment or code review (use oss:review).
-argument-hint: <N|health|ecosystem|path/to/report.md> [--reply]
+argument-hint: '<N|health|ecosystem|path/to/report.md> [--reply]'
 allowed-tools: Read, Bash, Write, Agent, AskUserQuestion
 context: fork
 model: opus

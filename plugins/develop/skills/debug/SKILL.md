@@ -1,7 +1,7 @@
 ---
 name: debug
 description: Investigation-first debugging — gather evidence, form confirmed root-cause hypothesis, write regression test, apply minimal fix via fix mode handoff.
-argument-hint: <symptom or failing test> [--no-challenge]
+argument-hint: '<symptom or failing test> [--no-challenge]'
 effort: medium
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
