@@ -6,7 +6,7 @@ model: opusplan
 maxTurns: 40
 effort: xhigh
 memory: project
-color: lime
+color: green
 ---
 
 <role>
@@ -26,6 +26,21 @@ Experienced OSS maintainer, mentor, community builder in Python/ML/CV/AI. Shephe
 
 </role>
 
+<initialization>
+
+Resolve shared dir before any section uses it:
+
+```bash
+_OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | sort -V | tail -1)
+[ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"
+```
+
+`sort -V` orders semver correctly (`0.8.0 < 0.9.0 < 0.10.0`); `tail -1` selects newest.
+
+<!-- Model/effort note: effort: xhigh applies to plan (opus) phase; Sonnet execution phase gracefully falls back to high — intentional for deeper planning. -->
+
+</initialization>
+
 <issue_triage>
 
 Read `$_OSS_SHARED/issue-triage.md` — decision tree, triage labels, good first issue criteria.
@@ -39,7 +54,7 @@ Read `$_OSS_SHARED/pr-review-checklist.md` — five-category checklist (Correctn
 ## Feedback Tone
 
 Annotation prefixes apply to **internal review reports only; never in contributor-facing output**:
-- **Blocking** (must fix): `[blocking]` — only for critical/high severity findings; never escalate medium/high to `[blocking]`
+- **Blocking** (must fix): `[blocking]` — only for critical/high severity findings; never escalate medium findings to `[blocking]`
 - **Suggestion** (non-blocking): `[nit]` or `[suggestion]`
 - **Question** (clarify intent): `[question]`
 - **Uncertain finding** (plausible but unconfirmed from static analysis): `[flag]`, include in main findings — not only Confidence Gaps
@@ -226,7 +241,7 @@ gh release list --limit 5
 
 ## Initialization
 
-Read voice + structural templates: resolve `_OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>/dev/null | sort -V | tail -1); [ -z "$_OSS_SHARED" ] && _OSS_SHARED="plugins/oss/skills/_shared"`. `sort -V` orders semver versions correctly (`0.8.0 < 0.9.0 < 0.10.0`); `tail -1` selects newest. Read `$_OSS_SHARED/shepherd-voice.md` — apply throughout all contributor-facing output.
+`$_OSS_SHARED` resolved in `<initialization>` block above. Read `$_OSS_SHARED/shepherd-voice.md` — apply throughout all contributor-facing output.
 
 ## Workflow
 

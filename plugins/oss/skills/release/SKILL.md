@@ -21,13 +21,13 @@ Mode comes **first**; range or flags follow:
 
 | Invocation | Arguments | Writes to disk |
 | --- | --- | --- |
-| `/release [notes] [range]` | optional range (default: last-tag..HEAD); use `v1->v2` for explicit range | `PUBLIC-NOTES.md` |
-| `/release notes [range] --changelog` | optional range + flag | `PUBLIC-NOTES.md` + prepends `CHANGELOG.md` |
-| `/release notes [range] --summary` | optional range + flag | `PUBLIC-NOTES.md` + `.temp/output-release-summary-<branch>-<date>.md` |
-| `/release notes [range] --migration` | optional range + flag | `PUBLIC-NOTES.md` + `.temp/output-release-migration-<branch>-<date>.md` |
+| `/release [notes] [range]` | optional range (default: last-tag..HEAD); use `v1->v2` for explicit range | `DRAFT.md` |
+| `/release notes [range] --changelog` | optional range + flag | `DRAFT.md` + prepends `CHANGELOG.md` |
+| `/release notes [range] --summary` | optional range + flag | `DRAFT.md` + `.temp/output-release-summary-<branch>-<date>.md` |
+| `/release notes [range] --migration` | optional range + flag | `DRAFT.md` + `.temp/output-release-migration-<branch>-<date>.md` |
 | `/release notes [range] --changelog --summary --migration` | all flags | All four outputs |
-| `/release prepare <version>` | version to stamp, e.g. `v1.3.0` | All artifacts in `releases/<version>/`: `PUBLIC-NOTES.md` + `CHANGELOG.md` + `SUMMARY.md` + `MIGRATION.md` + `demo.py` |
-| `/release audit [version]` | optional target version | Terminal readiness report; emits `verdict: READY\ | NEEDS_ATTENTION\ | BLOCKED` as final line for orchestrator consumption |
+| `/release prepare <version>` | version to stamp, e.g. `v1.3.0` | All artifacts in `releases/<version>/`: `DRAFT.md` + `CHANGELOG.md` + `SUMMARY.md` + `MIGRATION.md` + `demo.py` |
+| `/release audit [version]` | optional target version | Terminal readiness report; emits `verdict: READY | NEEDS_ATTENTION | BLOCKED` as final line for orchestrator consumption |
 | `/release demo [range]` | optional range (default: last-tag..HEAD) | `releases/<version>/demo.py` or `.temp/release-demo-<branch>-<date>.py` |
 
 Range notation: `v1->v2` (e.g. `v1.2->v2.0`) — converted internally to git range. No mode given → defaults to `notes`. Flags add outputs alongside notes. `prepare` = full pipeline — runs audit first, then all artifacts; use when cutting release, not drafting.
@@ -231,13 +231,15 @@ Filter out: merge commits, minor dep bumps, CI/tooling config, comment typos, in
 
 ## Audit changelog
 
-Locate changelog: when `$VERSION` is set (prepare mode), check `releases/$VERSION/CHANGELOG.md`; otherwise check root `CHANGELOG.md`.
+Locate project changelog — search in order: `CHANGELOG.md` at repo root, `docs/CHANGELOG.md`, any `CHANGELOG*` file under repo root (one level deep). Store resolved path as `$CHANGELOG_FILE`. Mode does not change search order — always prefer existing project changelog regardless of mode.
 
 If exists: cross-check classified changes against existing entries for current unreleased section. Items classified in Classify each change but absent from CHANGELOG → add them (use same emoji-prefixed format already in file). Items in CHANGELOG that don't match any classified change → flag for review (do not delete automatically).
 
-If missing: create `releases/$VERSION/CHANGELOG.md` (prepare mode) or root `CHANGELOG.md` (notes mode) with `# Changelog` header and `## [Unreleased]` section populated from Classify each change.
+If missing: create `CHANGELOG.md` at repo root; set `$CHANGELOG_FILE` to that path. Populate with `# Changelog` header and `## [Unreleased]` section from Classify each change.
 
 Always report: "N items added to changelog, M items flagged for review."
+
+**Working document**: this phase owns the CHANGELOG-format classification (emoji-prefixed sections, `# Changelog` header). The Write release draft phase reads from this classification — it does NOT copy it. DRAFT.md uses a different format (see Write release draft template).
 
 ## Extract contributors
 
@@ -311,59 +313,18 @@ LATEST_TAG=$(gh release list --limit 20 --json tagName --jq '[.[] | select(.tagN
 [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ] && echo "No releases found — using template defaults" || gh release view "$LATEST_TAG"  # timeout: 15000
 ```
 
-Existing releases deviate from templates → match their style. Templates below = default; project conventions take precedence. `gh release list` returns empty → skip style-matching step; proceed with template defaults.
+Existing releases deviate from templates → match their tone and prose style only. **Never** adopt `# Changelog` or CHANGELOG section structure for DRAFT.md — always use the release notes template structure (`release-draft.tmpl.md`) regardless of existing release format. Template = default structure; project conventions take precedence for prose/tone only. `gh release list` returns empty → skip style-matching step; proceed with template defaults.
 
 Fetch origin URL for full changelog link:
 ```bash
 ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo "")  # timeout: 3000
 ```
 
-Use following output format:
+**DRAFT.md format guard**: DRAFT.md must NOT start with `# Changelog` and must NOT use CHANGELOG section structure. The CHANGELOG-format classification produced by the Audit changelog phase is an internal working document only — derive the sections below from it, do not copy it verbatim to DRAFT.md.
 
-```markdown
-# <version>: <release name>
+Read release draft template from `$SKILL_DIR/templates/release-draft.tmpl.md` and use as format. Replace `[org]/[repo]` with actual values from `$ORIGIN_URL` at runtime. Omit sections with no content.
 
-## Summary
-
-<simple paragraph — 2–4 sentences — what changed and why it matters for users/developers>
-
-## Spotlights / highlights
-
-<top 3–5 features or significant fixes, each with a short code example>
-
-## Migration guide
-
-<Releases do not introduce breaking changes unless the API was already deprecated in a prior release.
-Guide users on any migration needed. Include before/after code examples for each change.
-If no migration needed: "No migration required for this release.">
-
-<!-- Use content from the Draft migration guide phase — do not regenerate independently. -->
-
-## Notable changes
-
-<Focus on significance; group per area/component; list all PRs/commits that contributed.>
-
-### 🚀 Added
-### ⚠️ Breaking Changes
-### 🌱 Changed
-### 🗑️ Deprecated
-### ❌ Removed
-### 🔧 Fixed
-
----
-
-## 🏆 Contributors
-
-<Extract contributors list — one line per person, name + 3–6 word summary of notable contribution; no PR links>
-
----
-
-**Full changelog**: https://github.com/[org]/[repo]/compare/vPREV...vNEXT
-```
-
-Replace `[org]/[repo]` with actual values from `$ORIGIN_URL` at runtime. Omit sections with no content.
-
-Key differences from `prepare`: all phases run inline (no subagent delegation), output to `PUBLIC-NOTES.md` and root `CHANGELOG.md`. Produce CHANGELOG-format classification first as working document (not written to disk); derive notes from that classification.
+Key differences from `prepare`: all phases run inline (no subagent delegation), output to `DRAFT.md` and root `CHANGELOG.md`. Use the CHANGELOG-format classification from the Audit changelog phase as source material — write DRAFT.md in the release notes template format above, not in CHANGELOG format.
 
 ### CHANGELOG Entry (`--changelog` flag)
 
@@ -404,7 +365,7 @@ Read `$SHEPHERD_DIR/shepherd-revised.md` → use as final content for disk write
 Write to disk: (`BRANCH` and `DATE` from Shared setup block.)
 
 Shepherd review policy (applies when `$SHEPHERD_AVAILABLE == 1`):
-- **notes** (always): shepherd review → write to `PUBLIC-NOTES.md` at repo root. Notify: `→ written to PUBLIC-NOTES.md`
+- **notes** (always): shepherd review → write to `DRAFT.md` at repo root. Notify: `→ written to DRAFT.md`
 - **`--changelog`** (if set): no shepherd (structured format, internal audience) → prepend to `CHANGELOG.md` after `# Changelog` heading (create file if missing). Notify: `→ prepended to CHANGELOG.md`
 - **`--summary`** (if set): no shepherd (internal audience) → Draft executive summary already saved to `.temp/output-release-summary-$BRANCH-$DATE.md` — confirm written. Notify: `→ saved to .temp/output-release-summary-<branch>-<date>.md`
 - **`--migration`** (if set): shepherd review (public-facing) → save to `.temp/output-release-migration-$BRANCH-$DATE.md`. Notify: `→ saved to .temp/output-release-migration-<branch>-<date>.md`
@@ -434,22 +395,29 @@ Run all checks from **Mode: audit** with `$VERSION` as target. Present readiness
 
 **If verdict is READY or NEEDS_ATTENTION**: surface warnings, continue to Phase 2.
 
-### Phase 2: Gather and classify changes
+### Phase 2: Gather, classify, and changelog
 
-Use **Delegation strategy** above — spawn gather subagent for `$RANGE` to run gather/explore/validate phases and write findings to `GATHER_FILE`. Read returned JSON envelope; pass file path to Phase 3. Do not read gather file into main context.
+**a. Gather and classify** — spawn gather subagent per **Delegation strategy** for `$RANGE`; write findings to `GATHER_FILE`. Read returned JSON envelope; pass file path downstream. Do not read gather file into main context. Note `breaking` count from envelope — gates Phase 3b (migration guide).
 
-Note `breaking` count from envelope — gates Phase 3d.
+**b. Audit changelog** — apply **Audit changelog** logic inline: locate `$CHANGELOG_FILE` (per search order in Audit changelog section), cross-check classified changes from `$GATHER_FILE`, add missing entries, stamp unreleased section as `## [$VERSION] — $DATE`. Report: "N items added, M flagged."
 
-### Phase 3: Write all artifacts
+### Phase 3: Highlights and migration
+
+Set up release directory and back up any existing artifacts:
 
 ```bash
 RELEASE_DIR="releases/$VERSION"
 mkdir -p "$RELEASE_DIR"
 
+# Symlink canonical changelog into release dir — no duplication, single source of truth.
+# $CHANGELOG_FILE resolved by Phase 2b Audit changelog step.
+ln -sf "$(realpath "$CHANGELOG_FILE")" "$RELEASE_DIR/CHANGELOG.md"
+
 # Overwrite guard — back up any existing release artifacts before re-running prepare.
 # Re-running /release prepare for the same version is legitimate (post-audit-fix retry),
 # but silently overwriting hand-edited notes is destructive.
-for f in PUBLIC-NOTES.md CHANGELOG.md SUMMARY.md MIGRATION.md demo.py; do
+# CHANGELOG.md excluded — symlink; re-linking on re-run is safe and intentional.
+for f in HIGHLIGHTS.md DRAFT.md SUMMARY.md MIGRATION.md demo.py; do
     if [ -f "$RELEASE_DIR/$f" ]; then
         cp "$RELEASE_DIR/$f" "$RELEASE_DIR/$f.bak"
         echo "⚠ $RELEASE_DIR/$f exists — backed up to $f.bak before overwrite"
@@ -457,32 +425,29 @@ for f in PUBLIC-NOTES.md CHANGELOG.md SUMMARY.md MIGRATION.md demo.py; do
 done
 ```
 
-Write each artifact in sequence:
+**a. Identify highlights** — apply **Identify highlights** logic using classified changes from `$GATHER_FILE`: rank top 3–5 most significant changes (breaking > new public API > major UX > notable fixes), pull one concrete code example per highlight from diff output. Write to `releases/$VERSION/HIGHLIGHTS.md`. This document is source of truth for demo, executive summary, and release draft spotlights.
 
-**a. `releases/$VERSION/PUBLIC-NOTES.md`** — user-facing notes (release draft format from write-release-draft phase). Shepherd voice review applies. Existing file already backed up to `PUBLIC-NOTES.md.bak` by the overwrite guard above.
+**b. Draft migration guide** — apply **Draft migration guide** logic using breaking/deprecated changes from `$GATHER_FILE`. No breaking changes → single line: `No breaking changes in this release.` Shepherd voice review applies. Write to `releases/$VERSION/MIGRATION.md`.
 
-**b. `releases/$VERSION/CHANGELOG.md`** — changelog audit phase already updated changelog; write versioned entry stamped `$VERSION — $DATE`. Create with `# Changelog` header if missing. No shepherd review — write directly.
+### Phase 4: Demo and summary
 
-**c. `releases/$VERSION/SUMMARY.md`** — executive summary content from draft-executive-summary phase.
-
-**d. `releases/$VERSION/MIGRATION.md`** — always written. Migration guide content from draft-migration-guide phase. No breaking changes → single line: `No breaking changes in this release.` Shepherd voice review applies.
-
-### Phase 4: Demo notebook
-
-Reuse the gather subagent's `$GATHER_FILE` output from Phase 2 — do **not** re-run git commands. From the existing gathered commits and diffs, apply the demo generation logic from **Mode: demo**, Phase 2 (Generate demo script):
-
-- Select 2–3 headline features from `$GATHER_FILE`
-- For each, read the actual diff or changed source if not already in gather output
-- Generate the jupytext percent-format script following all content rules in Mode: demo
-
-Output path is always versioned in `prepare` mode:
+**a. Demo notebook** — reuse `$GATHER_FILE` and `releases/$VERSION/HIGHLIGHTS.md` from Phase 3. Apply demo generation logic from **Mode: demo**, Phase 2 (Generate demo script). Output path:
 
 ```bash
 DEMO_OUT="releases/$VERSION/demo.py"
-# releases/$VERSION/ already created by Phase 3 setup
 ```
 
-Write generated script to `$DEMO_OUT` using Write tool.
+Write generated script to `$DEMO_OUT` using Write tool. **Execution gate** — run:
+```bash
+python3 "$DEMO_OUT"  # timeout: 30000
+```
+Fix and re-run until script exits 0 and prints expected output. Do not proceed to 4b until gate passes.
+
+**b. Executive summary** — apply **Draft executive summary** logic using `releases/$VERSION/HIGHLIGHTS.md` and demo output. Write to `releases/$VERSION/SUMMARY.md`.
+
+### Phase 5: Write release draft
+
+`releases/$VERSION/DRAFT.md` — final assembly. Source: `releases/$VERSION/HIGHLIGHTS.md` (spotlights), `releases/$VERSION/MIGRATION.md`, `releases/$VERSION/SUMMARY.md`. Apply **Write release draft** logic (release-draft.tmpl.md format). Shepherd voice review applies.
 
 ### Output
 
@@ -494,17 +459,18 @@ Write generated script to `$DEMO_OUT` using Write tool.
 [any warnings carried forward]
 
 ### Written
-- `releases/$VERSION/PUBLIC-NOTES.md` — user-facing notes (N features, N fixes, N breaking changes)
-- `releases/$VERSION/CHANGELOG.md` — $VERSION changelog entry
-- `releases/$VERSION/SUMMARY.md` — internal summary
-- `releases/$VERSION/MIGRATION.md` — migration guide (N breaking changes, or "No breaking changes")
-- `releases/$VERSION/demo.py` — story-telling jupytext notebook
+- `$CHANGELOG_FILE` — $VERSION entry stamped (Phase 2b); `releases/$VERSION/CHANGELOG.md` symlinks here
+- `releases/$VERSION/HIGHLIGHTS.md` — top 3–5 spotlights with code examples (Phase 3a)
+- `releases/$VERSION/MIGRATION.md` — migration guide (N breaking changes, or "No breaking changes") (Phase 3b)
+- `releases/$VERSION/demo.py` — story-telling jupytext notebook (Phase 4a)
+- `releases/$VERSION/SUMMARY.md` — internal executive summary (Phase 4b)
+- `releases/$VERSION/DRAFT.md` — user-facing release notes, final assembly (Phase 5)
 
 ### Next steps
 1. Review all written files
 2. Bump version in the project manifest
 3. Commit, push, open PR
-4. On merge: create GitHub release from PUBLIC-NOTES.md
+4. On merge: create GitHub release from DRAFT.md
 5. Convert demo: `jupytext --to notebook releases/$VERSION/demo.py`
 ```
 
@@ -568,8 +534,6 @@ Run gather/explore/validate inline for `$RANGE` (no delegation — demo is singl
 git diff --stat "$(echo "$RANGE" | sed 's/\.\./.../')"  # three-dot range preferred; timeout: 3000
 ```
 
-Then select 2–3 headline features:
-
 From the gathered commits and diffs, select 2–3 headline features:
 - Prefer: new public API, breaking changes, significant performance wins, major UX improvements
 - Exclude: internal refactors, CI/tooling, dep bumps, doc-only changes
@@ -580,20 +544,7 @@ For each headline feature, read the actual diff or changed source file to unders
 
 Write a Python script in jupytext percent format. Structure in order:
 
-1. **Jupytext header** — YAML frontmatter as Python comments:
-   ```python
-   # ---
-   # jupyter:
-   #   jupytext:
-   #     cell_metadata_filter: -all
-   #     formats: ipynb,py:percent
-   #     text_representation:
-   #       extension: .py
-   #       format_name: percent
-   #       format_version: '1.3'
-   #       jupytext_version: 1.16.0
-   # ---
-   ```
+1. **Jupytext header** — read from `$SKILL_DIR/templates/demo-header.tmpl.py` and prepend verbatim as the first block of the generated script.
 2. **Title cell** (`# %% [markdown]`):
    - `# <PackageName> <VERSION>: <tagline — one clause per headline feature>`
    - Colab badge placeholder: `[![Open In Colab](...)](<repo-url>/blob/main/releases/<VERSION>/demo.ipynb)`
@@ -640,7 +591,7 @@ Notify: `→ written to $DEMO_OUT`
 - **Pre-release tag exclusion**: rc, dev, alpha, beta tags are never used as range base — always resolve to last stable release; applies in all modes (notes, prepare, audit)
 - Filter noise (CI config, dep bumps, typos) unless user-impacting
 - **Public-facing content policy**: release notes, changelogs, migration guides = user-visible changes only. Never include: internal staff names, internal maintenance, internal refactors, CI/tooling changes, internal dep bumps, code cleanup, developer housekeeping with no user impact.
-- Public-facing output co-authored with `oss:shepherd` — follow its `<voice>` guidelines for human, direct tone
+- Public-facing output co-authored with `oss:shepherd` — follow `$_OSS_SHARED/shepherd-voice.md` guidelines for human, direct tone
 - **Demo mode output**: jupytext percent format — convert to `.ipynb` with `jupytext --to notebook <file>.py`; placeholder URLs (`<repo-url>`, `<docs-url>`) must be replaced before publishing; Colab badge URL must point to actual notebook after upload
 - **Sequential gate**: gather → explore → validate docs → classify → audit changelog → extract contributors → identify highlights → draft migration → demo (feature only, execution gate) → executive summary → write draft — never reorder
 - **Demo execution gate**: demo phase blocks executive summary — no draft without executable demo for feature releases; script must exit 0 and print expected outputs before proceeding

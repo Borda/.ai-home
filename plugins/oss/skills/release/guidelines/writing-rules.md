@@ -4,9 +4,9 @@ Write for reader, not commit author.
 | --- | --- |
 | Feature heading | Bold title, period, then plain-English description — no jargon |
 | PR numbers (CHANGELOG) | Full Markdown link — `([#947](https://github.com/owner/repo/pull/947))` |
-| PR numbers (PUBLIC-NOTES.md) | Short inline ref — `(#947)` |
+| PR numbers (DRAFT.md) | Short inline ref — `(#947)` |
 | PR ref + fenced code block | Place `(#N)` at end of description text **before** the opening fence — never after the closing fence; trailing refs after fenced blocks are invisible in rendered output |
-| Issue refs | Never include `closes #N` / `fixes #N` in CHANGELOG or PUBLIC-NOTES.md |
+| Issue refs | Never include `closes #N` / `fixes #N` in CHANGELOG or DRAFT.md |
 | Code examples | Real usage showing the new surface; not pseudocode |
 | Tables | Use for option/preset comparisons; skip for single-item features |
 | Breaking changes | Rare — use sparingly; false alarms scare users more than the change itself |

@@ -42,7 +42,7 @@ Failure type → Response
 - **Concurrency**: `cancel-in-progress: true` grouped by `${{ github.workflow }}-${{ github.ref }}`
 - **Caching**: `astral-sh/setup-uv@<SHA> # v5` with `enable-cache: true` (uses `uv.lock` as cache key) — resolve SHA: `gh api repos/astral-sh/setup-uv/commits/v5 --jq .sha` (auto-dereferences annotated tags → commit SHA; never use `git/ref/tags/<tag>` — returns tag-object SHA, not commit SHA)
 - **Quality job**: `uv sync --dev` → `uv run ruff check .` → `ruff format --check .` → `uv run mypy src/`
-- **Test matrix**: `fail-fast: false`; Python 3.11–3.14 (min: 3.11; 3.14 pre-release — use `continue-on-error: true` or separate experimental cell until stable; graduate 3.14 to stable cell once CPython tags final release); recommended: `['3.11', '3.12', '3.13', '3.14']`; `uv sync --all-extras`; `pytest -n auto --tb=short -q --cov=src`
+- **Test matrix**: `fail-fast: false`; Python 3.11–3.14 (min: 3.11; 3.14 stable since October 2025 — treat as standard matrix cell); recommended: `['3.11', '3.12', '3.13', '3.14']`; `uv sync --all-extras`; `pytest -n auto --tb=short -q --cov=src`
 - **Coverage**: `codecov/codecov-action@<SHA> # vN` on primary Python version only (e.g. 3.12) — pin to full 40-char SHA; resolve: `gh api repos/codecov/codecov-action/commits/<tag> --jq .sha`
 - **SHA pinning**: replace `@v4`/`@v5` tags with 40-char commit SHAs — resolve: `gh api repos/<org>/<repo>/commits/<tag> --jq .sha`. Guard against null: `gh api ... --jq .sha` on private repos or non-existent tags embeds `null` — verify output is non-null before use.
 - For ruff/mypy config and rule selection, see `foundry:linting-expert` agent

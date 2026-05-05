@@ -48,14 +48,6 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 
 <workflow>
 
-**Deferred tool load** — first action before any task management or agent spawning:
-
-```
-ToolSearch("select:Agent,AskUserQuestion,TaskCreate,TaskUpdate,TaskList")
-```
-
-Ensures `Agent` (sub-agent spawning), `AskUserQuestion` (follow-up gate), and `Task*` tools are loaded before first use. Without this, these tools remain deferred and spawning/gate steps fail silently.
-
 <!-- Agent Resolution: canonical table at plugins/oss/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
@@ -69,7 +61,7 @@ _OSS_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/oss/*/skills/_shared 2>
 [ -z "$_OSS_SHARED" ] && echo "⚠ Could not resolve _OSS_SHARED — Step 9 --reply will fail; verify oss plugin installed" || true
 ```
 
-Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`, `foundry:doc-scribe`, `foundry:linting-expert`, `foundry:solution-architect`.
+Read `$_OSS_SHARED/agent-resolution.md`. Agents this skill uses: `foundry:sw-engineer`, `foundry:qa-specialist`, `foundry:perf-optimizer`, `foundry:doc-scribe`, `foundry:linting-expert`, `foundry:solution-architect`, `foundry:challenger`.
 
 **Task hygiene**: Before creating tasks, call `TaskList`. Each found task:
 
@@ -151,6 +143,7 @@ fi
 
 ```bash
 FOUNDRY_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_shared 2>/dev/null | sort -V | tail -1); [ -z "$FOUNDRY_SHARED" ] && FOUNDRY_SHARED="$(git rev-parse --show-toplevel 2>/dev/null || echo .)/.claude/skills/_shared"
+[ -z "$FOUNDRY_SHARED" ] && echo "⚠ Could not resolve FOUNDRY_SHARED — Steps 5/7/consolidator will fail; verify foundry plugin installed" || true
 ```
 
 ```bash
@@ -323,15 +316,22 @@ Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severi
 
 **Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: per preamble above (output to `foundry--challenger.md`). Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
 
-**Health monitoring** (CLAUDE.md §8): Agents synchronous — Claude awaits natively. Agent doesn't return within `$HARD_CUTOFF`s → Read partial results from `$RUN_DIR`, continue; mark ⏱ in report. One `$EXTENSION` if output file explains delay. Never omit timed-out agents.
+**Health monitoring** (CLAUDE.md §8): After spawning all agents, create checkpoint:
+
+```bash
+REVIEW_CHECKPOINT="/tmp/review-check-$(date +%s)"
+touch "$REVIEW_CHECKPOINT"
+```
+
+Every `$MONITOR_INTERVAL` seconds: `find $RUN_DIR -newer "$REVIEW_CHECKPOINT" -type f | wc -l` — non-zero = agents alive; zero for `$HARD_CUTOFF` seconds = stalled. One `$EXTENSION` if `tail -20` output file explains delay; second stall = cutoff. On timeout: read partial results from stalled agent's file; surface with ⏱ in report. Never omit timed-out agents.
 
 ```bash
 ls "$RUN_DIR/"*.md 2>/dev/null || echo "⚠ No agent output files found in $RUN_DIR — check that $RUN_DIR was expanded correctly in spawn prompts"
 ```
 
-## Step 4: Post-agent checks (run in parallel)
+## Step 4: Post-agent checks (begin after Step 3 agent spawns launch — do not wait for Step 3 completion)
 
-Run these two checks simultaneously (while Step 3 agents complete):
+Run these two checks concurrently with Step 3 agent execution:
 
 ```bash
 TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $NF}') # timeout: 6000  # shared by 4a and 4b
@@ -395,7 +395,7 @@ Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | t
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 
-> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `foundry--codex.md` if present — skip any that are missing). Read `$REVIEW_SKILL_DIR/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Read `${FOUNDRY_SHARED}/cross-validation-protocol.md` and apply cross-validation to all critical/blocking findings before including them (file absent → skip cross-validation, note in output). For `foundry--challenger.md`: map severity keys Blockers → critical/high, Concerns → medium, Nitpicks → low when aggregating counts.
+> **Task:** Read all finding files in `$RUN_DIR/` (agent files: `foundry--sw-engineer.md`, `foundry--qa-specialist.md`, `foundry--perf-optimizer.md`, `foundry--doc-scribe.md`, `foundry--linting-expert.md`, `foundry--solution-architect.md`, `foundry--challenger.md` if present, and `foundry--codex.md` if present — skip any that are missing). Read `$REVIEW_SKILL_DIR/checklist.md` using the Read tool and apply the consolidation rules (signal-to-noise filter, annotation completeness, section caps). Include only findings that passed Step 5 cross-validation (verdict=CONFIRMED or un-cross-validated medium/low). For `foundry--challenger.md`: map severity keys Blockers → critical/high, Concerns → medium, Nitpicks → low when aggregating counts.
 >
 > **Filtering rules:**
 > - Precision gate: only include findings with a concrete, actionable location (function, line range, or variable name).
@@ -416,7 +416,7 @@ Main context receives only the one-liner verdict. Proceed with that summary for 
 **Consolidator unavailable fallback** — if `Agent` tool deferred/not loaded and consolidator cannot be spawned:
 1. Synthesize verdict one-liner inline from Step 3 JSON envelopes (or in-context findings if agents also didn't spawn): `verdict=<APPROVE|REQUEST_CHANGES|NEEDS_WORK> | findings=N | critical=N | high=N | file=.temp/output-review-$BRANCH-$DATE.md`
 2. Write consolidated report inline to `.temp/output-review-$BRANCH-$DATE.md` using Write tool directly — include all sections and Confidence block
-3. Print terminal block using `terminal-summaries.md` template — **never silently skip terminal output**
+3. Print terminal block using `$FOUNDRY_SHARED/terminal-summaries.md` template — **never silently skip terminal output**
 
 Report format: read `templates/review-report.md` in this skill directory and use it as the output structure.
 
@@ -502,7 +502,7 @@ End with `## Confidence` block per CLAUDE.md. Always last thing, regardless of `
 <calibration>
 
 Scenarios:
-1. FIX scope: single bug-fix PR with 1 changed file → scope=FIX, 3 agents skipped: perf-optimizer (scope), solution-architect (scope), challenger (low value for targeted fixes, scope-based skip). Remaining: sw-engineer, qa-specialist, doc-scribe, linting-expert = 4 agents run. Note: challenger also skipped when `CHALLENGE_ENABLED=false` flag — that is a flag-based skip, independent of scope.
+1. FIX scope: single bug-fix PR with 1 changed file → scope=FIX, 3 agents skipped: perf-optimizer (scope), solution-architect (scope), challenger skipped by scope rule (FIX); also always skipped when `--no-challenge` passed (independent flag path). Remaining: sw-engineer, qa-specialist, doc-scribe, linting-expert = 4 agents run.
 2. FEATURE scope: new feature PR with API changes → scope=FEATURE, all 7 agents run
 3. --reply mode: existing review report + --reply flag → skip to Step 9, no agents spawned
 
@@ -519,8 +519,8 @@ Scenarios:
   - `[blocking]` bugs or regressions → `/develop:fix` to reproduce with test and apply targeted fix
   - Structural or quality issues → `/develop:refactor` for test-first improvements
   - Security findings in auth/input/deps → run `pip-audit` for dep CVEs; address OWASP issues via `/develop:fix`
-  - Mechanical issues beyond Step 6 → `/codex:codex-rescue <task>`
-  - Docstrings, type annotations, renames → `/codex:codex-rescue <task description>` per finding
+  - Mechanical issues beyond Step 6 → have Claude dispatch internally: `Agent(subagent_type="codex:codex-rescue", prompt="<task>")`
+  - Docstrings, type annotations, renames → dispatch `Agent(subagent_type="codex:codex-rescue", prompt="<task description>")` per finding
   - PR feedback for contributor → `--reply` to auto-draft via oss:shepherd, or invoke oss:shepherd manually for custom framing
 
 </notes>

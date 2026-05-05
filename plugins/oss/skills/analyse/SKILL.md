@@ -283,6 +283,17 @@ End response with `## Confidence` block per CLAUDE.md — always **absolute last
 
 </workflow>
 
+<calibration>
+
+Calibratable modes: thread (duplicate detection recall), health (issue health metrics accuracy), ecosystem (impact analysis accuracy).
+
+Scenarios:
+1. Thread — duplicate detection: synthetic issue with identical symptoms to an existing closed issue → root cause match ≥0.9; duplicate link surfaced
+2. Thread — actionable response quality: feature request with no linked PRs → concrete scope + next step; no vague suggestions
+3. Health — metric accuracy: repo with known issue/PR/response-time counts → numeric values within ±10% of ground truth
+
+</calibration>
+
 <notes>
 
 - Mode files live in `plugins/oss/skills/analyse/modes/` — one file per mode, fully self-contained
@@ -299,6 +310,5 @@ End response with `## Confidence` block per CLAUDE.md — always **absolute last
   - Issue is feature request → `/develop:feature` for TDD-first implementation
   - PR with quality concerns → `/oss:review` for comprehensive multi-agent code review
   - Draft responses → use `--reply` to auto-draft via shepherd; or invoke shepherd manually
-- Calibratable modes: thread (duplicate detection recall), health (issue health metrics accuracy), ecosystem (impact analysis accuracy).
 
 </notes>

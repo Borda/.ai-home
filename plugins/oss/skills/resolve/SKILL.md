@@ -35,6 +35,11 @@ Bare comment text → skip to Codex dispatch (Step 12).
 
 </inputs>
 
+<constants>
+CHALLENGE_TIMEOUT_S=300   <!-- tightened from CLAUDE.md §8 default 900s -->
+CHALLENGE_POLL_S=90       <!-- tightened from CLAUDE.md §8 default 300s -->
+</constants>
+
 <workflow>
 
 <!-- Symbol legend: ⚠ = warning/skipped (non-blocking, proceed with caution) · ⛔ = blocked/stop (halt workflow, do not proceed) -->
@@ -63,8 +68,6 @@ Read `$_OSS_SHARED/agent-resolution.md`. Contains: foundry check + fallback tabl
 ## Step 1: Pre-flight
 
 ```bash
-# Canonical source: plugins/foundry/skills/_shared/preflight-helpers.md
-# Keep in sync with that file when updating
 # From plugins/foundry/skills/_shared/preflight-helpers.md — TTL 4 hours, keyed per binary
 preflight_ok() {
     local f=".claude/state/preflight/$1.ok"
@@ -82,7 +85,7 @@ if preflight_ok codex; then
 elif claude plugin list 2>/dev/null | grep -q 'codex@openai-codex'; then # timeout: 15000
     preflight_pass codex && CODEX_AVAILABLE=true && echo "codex (openai-codex): ok"
 else
-    echo "codex (openai-codex): missing — action item implementation (Step 8) will be skipped"
+    echo "codex (openai-codex): missing — complex multi-file action items will be skipped; simple items implemented via foundry:sw-engineer (see Step 8 degradation)"
 fi
 
 # gh binary + auth — required; cached for 4h (auth won't change within a session)
@@ -290,27 +293,16 @@ Read every comment, review, inline code comment. For each inline code comment: i
 | `[info]` | Praise, acknowledgement, emoji-only — skip |
 | `[self-review]` | Finding from the `/oss:review` report — not a GitHub commenter; author = agent name |
 
-Build `ACTION_ITEMS`: `[{id, type, author, summary, file, line, full_comment_text}]`
+Build `ACTION_ITEMS`: `[{id, type, author, summary, file, line, url, full_comment_text}]` — `url`: `html_url` from GitHub API response; blank for report items
 
 ### Sources confirmation
 
-Print right before action item table:
-
-```markdown
-## Resolve — sources
-
-Mode   : pr
-PR     : #<N>
-GitHub : Read — PR body · <N> comments · <N> reviews · <N> inline code comments
-Report : not used
-
-Building action items…
-```
+Print Sources block (same format as Step 3a template; Mode=pr · PR=#<N> · GitHub=Read — PR body · <N> comments · <N> reviews · <N> inline code comments · Report=not used) right before action item table.
 
 Print action item table — **MUST render as markdown table; never use key-value list, prose, or separator-delimited format regardless of cell length**. Mandatory per-cell truncation (truncate with `…`, never wrap or split):
 
 - **Summary**: ≤60 chars — truncate at word boundary, append `…`
-- **File:Line**: ≤35 chars — first path only when multiple; truncate long paths from the left (e.g. `…/workflows/build-docs.yml:328`)
+- **Comment**: markdown link `[↗](<html_url>)` from GitHub API `html_url` field; `—` when absent (report items or no inline URL)
 - **Notes**: ≤45 chars — truncate; full text preserved in `full_comment_text`; use `—` when empty
 
 Status codes: `pending` · `✓ resolved` · `⊘ skipped` · `⊘ no action`. Verbose reason → Notes column:
@@ -318,10 +310,10 @@ Status codes: `pending` · `✓ resolved` · `⊘ skipped` · `⊘ no action`. V
 ```markdown
 ### Action Items — PR #<number>
 
-| # | Type | Author | Status | Summary | File:Line | Notes |
-|---|------|--------|--------|---------|-----------|-------|
-| 1 | [gh][req] | @reviewer | pending | rename param `x` to `count` | src/foo.py:42 | — |
-| 2 | [gh][suggest] | @maintainer | pending | add docstring | — | — |
+| # | Type | Author | Status | Summary | Comment | Notes |
+|---|------|--------|--------|---------|---------|-------|
+| 1 | [gh][req] | @reviewer | pending | rename param `x` to `count` | [↗](https://github.com/owner/repo/pull/42#discussion_r123) | — |
+| 2 | [gh][suggest] | @maintainer | pending | add docstring | [↗](https://github.com/owner/repo/pull/42#issuecomment-456) | — |
 | 3 | [gh][question] | @reviewer | pending | why not use X instead? | — | — |
 ```
 
@@ -347,18 +339,7 @@ Find + read latest review report (`ls -t .temp/output-review-*.md 2>/dev/null | 
 
 ### Sources confirmation
 
-Print right before merge summary and action item table:
-
-```markdown
-## Resolve — sources
-
-Mode   : pr + report
-PR     : #<N>
-GitHub : Read — PR body · <N> comments · <N> reviews · <N> inline code comments
-Report : Read <path to report file>
-
-Building action items…
-```
+Print Sources block (same format as Step 3a template; Mode=pr + report · PR=#<N> · GitHub=Read — PR body · <N> comments · <N> reviews · <N> inline code comments · Report=Read <path>) right before merge summary and action item table.
 
 Result: single merged `ACTION_ITEMS`. GitHub items first (`[gh][req]`/`[gh][suggest]`), then `[report]` items. Print merge summary before table:
 
@@ -397,17 +378,19 @@ LAUNCH_AT=$(date +%s)
 NUM_GROUPS=0  # incremented once per spawned agent group below
 ```
 
+Before spawning, write all pending action items to file using the Write tool (file-handoff protocol — CLAUDE.md §2):
+
+Write `$CHALLENGE_DIR/items.json` with all pending ACTION_ITEMS in format:
+`{"items": [{"id": <id>, "summary": "<summary>", "file_line": "<file:line or —>", "author": "<author>", "full_comment_text": "<full text>"}]}`
+
 Spawn each challenge group with `run_in_background=true`, instructing it to write compact JSON to `$CHALLENGE_DIR/<group>.json`; increment `NUM_GROUPS` after each spawn:
 
 ```text
 Agent(subagent_type="foundry:challenger", run_in_background=true, prompt="
 Challenge each review comment for PR #<N>.
-For each item: read referenced file at file:line if given; determine if comment is valid against actual code, or should be pushed back.
+Read items from $CHALLENGE_DIR/items.json (JSON array under key 'items', each with id, summary, file_line, author, full_comment_text).
+For each item: read referenced file at file_line if given; determine if comment is valid against actual code, or should be pushed back.
 Be concise — max 2 tool calls per item.
-
-Items:
-<id>: <summary> | file: <file:line or '—'> | @<author>: <full_comment_text>
-...
 
 Write ONLY compact JSON to $CHALLENGE_DIR/challenger.json using the Write tool:
 {\"verdicts\": [{\"id\": <id>, \"verdict\": \"VALID\"|\"PUSH_BACK\", \"rationale\": \"<one sentence>\"}]}
@@ -420,6 +403,7 @@ Then return the same JSON as your final message.
 **5-minute health monitor** — check every 90 s; hard cutoff at 300 s (5 min):
 
 ```bash
+# Tightened from CLAUDE.md §8: hard cutoff 15min→5min, poll 5min→90s (appropriate for short challenge tasks)
 # Poll until all groups done or 5-min deadline reached
 while true; do
     NOW=$(date +%s)
@@ -909,6 +893,15 @@ Read and execute `$_OSS_RESOLVE/modes/comment-dispatch.md`.
 
 </workflow>
 
+<calibration>
+
+Scenarios:
+1. Mode selection: bare PR number (e.g. `42`) → pr mode; `42 report` → pr + report mode; bare `report` → report mode; bare comment text → comment dispatch (Step 12)
+2. Action item classification: LGTM/emoji comment → `[info]` (skip); `nit:` suggestion → `[gh][suggest]`; resolved thread → `[done]`; "must fix X before merge" from reviewer with write access → `[gh][req]`
+3. Challenge accuracy: comment about actually-present bug (confirmed by reading code) → VALID; comment about issue already addressed in a subsequent commit → PUSH_BACK
+
+</calibration>
+
 <notes>
 
 - **Pre-flight git pull** — Step 1 fetches remote tracking ref, pulls if ahead; 1-local/1-remote divergence merges clean; `git pull` conflicts → exit with message to resolve manually — prevents `git merge --continue` with no in-progress merge
@@ -922,11 +915,10 @@ Read and execute `$_OSS_RESOLVE/modes/comment-dispatch.md`.
 - **`gh pr merge` flags**: `--merge` = preserves all commits; `--squash` = collapses (loses action-item commits); never `--rebase` (rewrites SHAs); default `--merge`.
 - **Escape hatch**: `git merge --abort` = undo all conflict state; `git push --force-with-lease` (never plain `--force`) only when user explicitly requests — if push rejected after local amend.
 - **Codex agent health**: subject to CLAUDE.md §8 — 15-min cutoff, ⏱ on timeout; partial results via `tail -100` on output file.
-- **Worktree cleanup safety net**: `SessionEnd` runs `git worktree prune` — catches orphaned worktrees.
 - **Thread resolution via GraphQL** — GitHub REST `/pulls/{PR}/comments` returns individual comment objects; `isResolved` lives on `PullRequestReviewThread` (GraphQL only). Step 3b fetches it separately. `RESOLVED_THREAD_IDS` = array of root comment `databaseId` values for all resolved threads; inline comments matching any ID → auto-`[done]`. GraphQL fetch failure (network, permissions) → `[]` fallback — skill continues without resolved-status data.
 - **`[gh]` items** (all pr-sourced items in all modes): commit messages use: `[resolve #<id>] @<reviewer> (gh):`
 - **`[report]` items**: attribute to agent, not GitHub commenter — distinguishes automated findings in git history. Format: `[resolve #<id>] /review finding by <agent-name> (report: <report-path>):`
-- **Sources block**: print after mode resolution, before GitHub API calls — "abort if wrong source" moment.
+- **Sources block**: print after all sources read, before action item table — pre-table summary confirming what was fetched.
 - **Step 7 delegation** — resolve owns orchestration + context; sw-engineer owns code-level resolution (Read → Edit → stage); resolve retains conflict report + `git merge --continue`.
 - Follow-up chains:
   - After push → never approve/comment on PR; maintainer reviews + clicks Merge.

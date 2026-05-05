@@ -14,7 +14,11 @@
 Guide users on any migration needed. Include before/after code examples for each change.
 If no migration needed: "No migration required for this release.">
 
+<!-- Use content from the Draft migration guide phase — do not regenerate independently. -->
+
 ## Notable changes
+
+<Focus on significance; group per area/component; list all PRs/commits that contributed.>
 
 ### 🚀 Added
 
