@@ -184,11 +184,18 @@ git diff --stat "$(echo "$RANGE" | sed 's/\.\.\./\ /;s/\.\./\ /')" # timeout: 30
 # PR titles, bodies, and labels for merged PRs (richer context than commits)
 TRUNK=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | { read -r _ _ val; echo "${val:-main}"; })
 # timeout: 15000
-gh pr list --state merged --base "${TRUNK:-main}" --limit 100 \
+gh pr list --state merged --base "${TRUNK:-main}" --limit 500 \
     --json number,title,body,labels,mergedAt,author 2>/dev/null
 ```
 
 Cross-reference commit bodies against Pull Request (PR) descriptions — canonical source of truth for *why* change was made. `BREAKING CHANGE:` footer = breaking change regardless of PR label.
+
+**Detect revert pairs**: scan full commit messages from `git log $RANGE --no-merges --format="%H %s"` for subjects beginning with `Revert "`. For each such commit:
+1. Extract original subject from between the quotes.
+2. Search remaining commits in range for a commit whose subject matches (or closely matches) the extracted subject.
+3. If both original and revert commit are found within range → they form a `REVERT_SET` pair: net effect is zero.
+
+Record all `REVERT_SET` pairs before entering Classify. Commits in `REVERT_SET` are excluded from all standard sections (Added, Fixed, etc.) and instead collected for the 🔄 Reverted section. If only the revert is in range (original predates range) → the feature WAS shipped in a prior release and is now gone; classify as ❌ Removed (or ⚠️ Breaking Changes if API surface changed without a prior deprecation period) — NOT 🔄 Reverted, because the net user effect is non-zero: something they relied on is missing.
 
 ## Explore codebase
 
@@ -209,19 +216,20 @@ Check public API surface documented in docs/ (or README) matches what changed in
 
 ## Classify each change
 
-Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes → 🌱 Changed → 🗑️ Deprecated → ❌ Removed → 🔧 Fixed → 🔒 Security
+Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes → 🌱 Changed → 🗑️ Deprecated → ❌ Removed → 🔧 Fixed → 🔒 Security → 🔄 Reverted
 
 | Category | Output section | What goes here |
 | --- | --- | --- |
 | **New Features** | 🚀 Added | User-visible additions |
 | **Breaking Changes** | ⚠️ Breaking Changes | Existing code **stops working immediately** after upgrade — API removed, signature changed incompatibly, behavior changed with no fallback. Must be 100% certain it no longer works. |
 | **Improvements** | 🚀 Added or 🌱 Changed | Enhancements to existing behavior |
-| **Performance** | 🚀 Added or 🔧 Fixed or 🌱 Changed | Speed or memory improvements. Use 🔧 Fixed if it corrects a regression, use 🚀 Added if it's a new optimization feature, use 🌱 Changed if it's a refactor for efficiency. |
+| **Performance** | 🚀 Added or 🔧 Fixed or 🌱 Changed | Speed or memory improvements. Use 🔧 Fixed if it corrects a regression, use 🚀 Added if it's a new optimization feature, use 🌱 Changed if it's a refactor for efficiency. **Quantitative claims** ("2× faster", "50% less memory") require evidence from PR body or benchmark artifacts — unsubstantiated claims from commit subjects alone → rewrite to "improved performance" without the number (see `guidelines/numbers-reference.md`). |
 | **Deprecations** | 🗑️ Deprecated | Old API **still works** this release but is scheduled for removal — emits a warning, replacement exists |
 | **Removals** | ❌ Removed | Previously deprecated API now gone (this is what becomes a Breaking Change in the next cycle) |
 | **Bug Fixes** | 🔧 Fixed | Correctness fixes |
 | **Security** | 🔒 Security | Security fixes and vulnerability patches — omit CVE numbers in public notes; link to advisory if public |
 | **Internal** | *(omit)* | Refactors, CI/tooling, deps, code cleanup, developer-facing housekeeping — omit unless directly user-impacting |
+| **Reverted** | 🔄 Reverted | Introduced AND reverted within range (REVERT_SET pairs) — net effect zero; list as "Reverted: <original description>"; do NOT classify original change in any other section; omit from highlights, demo, and migration guide |
 
 **Breaking vs Deprecated**: old call still works (even with warning) → Deprecated, never Breaking. Breaking = upgrade causes immediate failures, no compat period.
 
@@ -229,11 +237,39 @@ Filter out: merge commits, minor dep bumps, CI/tooling config, comment typos, in
 
 **Cherry-pick annotation (stable-branch mode)**: when `$CHERRY_PICK_SUBJECTS` is set (populated in gather phase for stable/bug-fix branches), check each commit's subject against it. Match → commit is a backport from `$SOURCE_TAG_REF`; append "(backported from $SOURCE_TAG_REF)" to the classification entry. No match → fix is original to this stable branch; no annotation needed.
 
+## Truth check
+
+Gate — runs after Classify, before Audit changelog. Verifies each classified change actually exists in HEAD (codebase is the source of truth, not commit messages).
+
+**Scope**: apply to all changes classified as 🚀 Added, ⚠️ Breaking Changes, or 🌱 Changed that introduce or remove a named symbol (function, class, CLI flag, config key). Skip: 🔧 Fixed (absence of bug is not greppable), 🔒 Security, 🗑️ Deprecated (still present by definition), ❌ Removed (confirmed absent by removal logic), 🔄 Reverted (already excluded from net changes).
+
+**For each in-scope classified change**:
+
+```bash
+# For additions — confirm symbol present in implementation files at HEAD
+# Restrict to src/ directories; docs/, tests/, CHANGELOG exclude (they document, not implement)
+git grep -l "<symbol_name>" HEAD -- 'src/**' '*.py' '*.ts' '*.js' '*.go' '*.rs' 2>/dev/null || \
+  git grep -l "<symbol_name>" HEAD -- . --exclude-dir=docs --exclude-dir=tests --exclude-dir=.github  # timeout: 3000
+# For removals / breaking changes — confirm symbol absent from implementation at HEAD
+git grep -l "<symbol_name>" HEAD -- 'src/**' '*.py' '*.ts' '*.js' '*.go' '*.rs' 2>/dev/null && echo "PRESENT (unexpected)" || echo "ABSENT (confirmed)"  # timeout: 3000
+# For behavior changes — read the relevant file at HEAD and confirm the changed code path
+git show HEAD:<changed_file> | grep -n "<distinguishing_pattern>"  # timeout: 3000
+```
+
+**Outcomes**:
+- Confirmed present → keep in classified section; note "truth-checked"
+- Not found in HEAD → change was reverted after range end (post-range revert), or was merged to a different branch; move entry from its section to ⚠️ Unconfirmed with note: "classified from commit history but not found in HEAD — verify before publishing"; do NOT include in highlights or demo
+- Cannot determine (e.g. behavioral change without greppable symbol) → keep classification; add "(not verified)" qualifier to the entry
+
+**Gate rule**: at least the top 3 most significant classified changes (breaking, new public API) must pass truth check before proceeding to Identify highlights. If any top-3 change moves to ⚠️ Unconfirmed, flag for user review before continuing — do not silently drop.
+
 ## Audit changelog
 
 Locate project changelog — search in order: `CHANGELOG.md` at repo root, `docs/CHANGELOG.md`, any `CHANGELOG*` file under repo root (one level deep). Store resolved path as `$CHANGELOG_FILE`. Mode does not change search order — always prefer existing project changelog regardless of mode.
 
 If exists: cross-check classified changes against existing entries for current unreleased section. Items classified in Classify each change but absent from CHANGELOG → add them (use same emoji-prefixed format already in file). Items in CHANGELOG that don't match any classified change → flag for review (do not delete automatically).
+
+**Reverted-entry handling**: for each REVERT_SET pair, add a `🔄 Reverted` entry: `🔄 Reverted: <original change description> (introduced and reverted in this release)`. If the original change was already written to CHANGELOG before the revert (e.g. during earlier drafting), strike or remove it from the main section and add the Reverted entry instead — a change that did not ship must not appear as shipped. Items in CHANGELOG marked as Reverted are never promoted to highlights or migration guide.
 
 If missing: create `CHANGELOG.md` at repo root; set `$CHANGELOG_FILE` to that path. Populate with `# Changelog` header and `## [Unreleased]` section from Classify each change.
 
@@ -280,7 +316,7 @@ Write demo to `$DEMO_OUT`. (`prepare` mode: `releases/$VERSION/demo.py` — see 
 
 **Gate: demo must execute to completion with expected outputs before proceeding to Draft executive summary.** Run:
 ```bash
-python3 "$DEMO_OUT"  # timeout: 30000
+python3 "$DEMO_OUT"  # timeout: 600000
 ```
 If execution fails: fix and re-run. Do not proceed until script exits 0 and prints expected output. Self-contained rules: package under release is installed in current env; no live API calls or network deps; deterministic synthetic data; `# !pip install` lines are Python comments — interpreter skips them.
 
@@ -308,8 +344,8 @@ done
 Before writing, fetch last 2–3 releases to check project-specific formatting conventions:
 
 ```bash
-gh release list --limit 3                                                  # timeout: 30000
-LATEST_TAG=$(gh release list --limit 20 --json tagName --jq '[.[] | select(.tagName | test("rc|dev|alpha|beta"; "i") | not)] | .[0].tagName // empty') # timeout: 30000
+gh release list --limit 5                                                  # timeout: 30000
+LATEST_TAG=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | test("rc|dev|alpha|beta"; "i") | not)] | .[0].tagName // empty') # timeout: 30000
 [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ] && echo "No releases found — using template defaults" || gh release view "$LATEST_TAG"  # timeout: 15000
 ```
 
@@ -333,6 +369,51 @@ Read CHANGELOG entry template from $SKILL_DIR/templates/changelog.tmpl.md and us
 ### Internal Release Summary (`--summary` flag)
 
 Read internal release summary template from $SKILL_DIR/templates/summary.tmpl.md and use as format.
+
+### Adversarial review
+
+Challenge every factual claim in the assembled draft against the actual codebase and project docs. Runs before voice/tone polish — facts must be correct before prose is refined.
+
+**Scope**: applies to `notes` mode (DRAFT.md) and `prepare` mode (releases/$VERSION/DRAFT.md) and `--migration` flag output. Skip for `--summary` (internal audience) and `--changelog` entries (structured format, not claim-heavy prose).
+
+```bash
+# Adversarial review run dir — expand to literal value before spawning
+ADVERSARIAL_DIR=".temp/release-adversarial-$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')-$(date +%Y-%m-%d)"
+mkdir -p "$ADVERSARIAL_DIR"  # timeout: 5000
+```
+
+Write full assembled draft content to `$ADVERSARIAL_DIR/draft-to-review.md` using Write tool.
+
+Spawn adversarial reviewer:
+
+```text
+Agent(subagent_type="general-purpose", prompt="Adversarial review of a release draft against the project codebase and docs. Working directory: <REPO_ROOT>.
+
+Read the release draft at: <$ADVERSARIAL_DIR/draft-to-review.md>
+
+Challenge across 4 dimensions — treat every claim as unproven until verified:
+
+1. FACTUAL ACCURACY — for every claim ('adds X', 'fixes Y', 'removes Z', 'improves performance'), verify against HEAD: git grep or read the relevant file. Quote the file:line that confirms or refutes. A claim with no verifiable trace in HEAD = finding.
+2. COMPLETENESS — <gather context below>: significant commits (breaking changes, new public API) not mentioned in draft = finding. Minor/internal commits being absent is expected.
+3. SEMVER CORRECTNESS — if draft says 'no breaking changes', scan for removed or renamed public API, changed function signatures, removed config keys using git diff. Flag any contradiction.
+4. DOCS ALIGNMENT — for each new API or behavior claimed in draft, confirm docs/ or README covers it. Missing doc = finding.
+
+<gather context>
+$([ -n \"<GATHER_FILE>\" ] && [ -f \"<GATHER_FILE>\" ] && echo 'Full commit/PR classification in: <GATHER_FILE> — read it for the ground-truth change list.' || echo 'Use the git range <RANGE> directly: git log <RANGE> --no-merges --oneline to get the change list.')
+</gather context>
+
+For each finding: severity (critical=claim directly contradicts codebase | high=significant missing change or SemVer misclassification | medium=overstated claim or minor missing item | low=style/wording inaccuracy). For critical and high findings: quote exact draft text and quote codebase evidence.
+
+Write full findings report to <$ADVERSARIAL_DIR/adversarial-review.md> using the Write tool.
+Return ONLY on your final line: {\"status\":\"done\",\"file\":\"<$ADVERSARIAL_DIR/adversarial-review.md>\",\"critical\":N,\"high\":N,\"medium\":N,\"low\":N,\"confidence\":0.N}")
+```
+
+Expand `<REPO_ROOT>`, `<RANGE>`, `<GATHER_FILE>`, `<$ADVERSARIAL_DIR>` to their literal values before spawning — never pass variable names literally.
+
+**Gate — read `$ADVERSARIAL_DIR/adversarial-review.md`**:
+- **Critical or high findings**: fix in draft before proceeding; re-run adversarial review on fixed sections once (max 1 re-run); if findings persist after re-run, surface to user and stop
+- **Medium or low findings**: append as `> ⚠️ Reviewer notes: <summary>` to the response; include in Human gate handoff; do not block Polish step
+- **0 findings**: proceed directly to Polish
 
 ### Polish and write to disk
 
@@ -439,7 +520,7 @@ DEMO_OUT="releases/$VERSION/demo.py"
 
 Write generated script to `$DEMO_OUT` using Write tool. **Execution gate** — run:
 ```bash
-python3 "$DEMO_OUT"  # timeout: 30000
+python3 "$DEMO_OUT"  # timeout: 600000
 ```
 Fix and re-run until script exits 0 and prints expected output. Do not proceed to 4b until gate passes.
 
@@ -447,7 +528,7 @@ Fix and re-run until script exits 0 and prints expected output. Do not proceed t
 
 ### Phase 5: Write release draft
 
-`releases/$VERSION/DRAFT.md` — final assembly. Source: `releases/$VERSION/HIGHLIGHTS.md` (spotlights), `releases/$VERSION/MIGRATION.md`, `releases/$VERSION/SUMMARY.md`. Apply **Write release draft** logic (release-draft.tmpl.md format). Shepherd voice review applies.
+`releases/$VERSION/DRAFT.md` — final assembly. Source: `releases/$VERSION/HIGHLIGHTS.md` (spotlights), `releases/$VERSION/MIGRATION.md`, `releases/$VERSION/SUMMARY.md`. Apply **Write release draft** logic (release-draft.tmpl.md format). Adversarial review applies (use `$GATHER_FILE` from Phase 2a as gather context). Shepherd voice review applies.
 
 ### Output
 
@@ -542,6 +623,15 @@ For each headline feature, read the actual diff or changed source file to unders
 
 ### Phase 2: Generate demo script
 
+**Real-world data constraint**: demo must use actual project artifacts, real API calls against the package under release, or genuine example data already present in the repo. Fabricated or synthetic inputs are not acceptable by default. Sources in priority order: repo test fixtures, example scripts shipped with package, public datasets referenced in project docs, real CLI invocations against installed package.
+
+**Fallback protocol — if a real demo cannot be assembled** (e.g. no usable fixtures, installed package not functional, API requires live credentials): before writing any synthetic script, execute these steps in order:
+
+1. **Document each failed attempt**: output a `## Demo attempts` block to the terminal listing every approach tried and the specific reason it was rejected (e.g. "test fixtures require database connection", "example script imports non-installable C extension"). Minimum one entry per attempt.
+2. **Ask Codex (if available)**: check `codex` plugin availability; if present, spawn `Agent(subagent_type="codex:codex-rescue")` with the `## Demo attempts` log and ask it to locate or construct a real-world demo from project artifacts. If Codex returns a viable approach, use it — stop here and do not proceed to steps 3–4.
+3. **Ask user**: invoke `AskUserQuestion` with the `## Demo attempts` log (and Codex outcome if attempted), asking the user to either provide real-world assets or explicitly approve a synthetic demo.
+4. **Synthetic demo only on explicit approval**: proceed with synthetic/fabricated demo content only if the `AskUserQuestion` response in step 3 explicitly authorises it.
+
 Write a Python script in jupytext percent format. Structure in order:
 
 1. **Jupytext header** — read from `$SKILL_DIR/templates/demo-header.tmpl.py` and prepend verbatim as the first block of the generated script.
@@ -588,6 +678,10 @@ Notify: `→ written to $DEMO_OUT`
 
 <notes>
 
+- **Numbers reference**: all numeric limits and claims in this skill are documented with rationale and evidence in `guidelines/numbers-reference.md`; update that file whenever limits change
+- **Revert handling**: REVERT_SET pairs (both original and revert in range) = net-zero; appear only in 🔄 Reverted section; never in highlights, demo, migration guide; if only the revert is in range (original predates range) → classify as ❌ Removed or ⚠️ Breaking (not 🔄 Reverted) — from user's perspective the feature is gone from a version it was in
+- **Truth check is mandatory**: top-3 classified changes (breaking, new API) must be confirmed present in HEAD before Identify highlights; unconfirmed changes move to ⚠️ Unconfirmed and require user sign-off
+- **Adversarial review is mandatory for public-facing output**: runs after draft assembly, before shepherd/polish; critical/high findings block write-to-disk; medium/low included as reviewer notes; skip for internal-only outputs (--summary, --changelog); applies in `notes`, `prepare`, and `--migration` modes
 - **Pre-release tag exclusion**: rc, dev, alpha, beta tags are never used as range base — always resolve to last stable release; applies in all modes (notes, prepare, audit)
 - Filter noise (CI config, dep bumps, typos) unless user-impacting
 - **Public-facing content policy**: release notes, changelogs, migration guides = user-visible changes only. Never include: internal staff names, internal maintenance, internal refactors, CI/tooling changes, internal dep bumps, code cleanup, developer housekeeping with no user impact.
@@ -595,6 +689,7 @@ Notify: `→ written to $DEMO_OUT`
 - **Demo mode output**: jupytext percent format — convert to `.ipynb` with `jupytext --to notebook <file>.py`; placeholder URLs (`<repo-url>`, `<docs-url>`) must be replaced before publishing; Colab badge URL must point to actual notebook after upload
 - **Sequential gate**: gather → explore → validate docs → classify → audit changelog → extract contributors → identify highlights → draft migration → demo (feature only, execution gate) → executive summary → write draft — never reorder
 - **Demo execution gate**: demo phase blocks executive summary — no draft without executable demo for feature releases; script must exit 0 and print expected outputs before proceeding
+- **Demo real-world-only policy**: demo must use actual project data/fixtures/API — synthetic inputs not acceptable without explicit user approval in the same session; mandatory fallback sequence: (1) document each failed attempt in `## Demo attempts` block, (2) ask Codex if available (`Agent(subagent_type="codex:codex-rescue")`), (3) ask user via `AskUserQuestion`, (4) synthetic proceeds only on explicit user approval
 - **Changelog audit non-destructive**: adds missing entries, flags extras, never removes existing entries automatically
 - Follow-up chains:
   - Readiness check → `/release prepare <version>` runs built-in audit first; use standalone `/release audit [version]` only for readiness check without cutting release

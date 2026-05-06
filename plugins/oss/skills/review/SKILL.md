@@ -147,27 +147,31 @@ FOUNDRY_SHARED=$(ls -d ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/_sh
 ```
 
 ```bash
-# $CLEAN_ARGS must be a non-empty numeric PR number — guard first:
-if [ -z "$CLEAN_ARGS" ] || ! [[ "$CLEAN_ARGS" =~ ^[0-9]+$ ]]; then
-    echo "Error: PR number required. Usage: /oss:review <PR number> [--reply] [--no-challenge]"
-    exit 1
+if [ "$DIRECT_PATH_MODE" = "false" ]; then
+    # $CLEAN_ARGS must be a non-empty numeric PR number:
+    if [ -z "$CLEAN_ARGS" ] || ! [[ "$CLEAN_ARGS" =~ ^[0-9]+$ ]]; then
+        echo "Error: PR number required. Usage: /oss:review <PR number> [--reply] [--no-challenge]"
+        exit 1
+    fi
+    # Run all four in parallel:
+    CHANGED_FILES=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null)  # cache for reuse in codemap block # timeout: 6000
+    gh pr view $CLEAN_ARGS                                            # PR description and metadata       # timeout: 6000
+    gh pr checks $CLEAN_ARGS                                          # CI status — don't review if CI is red # timeout: 15000
+    gh pr view $CLEAN_ARGS --json reviews,labels,milestone            # timeout: 6000
 fi
-# Run all four in parallel:
-CHANGED_FILES=$(gh pr diff $CLEAN_ARGS --name-only 2>/dev/null)  # cache for reuse in codemap block # timeout: 6000
-gh pr view $CLEAN_ARGS                                            # PR description and metadata       # timeout: 6000
-gh pr checks $CLEAN_ARGS                                          # CI status — don't review if CI is red # timeout: 15000
-gh pr view $CLEAN_ARGS --json reviews,labels,milestone            # timeout: 6000
 ```
 
-**CI RED GATE**: if `gh pr checks` shows any required check failing → print `⛔ CI is red — skipping full review. Fix failing CI first, then re-run /oss:review.` and `exit 0`. Do NOT proceed to Steps 2–8.
+**CI RED GATE** (PR mode only): if `gh pr checks` shows any required check failing → print `⛔ CI is red — skipping full review. Fix failing CI first, then re-run /oss:review.` and `exit 0`. Do NOT proceed to Steps 2–8.
 
 ### Python file pre-check
 
 ```bash
-PY_FILES=$(echo "$CHANGED_FILES" | grep '\.py$' || true)
-if [ -z "$PY_FILES" ]; then
-    echo "No Python files changed in PR #$CLEAN_ARGS — skipping Python-specific review (oss:review is Python-only)"
-    exit 0
+if [ "$DIRECT_PATH_MODE" = "false" ]; then
+    PY_FILES=$(echo "$CHANGED_FILES" | grep '\.py$' || true)
+    if [ -z "$PY_FILES" ]; then
+        echo "No Python files changed in PR #$CLEAN_ARGS — skipping Python-specific review (oss:review is Python-only)"
+        exit 0
+    fi
 fi
 ```
 
@@ -214,7 +218,7 @@ Agent 1 uses this to prioritize: high `rdep_count` modules warrant deeper scruti
 
 Parse PR body (`gh pr view $CLEAN_ARGS`) for issue refs (`Closes #N`, `Fixes #N`, `Resolves #N`, `refs #N` — case-insensitive). Extract to `ISSUE_NUMS`. Cap 3.
 
-`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **concurrently in Step 2, alongside Codex co-review** (both run after `$RUN_DIR` is initialized — issue agents and Codex are parallel, not sequential). **Synchronization**: Step 3 agents must NOT spawn until all issue agents have returned (confirmed by checking `$RUN_DIR/issue-<N>.md` exists for each N). Wait for all issue agent completions before proceeding to Step 3. Each issue agent:
+`ISSUE_NUMS` non-empty: spawn one **foundry:sw-engineer** per issue **concurrently in Step 2, alongside Codex co-review** (both run after the run directory is created in Step 2 — issue agents and Codex are parallel, not sequential). **Synchronization**: Step 3 agents must NOT spawn until all issue agents have returned (confirmed by checking `$RUN_DIR/issue-<N>.md` exists for each N). Wait for all issue agent completions before proceeding to Step 3. Each issue agent:
 
 - Fetch issue: `gh issue view <N> --json title,body,comments,state,labels`
 - Fetch comments: `gh issue view <N> --comments`
@@ -314,7 +318,7 @@ Read `$REVIEW_SKILL_DIR/checklist.md` — apply CRITICAL/HIGH patterns as severi
 
 **Agent 6 — foundry:solution-architect (optional, PRs touching public API boundaries)**: Diff touches `__init__.py` exports, adds/modifies Protocols/ABCs, changes module structure, or new public classes → evaluate API design, coupling, backward compat. Skip if internal only.
 
-**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false`)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: per preamble above (output to `foundry--challenger.md`). Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
+**Agent 7 — foundry:challenger (skip if `CHALLENGE_ENABLED=false` or FIX scope)**: Adversarial review of design decisions in the PR. Attacks assumptions, missing edge cases, security risks, architectural concerns, and complexity creep with mandatory refutation step. File-handoff: per preamble above (output to `foundry--challenger.md`). Severity mapping: Blockers → critical/high; Concerns → medium; Nitpicks → low.
 
 **Health monitoring** (CLAUDE.md §8): After spawning all agents, create checkpoint:
 

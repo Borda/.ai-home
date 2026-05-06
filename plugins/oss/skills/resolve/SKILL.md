@@ -4,7 +4,7 @@ description: "OSS maintainer fast-close workflow for GitHub PRs. Three phases: (
 argument-hint: '<PR number or URL> [report] | report | <review comment text>'
 disable-model-invocation: true
 effort: high
-allowed-tools: Read, Edit, Bash, Agent, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
+allowed-tools: Read, Edit, Write, Bash, Agent, TaskCreate, TaskUpdate, TaskList, AskUserQuestion
 ---
 
 <objective>
