@@ -1,4 +1,4 @@
-# Skill Checks — 21, 22, 23, 24, 27, 28
+# Skill Checks — 21, 22, 23, 24, 27, 28, 30, 31
 
 ## Check 21 — Skill frontmatter conflicts
 
@@ -269,8 +269,8 @@ grep -rn '| tail\b\|| head\b' plugins/*/skills/ .claude/skills/ 2>/dev/null |
   grep -v 'PIPESTATUS\|pipefail\|#.*tail\|#.*head' |
   grep -v '^Binary' &&
 printf "  ${CYN}hint${NC}: use \${PIPESTATUS[0]} or set -o pipefail; \$? captures tail/head exit (always 0)\n" || true
-printf "${GRN}✓${NC}: Check 30a scan complete\n"
-```  # timeout: 5000
+printf "${GRN}✓${NC}: Check 30a scan complete\n"  # timeout: 5000
+```
 
 Severity: **critical** — gate commands appear to pass even on genuine failure; `$?` after `cmd | tail -N` is tail's exit code (0), not cmd's.
 
@@ -288,8 +288,8 @@ grep -rn 'SKIP_[A-Z_]*=1' plugins/*/skills/ .claude/skills/ 2>/dev/null |
     grep -q '\[ "\${SKIP_' "$file" 2>/dev/null ||
       printf "${YEL}⚠ SKIP guard missing${NC}: %s — SKIP variable set but no conditional guard found\n" "$file"
 done
-printf "${GRN}✓${NC}: Check 30b scan complete\n"
-```  # timeout: 5000
+printf "${GRN}✓${NC}: Check 30b scan complete\n"  # timeout: 5000
+```
 
 Severity: **critical** — `SKIP_RUFF=1` set by tool detection, but `$RUNNER ruff check` runs unconditionally; detection is cosmetic.
 
@@ -317,8 +317,8 @@ grep -rn '\$TEST_CMD.*--tb\b\|\$TEST_CMD.*--co\b\|\$TEST_CMD.*::\|\$TEST_CMD.*--
   plugins/*/skills/ .claude/skills/ 2>/dev/null |
   grep -v 'PYTEST_CMD\|#' | grep -v '^Binary' &&
 printf "  ${CYN}hint${NC}: derive PYTEST_CMD for pytest-specific flags; TEST_CMD=tox or make won't accept --tb/--co/::/--cov\n" || true
-printf "${GRN}✓${NC}: Check 30d scan complete\n"
-```  # timeout: 5000
+printf "${GRN}✓${NC}: Check 30d scan complete\n"  # timeout: 5000
+```
 
 Severity: **high** — skill fails silently on tox/make projects when pytest-specific flags appended to TEST_CMD.
 
@@ -332,3 +332,49 @@ Fix: after detecting TEST_CMD, derive `PYTEST_CMD` for targeted runs: `tox` → 
 | 30b — SKIP guard missing | `SKIP_X=1` with no `[ "${SKIP_X:-0}" ]` guard | critical | no |
 | 30c — filename mismatch | spawn filename ≠ consolidator filename (model reasoning) | high | no |
 | 30d — TEST_CMD+pytest flags | `$TEST_CMD --tb` / `--co` / `::` / `--cov` without PYTEST_CMD | high | no |
+
+## Check 31 — Skill tool call vs allowed-tools consistency
+
+For each SKILL.md, verify that every **gating or dispatch tool** called in the workflow body is declared in `allowed-tools:` frontmatter. The runtime enforces `allowed-tools` — undeclared tool calls are blocked silently, causing the entire workflow phase to fail without any error message.
+
+**High-risk tools** (their absence breaks entire workflow phases, not just individual steps):
+
+| Tool | Consequence if absent from `allowed-tools` |
+| --- | --- |
+| `Skill` | Follow-up gate never dispatches target skill; user's selection silently dropped |
+| `AskUserQuestion` | Skill falls back to prose questions (violates communication.md; interactive gates broken) |
+| `Agent` | Sub-agent spawns blocked; orchestration phase fails silently |
+
+```bash
+RED='\033[1;31m'
+GRN='\033[0;32m'
+CYN='\033[0;36m'
+NC='\033[0m'
+
+found=0
+for f in plugins/*/skills/*/SKILL.md .claude/skills/*/SKILL.md; do  # timeout: 5000
+    [ -f "$f" ] || continue
+    skill_name=$(basename "$(dirname "$f")")
+    allowed=$(awk '/^---$/{c++} c==1{print} c==2{exit}' "$f" 2>/dev/null | grep '^allowed-tools:' | sed 's/allowed-tools:[[:space:]]*//')
+    [ -z "$allowed" ] && continue
+    body=$(awk '/^---$/{c++} c>=2{print}' "$f" 2>/dev/null)
+    for tool in Skill AskUserQuestion Agent; do
+        if echo "$body" | grep -qE "\b${tool}\(" 2>/dev/null; then
+            if ! echo "$allowed" | grep -qw "$tool"; then
+                printf "${RED}! BREAKING${NC} skills/%s: body calls %s() but '%s' absent from allowed-tools\n" "$skill_name" "$tool" "$tool"
+                printf "  ${CYN}fix${NC}: add '%s' to allowed-tools: in %s\n" "$tool" "$f"
+                found=1
+            fi
+        fi
+    done
+done
+[ "$found" -eq 0 ] && printf "${GRN}✓${NC}: Check 31 — all gating tool calls covered by allowed-tools\n"  # timeout: 5000
+```
+
+Severity: **critical** — blocked gating tool = entire workflow phase silently broken at runtime.
+
+Auto-fix: append missing tool name to `allowed-tools:` frontmatter line.
+
+| Sub-check | Condition | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| 31 — tool-body mismatch | body calls `Skill()`, `AskUserQuestion()`, or `Agent()` but tool absent from `allowed-tools` | critical | yes — add to frontmatter |

@@ -239,12 +239,12 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 >
 > | Scope | File(s) to read |
 > | --- | --- |
-> | `setup` | `checks-setup.md` + `checks-install.md` (Checks 1–11, 30, I1–I3) |
+> | `setup` | `checks-setup.md` + `checks-install.md` (Checks 1–11, I1–I3) |
 > | `plugin` | `checks-setup.md` (Checks 7, 8 only) |
 > | `plugins` | `checks-setup.md` (Checks 7, 8) + `checks-agents.md` + `checks-skills.md` + `checks-shared.md` (14, 15, 17, 12, 13, 25, 29) |
 > | `plugins <name>` | same as `plugins` — scoped to one plugin directory |
 > | `agents` | `checks-agents.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13, 25, 29) + `checks-skills.md` (Check 22 only) |
-> | `skills` | `checks-skills.md` + `checks-shared.md` (run only: 14, 15, 17, 12, 13, 25, 29) |
+> | `skills` | `checks-skills.md` (21–24, 27, 28, 30, 31) + `checks-shared.md` (run only: 14, 15, 17, 12, 13, 25, 29) |
 > | `rules` | `checks-shared.md` (run only: 18, 12, 13, 29) |
 > | `communication` | `checks-shared.md` (run only: 15, 16, 12, 13, 29) |
 > | No scope (full) | all 4 files |
@@ -395,6 +395,16 @@ After emitting report → fire **Follow-up gate** (Step 7 follow-up). If user pi
 
 Apply this hierarchy to every fix action at all severity levels.
 
+**Adversarial pre-apply validation gate** — before spawning any fix agent, each proposed fix must clear a two-agent gate:
+
+1. Spawn **foundry:challenger** with the finding text, file path, and proposed fix action — challenge: "Is this finding real? Is the fix appropriate? Does it risk removing load-bearing behavioral content (runtime gates, behavioral invariants, execution constraints, `<notes>` checkpoints)?"
+2. Spawn **foundry:curator** with the same context — validate: "Is this fix correct given the Fix Action Hierarchy? Does it preserve behavioral integrity? Could it silently remove content that is load-bearing even if it appears redundant or verbose?"
+3. Issue both spawns in parallel per file. Each writes a verdict to `<RUN_DIR>/gate-<file-basename>-<finding-id>.md` and returns only: `{"verdict":"approved"|"blocked","reason":"<one-line>","file":"<path>"}`
+4. If **either** returns `blocked` → skip fix agent for that finding; add to `blocked_findings` list with reason; surface in final report as `⚠ GATE-BLOCKED — needs human review: <reason>`
+5. Only if **both** return `approved` → proceed to spawn fix agent
+
+Gate applies to every finding at every severity level. Skip only for the inline-exception cases listed below (settings.json, CLAUDE.md, dead loops, model tier).
+
 Choose the fix agent based on file type:
 
 - **`.claude/agents/*.md` and `.claude/skills/*/SKILL.md`** → spawn **foundry:curator** — it has domain expertise in config quality and has `Write`/`Edit` tools
@@ -415,15 +425,18 @@ When the finding count exceeds 10 or the user picked "Fix all" from the gate, sp
 ```markdown
 Read `<RUN_DIR>/summary.jsonl` — this is the findings list (one JSON object per line).
 Read `$AUDIT_TPL/fix-prompt.md` for the per-file fix prompt template.
-For each unique file in the findings list, spawn one fix agent (foundry:curator for .md files, foundry:sw-engineer for .js/.py files) with all findings for that file batched into a single prompt.
-Issue all fix spawns in a single response for parallelism.
+**Adversarial pre-apply gate**: for each unique file in the findings list, spawn **foundry:challenger** AND **foundry:curator** in parallel — challenge/validate each finding batch: "Is each finding real? Is the fix appropriate? Does any fix risk removing load-bearing behavioral content?" Each writes verdict to `<RUN_DIR>/gate-<file-basename>.md`; return `{"verdict":"approved"|"blocked","reason":"<one-line>","file":"<path>"}`. If either returns `blocked`: mark findings for that file as blocked (add to `blocked_findings` list with reason); skip fix agent. Proceed to fix agent only if both return `approved`.
+Issue all gate spawns in a single response (parallel). After gate verdicts received, issue all fix spawns in a single response (approved files only, parallel).
+For each file that passed the gate, spawn one fix agent (foundry:curator for .md files, foundry:sw-engineer for .js/.py files) with all approved findings batched into a single prompt.
 After all fix agents complete, spawn foundry:curator re-audit agents (one per changed file) to confirm fixes held.
 Write a completion summary to `<RUN_DIR>/fix-summary.md`:
   - findings_total: N
   - fixed: N
+  - blocked: N (gate-rejected; listed in blocked_findings)
   - failed: N
   - re_audit_clean: true|false
-Return ONLY: {"status":"done","file":"<RUN_DIR>/fix-summary.md","fixed":N,"failed":N,"re_audit_clean":true|false,"confidence":0.N}
+  - blocked_findings: [{id, file, reason}, ...]
+Return ONLY: {"status":"done","file":"<RUN_DIR>/fix-summary.md","fixed":N,"blocked":N,"failed":N,"re_audit_clean":true|false,"confidence":0.N}
 ```
 
 The orchestrator (main context) then reads only the compact JSON envelope. It does NOT read fix-summary.md unless `re_audit_clean: false` or `failed > 0`.
