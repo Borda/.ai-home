@@ -83,6 +83,29 @@ After the scan, apply model reasoning to each match — exclude cases where the 
 | `echo … >` / `tee` to write a file | Write tool | medium |
 | `sed`/`awk` for text substitution | Edit tool | medium |
 
+### Sub-check 23e — python3 inline policy (CLAUDE.md / MEMORY.md violation)
+
+`python3` is intentionally absent from the allow list (MEMORY.md: "Allow List Policy — python* excluded by design"). Any `python3 -c` invocation in a skill body will pause for a permission prompt mid-workflow, breaking automated flows when the user denies.
+
+```bash
+printf "=== Check 23e: python3 inline policy ===\n"
+grep -rn 'python3 -c\b' plugins/*/skills/*/SKILL.md .claude/skills/*/SKILL.md 2>/dev/null |
+  grep -v '^Binary' | grep -v '^\s*#' &&
+printf "  hint: python3 not in allow list by design — move logic to bin/*.py or use native tools (Read/Write/Edit/Bash with jq)\n" || true
+printf "=== Check 23e: heredoc python policy ===\n"
+grep -rn "python3 << '\|python3 <<\"" plugins/*/skills/*/SKILL.md .claude/skills/*/SKILL.md 2>/dev/null |
+  grep -v '^Binary' | grep -v '^\s*#' &&
+printf "  hint: CLAUDE.md bans heredoc python; use bin/*.py instead\n" || true
+printf "✓: Check 23e scan complete\n"  # timeout: 5000
+```
+
+Severity: **high** — permission prompt mid-workflow blocks automation; user deny = skill phase fails.
+
+| Sub-check | Pattern | Severity |
+| --- | --- | --- |
+| 23e — python3 -c inline | `python3 -c` in skill body | high |
+| 23e — python3 heredoc | `python3 << '` in skill body | high |
+
 **Report only** — never auto-fix; some Bash invocations in example/illustration code blocks are intentional.
 
 ## Check 24 — Skill sequence compatibility
@@ -252,6 +275,40 @@ Partially covered → **[medium] 28b**: `<plugin>/<skill>: fallback section pres
 | 28a — no fallback for cross-plugin dispatch | high | no |
 | 28b — fallback present but agent not covered | medium | no |
 
+### Sub-check 28c — Cross-plugin prose references without availability guard
+
+Skills may reference other plugins' skills in `<notes>`, follow-up chains, and prose documentation without a runtime dispatch (no `Agent(subagent_type=...)` call). These prose references are shown to users as runnable next-steps; if the referenced plugin is absent, the command fails silently.
+
+**Step — Scan for unguarded prose cross-plugin references**:
+
+```bash
+printf "=== Check 28c: Cross-plugin prose refs ===\n"
+for f in plugins/*/skills/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  skill_plugin=$(echo "$f" | cut -d/ -f2)
+  # Find refs to other plugins in prose (backtick-wrapped /plugin:skill or /plugin:skill in plain text)
+  matches=$(grep -nE '`/[a-z]+:[a-z]|/oss:|/develop:|/research:|/codemap:|/foundry:' "$f" 2>/dev/null |
+    grep -v "subagent_type\|#.*requires\|requires.*plugin\|plugin.*installed\|if.*plugin" |
+    grep -v "$(echo "$skill_plugin" | sed 's/[^a-z]//g'):" || true)
+  if [ -n "$matches" ]; then
+    echo "$matches" | while IFS= read -r line; do
+      printf "⚠ 28c: %s — cross-plugin ref without availability guard: %s\n" "$f" "$line"
+      printf "  fix: add '(requires <plugin> plugin)' inline, or wrap in availability check\n"
+    done
+  fi
+done
+printf "✓: Check 28c scan complete\n"  # timeout: 5000
+```
+
+Severity: **medium** — user sees broken command in follow-up gate or documentation prose.
+Fix: append `(requires \`<plugin>\` plugin)` immediately after the cross-plugin skill reference, or restructure as conditional.
+
+| Sub-check | Condition | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| 28a — no fallback for cross-plugin dispatch | high | no |
+| 28b — fallback present but agent not covered | medium | no |
+| 28c — prose cross-plugin ref without availability guard | medium | no |
+
 ## Check 30 — Plugin skill bash operational correctness
 
 Four static-grep patterns catching silent failures in skill SKILL.md bash blocks. Run across both `.claude/skills/` and `plugins/*/skills/` — these bugs appear in any skill.
@@ -326,12 +383,27 @@ Fix: after detecting TEST_CMD, derive `PYTEST_CMD` for targeted runs: `tox` → 
 
 **Report only** — do not auto-fix; resolution requires understanding each skill's runner detection block.
 
+### 30e — Heredoc python in skill bodies
+
+Heredoc python blocks (`python3 << 'EOF'`) are banned by CLAUDE.md. Distinct from 23e (which targets `python3 -c` one-liners); 30e specifically catches multi-line heredoc forms that bypass the one-liner size limit.
+
+```bash
+printf "=== Check 30e: Heredoc python ===\n"
+grep -rn "python3 <<\|python3 << '" plugins/*/skills/ .claude/skills/ 2>/dev/null |
+  grep -v '^Binary' | grep -v '^\s*#' &&
+printf "  hint: CLAUDE.md bans python3 heredoc; use bin/*.py script instead\n" || true
+printf "✓: Check 30e scan complete\n"  # timeout: 5000
+```
+
+Severity: **high** — heredoc triggers permission prompt; user deny = workflow block; also violates CLAUDE.md §Pre-Authorized Operations.
+
 | Sub-check | Pattern | Severity | Auto-fix |
 | --- | --- | --- | --- |
 | 30a — pipe exit code | `\ | tail` / `\ | head` without PIPESTATUS | critical | no |
 | 30b — SKIP guard missing | `SKIP_X=1` with no `[ "${SKIP_X:-0}" ]` guard | critical | no |
 | 30c — filename mismatch | spawn filename ≠ consolidator filename (model reasoning) | high | no |
 | 30d — TEST_CMD+pytest flags | `$TEST_CMD --tb` / `--co` / `::` / `--cov` without PYTEST_CMD | high | no |
+| 30e — heredoc python | `python3 <<` in skill body | high | no |
 
 ## Check 31 — Skill tool call vs allowed-tools consistency
 
@@ -378,3 +450,84 @@ Auto-fix: append missing tool name to `allowed-tools:` frontmatter line.
 | Sub-check | Condition | Severity | Auto-fix |
 | --- | --- | --- | --- |
 | 31 — tool-body mismatch | body calls `Skill()`, `AskUserQuestion()`, or `Agent()` but tool absent from `allowed-tools` | critical | yes — add to frontmatter |
+
+### Sub-check 31b — Skill frontmatter completeness
+
+Verify required frontmatter fields present in every SKILL.md. Missing fields cause undocumented default behavior or miscategorized routing.
+
+```bash
+YEL='\033[1;33m'
+GRN='\033[0;32m'
+NC='\033[0m'
+printf "=== Check 31b: Frontmatter completeness ===\n"
+found=0
+for f in plugins/*/skills/*/SKILL.md .claude/skills/*/SKILL.md; do  # timeout: 5000
+    [ -f "$f" ] || continue
+    skill=$(basename "$(dirname "$f")")
+    fm=$(awk '/^---$/{c++} c==1{print} c==2{exit}' "$f" 2>/dev/null)
+    # effort: — required always; no documented default
+    echo "$fm" | grep -q '^effort:' || {
+        printf "${YEL}⚠${NC} 31b: %s — missing effort: field (required; no default)\n" "$skill"
+        found=1
+    }
+    # when_to_use: — required when disable-model-invocation absent (routing signal)
+    has_dmi=$(echo "$fm" | grep -c 'disable-model-invocation: true' || true)
+    has_wtu=$(echo "$fm" | grep -c '^when_to_use:' || true)
+    [ "$has_dmi" -eq 0 ] && [ "$has_wtu" -eq 0 ] && {
+        printf "${YEL}⚠${NC} 31b: %s — missing when_to_use: (needed when auto-invocation allowed)\n" "$skill"
+        found=1
+    }
+done
+[ "$found" -eq 0 ] && printf "${GRN}✓${NC}: Check 31b — frontmatter complete across all skills\n"
+```
+
+Severity: **medium** for `effort:` (no default documented); **low** for `when_to_use:` (routing impact).
+
+| Sub-check | Field | Condition | Severity | Auto-fix |
+| --- | --- | --- | --- | --- |
+| 31 — tool-body mismatch | `allowed-tools` | body calls Skill/AskUserQuestion/Agent, not in frontmatter | critical | yes |
+| 31b — effort missing | `effort:` | always required | medium | yes |
+| 31b — when_to_use missing | `when_to_use:` | no `disable-model-invocation: true` | low | no |
+
+## Check C35 — Background agent health monitoring compliance (CLAUDE.md §8)
+
+CLAUDE.md §8 requires every skill that spawns background agents to implement: (1) launch sentinel creation, (2) 5-min file-activity poll, (3) 15-min hard cutoff. Absence = stalled agents silently drop findings.
+
+**Step 1 — Find skills with background agent spawns**:
+
+```bash
+printf "=== Check C35: Background agent health monitoring ===\n"
+BG_SKILLS=$(grep -rl 'run_in_background.*true\|run_in_background=true' plugins/*/skills/*/SKILL.md .claude/skills/*/SKILL.md 2>/dev/null)
+if [ -z "$BG_SKILLS" ]; then
+    printf "✓: No background agent spawns found — C35 N/A\n"
+fi  # timeout: 5000
+```
+
+**Step 2 — For each skill found, verify §8 protocol elements**:
+
+```bash
+for f in $BG_SKILLS; do  # timeout: 5000
+    skill=$(basename "$(dirname "$f")")
+    # Check for _shared/agent-spawn-protocol.md reference (preferred) OR inline §8 elements
+    if grep -q 'agent-spawn-protocol' "$f" 2>/dev/null; then
+        printf "✓ C35: %s — references agent-spawn-protocol.md\n" "$skill"
+        continue
+    fi
+    # Fallback: check for inline §8 elements
+    has_sentinel=$(grep -c 'LAUNCH_AT\|touch /tmp/' "$f" 2>/dev/null || echo 0)
+    has_poll=$(grep -c 'find.*-newer.*-type f.*wc -l\|MONITOR_INTERVAL' "$f" 2>/dev/null || echo 0)
+    has_cutoff=$(grep -c 'HARD_CUTOFF\|timed.out\|15 min\|900' "$f" 2>/dev/null || echo 0)
+    [ "$has_sentinel" -eq 0 ] && printf "⚠ C35a: %s — no launch sentinel (CLAUDE.md §8 step 1)\n" "$skill"
+    [ "$has_poll" -eq 0 ]    && printf "⚠ C35b: %s — no 5-min file-activity poll (§8 step 2)\n" "$skill"
+    [ "$has_cutoff" -eq 0 ]  && printf "⚠ C35c: %s — no 15-min hard cutoff (§8 step 3)\n" "$skill"
+done
+```
+
+Severity: **high** for C35a/b/c — stalled background agents drop findings with no user-visible signal.
+Fix: either reference `$_FOUNDRY_SHARED/agent-spawn-protocol.md` (preferred once file exists) or inline all three §8 elements in the skill.
+
+| Sub-check | Pattern | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| C35a — no launch sentinel | no `touch /tmp/<sentinel>` after background spawn | high | no |
+| C35b — no file-activity poll | no 5-min `find -newer` loop | high | no |
+| C35c — no hard cutoff | no `HARD_CUTOFF` / 15-min signal | high | no |

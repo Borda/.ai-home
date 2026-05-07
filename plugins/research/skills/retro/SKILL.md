@@ -61,7 +61,7 @@ BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')  # t
 ```
 
 ```bash
-RUN_DIR=".experiments/retro-$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # timeout: 3000
+RUN_DIR=".experiments/retro-$(date -u +%Y-%m-%dT%H-%M-%SZ)"  # timeout: 3000  # flat pattern (retro-<ts>/) for backwards-compat with existing run references in notes/docs
 mkdir -p "$RUN_DIR/scripts"
 ```
 

@@ -20,6 +20,7 @@ Steward principle: every role must earn its place AND have room to grow. When a 
 - NOT for: creating or scaffolding new agents or skills — use `/manage create <type> <name>`.
 - NOT for: routing new tasks to agents — invoke only when task is `*.md` config review.
 - NOT for: production implementation code — use `foundry:sw-engineer`.
+- NOT for: docstrings, README content, API reference docs — use `foundry:doc-scribe`.
 
 </role>
 
@@ -186,13 +187,9 @@ Omitting fix directive is format violation.
 
 Score = coverage estimate; `Gaps` = primary signal. `/calibrate` measures score-vs-recall tracking over time.
 
-Confidence scoring guidance:
-
-- **0.9+**: all files read in full; all cross-refs validated on disk; no ambiguous patterns
-- **Inline-only (no disk Glob)**: cap at 0.95 for disk-dependent findings (cross-refs, roster completeness); content-derivable findings (tag balance, step numbering, missing sections, model, JSON validity) are not disk-dependent — no cap applies; floor is 0.90 when all findings are content-derivable
-- **0.7–0.9**: most files checked; one or two references unverifiable without runtime data
-- **\<0.7**: significant blind spots — flag explicitly; orchestrator should consider second pass
-- Context-provided agent roster: treat as disk-validated for cross-ref scoring — do not reduce score solely for this reason
+Confidence scoring follows `quality-gates.md` (canonical). Curator-specific calibration:
+- Inline-only (no disk Glob): cap at 0.95 for disk-dependent findings (cross-refs, roster completeness); content-derivable findings (tag balance, step numbering, missing sections, model, JSON validity) — no cap; floor 0.90 when all findings content-derivable
+- Context-provided agent roster: treat as disk-validated for cross-ref scoring — do not reduce score
 - Do not inflate to 0.95+ to compensate for inline-only limit — report real score, name limit in Gaps
 
 \</output_format>
@@ -201,16 +198,13 @@ Confidence scoring guidance:
 
 ## How to Apply Fixes
 
-When asked to fix issues:
+When asked to fix issues (priority ordering enforced in workflow Step 8):
 
-1. Fix broken cross-references first — silently fail at runtime
-2. Remove duplicate sections before trimming — removal always safer than rewriting
-3. Over-budget agents: remove full sections > rewrite existing ones
-4. Never remove: decision trees, output templates, workflow blocks, preservation-checklist items
-5. Before trimming any section, ask: "Is this bloat or legitimate growth?" — if a role has evolved, update its boundary docs first; trim only content that duplicates another canonical owner or that can be replaced by a cross-ref without information loss
-6. Improvement coaching: when a role has gaps (missing antipatterns, thin workflow, no NOT-for clauses), suggest additions before reporting structural defects — grow the role to meet the standard, don't just flag non-compliance
-7. After edits: re-run `wc -l .claude/agents/*.md` (Bash intentional) and re-check cross-refs
-   (installed agents: `.claude/agents/*.md`; plugin-dev agents: `plugins/<name>/agents/*.md`)
+- Never remove: decision trees, output templates, workflow blocks, preservation-checklist items
+- Before trimming any section, ask: "Is this bloat or legitimate growth?" — if a role has evolved, update its boundary docs first; trim only content that duplicates another canonical owner or that can be replaced by a cross-ref without information loss
+- Improvement coaching: when a role has gaps (missing antipatterns, thin workflow, no NOT-for clauses), suggest additions before reporting structural defects — grow the role to meet the standard, don't just flag non-compliance
+- After edits: re-run `wc -l .claude/agents/*.md` (Bash intentional) and re-check cross-refs
+  (installed agents: `.claude/agents/*.md`; plugin-dev agents: `plugins/<name>/agents/*.md`)
 
 ## Confidence → Improvement Loop
 

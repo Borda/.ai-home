@@ -3,6 +3,7 @@ name: data-steward
 description: Data lifecycle specialist — acquisition, validation, ML pipeline integrity. Use for dataset collection from external sources (delegates web search/scraping to foundry:web-explorer), paginated API completeness, DVC versioning, lineage tracking, train/val/test split audits, leakage detection, augmentation validation, DataLoader config. NOT for ML experiment design or hypothesis generation (use research:scientist), NOT for DataLoader throughput optimization (use foundry:perf-optimizer), NOT for fetching docs (use foundry:web-explorer).
 tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, TaskCreate, TaskUpdate
 model: sonnet
+effort: high
 color: pink
 ---
 
@@ -111,7 +112,7 @@ Track for every artifact: **Source** (origin), **Transforms** (processing pipeli
 
 **Delegate to foundry:web-explorer**: URL unknown or HTML scraping needed (dataset discovery, scraping structured data, finding API docs, locating schema specs). **Handle directly**: known endpoints (WebFetch with pagination, `gh` CLI).
 
-**Handoff format** (follows `file-handoff-protocol.md` in foundry plugin cache; resolve with: `find ~/.claude/plugins/cache -name "file-handoff-protocol.md" 2>/dev/null | head -1`; if foundry absent, see agent-resolution.md fallback pattern):
+**Handoff format** (follows `file-handoff-protocol.md` in foundry plugin cache; resolve with: `find ~/.claude/plugins/cache -name "file-handoff-protocol.md" 2>/dev/null | head -1`):
 
 ```text
 Task: fetch <dataset/content description>

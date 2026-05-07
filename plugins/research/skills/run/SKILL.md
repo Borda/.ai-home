@@ -74,7 +74,12 @@ _RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills
 # shared resolution block — canonical source: skills/_shared/agent-resolution.md
 ```
 
-Note: `CLAUDE_SKILL_DIR` is initialized in `<constants>` block.
+**`CLAUDE_SKILL_DIR` resolution** — constants block provides default `plugins/research/skills/run` (source-tree path). Resolve to installed path before use:
+
+```bash
+CLAUDE_SKILL_DIR=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/run 2>/dev/null | head -1)
+[ -z "$CLAUDE_SKILL_DIR" ] && CLAUDE_SKILL_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/skills/run"
+```
 
 Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:sw-engineer`, `foundry:linting-expert`, `foundry:perf-optimizer`, `foundry:solution-architect`, `research:scientist`.
 
@@ -191,7 +196,7 @@ Run all checks before touching code. Fail fast with clear message:
 8. **Flag conflict**: if `--colab` and `--compute=docker` both active: print `⚠ --colab and --compute=docker are mutually exclusive. Use one or the other.` and **stop**.
 9. **`--journal` prerequisite**: verify `--researcher`/`--architect` also set. If neither: print `⚠ --journal requires --researcher or --architect — omit --journal or add a hypothesis pipeline flag.` and **stop**.
 
-**`--codex-delegation` warning** (non-blocking): check whether `.claude/skills/_shared/codex-delegation.md` exists. If not found:
+**`--codex-delegation` warning** (non-blocking): check whether `.claude/skills/_shared/codex-delegation.md` exists (deployed by `/foundry:init`). If not found:
 
 ```bash
 [ -f ".claude/skills/_shared/codex-delegation.md" ] || echo "⚠ .claude/skills/_shared/codex-delegation.md not found. R7 Codex delegation will be skipped. Run /foundry:init to install it."

@@ -74,19 +74,7 @@ Apply `--dim` filter: if `--dim F,H` specified, only audit those dimensions. Def
 
 Spawn `research:scientist` via `Agent(subagent_type="research:scientist", prompt="...")`. Single agent handles all five dimensions — cross-dimension context requires holistic paper understanding.
 
-**Health monitoring** (CLAUDE.md section 8):
-
-```bash
-LAUNCH_AT=$(date +%s)
-CHECKPOINT="/tmp/verify-check-$LAUNCH_AT"
-touch "$CHECKPOINT"  # timeout: 3000
-```
-
-Poll every 5 min: `find $RUN_DIR -newer "$CHECKPOINT" -type f | wc -l` (`timeout: 5000`) — new files = alive; zero = stalled.
-
-- **Hard cutoff: 15 min** no file activity — timed out
-- **One extension (+5 min)**: if `tail -20 $RUN_DIR/audit-raw.md` shows active progress (partial content written), grant one extension; second stall = hard cutoff
-- **On timeout**: read `tail -100 $RUN_DIR/audit-raw.md`; if file missing or empty, set `fidelity = null`, continue to V4 with `timed_out` status. Surface with a timeout marker in report.
+<!-- Agent call is synchronous — no Bash file-activity poll available during Agent(...) execution. HARD_CUTOFF (900s) is the sole liveness mechanism. On timeout: surface partial results from `$RUN_DIR/audit-raw.md` (see <constants> block). Same pattern as research:topic. -->
 
 **Scientist prompt**:
 

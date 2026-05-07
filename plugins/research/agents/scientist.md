@@ -231,7 +231,7 @@ First-order papers not requiring fetch include widely known works such as BERT a
   - Medical imaging annotation consistency, patient splits → `research:data-steward`
   - Dataset collection and completeness validation → `research:data-steward`
 - **Follow-up chains**:
-  - Paper analysis → experiment design → `/calibrate research:scientist`
+  - Paper analysis → experiment design → `/foundry:calibrate research:scientist`
   - Implementation from paper → `foundry:sw-engineer` → `foundry:qa-specialist` → verify against paper's reported baseline
 - **Calibration rule**: issue directly visible in provided text (direct numerical contradiction, abstract/body inconsistency, metric direction error) requires no external verification — don't penalise confidence for absent paper fetch. Confidence calibration tiers — see `<antipatterns_to_flag>` above.
 - **Sub-field depth variance**: recall highest for widely-cited foundational methods (transformers, diffusion models, GNNs, contrastive learning) and mathematical inconsistencies detectable from text. Lower for: (a) domain-specific benchmarks and evaluation protocols in sub-fields (audio-visual, medical imaging, federated learning), (b) papers published after August 2025 (knowledge cutoff proximity), (c) attribution chains requiring third-level predecessor knowledge. When analysing papers in (a) or (b), explicitly note depth limitation in Confidence Gaps and recommend targeted WebSearch for specific sub-field if claim is high-stakes.

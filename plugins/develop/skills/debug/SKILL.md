@@ -1,15 +1,15 @@
 ---
 name: debug
-description: Investigation-first debugging — gather evidence, form confirmed root-cause hypothesis, write regression test, apply minimal fix via fix mode handoff.
+description: Investigation-first debugging — gather evidence, form confirmed root-cause hypothesis, hand off to fix mode with diagnosis file.
 argument-hint: '<symptom or failing test> [--no-challenge]'
 effort: medium
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdate, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, Skill, TaskCreate, TaskUpdate, AskUserQuestion
 disable-model-invocation: true
 ---
 
 <objective>
 
-Investigation-first debugging. Gather evidence, trace data flow, form confirmed root-cause hypothesis, write regression test, hand off to fix mode.
+Investigation-first debugging. Gather evidence, trace data flow, form confirmed root-cause hypothesis, hand off to fix mode.
 
 NOT for: production incidents without local reproduction (use `/foundry:investigate` for triage); `.claude/` config issues (use `/foundry:audit`).
 
@@ -241,16 +241,6 @@ Evidence: <key signals>
 4. **Convergence deadline**: after cross-challenge, if teammates still disagree on root cause, lead selects the hypothesis with the most direct evidence (observable in code or logs). If truly tied, use `AskUserQuestion` to present the top 2 competing hypotheses and ask user to guide.
 5. Lead synthesises consensus root cause, then executes Steps 3-4 (hypothesis gate, hand off to fix) alone
 
-**Spawn prompt template:**
-
-```markdown
-You are a foundry:sw-engineer teammate debugging: [symptom].
-Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
-Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
-Report findings to @lead using deltaT# or epsilonT# codes.
-Compact Instructions: preserve file paths, errors, line numbers. Discard verbose tool output.
-Task tracking: do NOT call TaskCreate or TaskUpdate — the lead owns all task state. Signal completion in your final delta message: "Status: complete | blocked — <reason>".
-Write your full analysis to .plans/active/debug-hypothesis-[N]-[timestamp].md using the Write tool. Return ONLY compact JSON: {"status":"done","file":"<path>","findings":N,"confidence":0.N}.
-```
+**Spawn prompt template:** read `$_DEV_SHARED/preflight-helpers.md` §Team Spawn Template — replace `[ROLE_PHRASE]` with `[symptom]`, `[FILE_SLUG]` with `debug-hypothesis`.
 
 </workflow>

@@ -19,6 +19,8 @@ Use `/caveman` compression for all agent, skill, rule file edits — drop articl
 - No file may depend on source tree being present — assume installed path only
 - No hardcoded paths to sibling plugins or `plugins/<name>/` directories
 - Validate: after `claude plugin install`, all agents/skills/rules/hooks resolve without local `plugins/` tree
+- **Bare `plugins/` path = only valid as final fallback** after cache-path resolution: `VAR="$(ls -td ~/.claude/plugins/cache/borda-ai-rig/<plugin>/*/skills/_shared 2>/dev/null | head -1)"; [ -z "$VAR" ] && VAR="plugins/<plugin>/skills/_shared"`. Never use bare `plugins/` as primary path. Check C32 flags violations.
+- **Health monitoring mandatory for background agents**: any skill spawning `Agent(..., run_in_background=true)` must implement CLAUDE.md §8 (sentinel + 5-min poll + 15-min cutoff). Reference `_FOUNDRY_SHARED/agent-spawn-protocol.md` rather than reproducing inline. Check C35 flags violations.
 
 ## Naming
 
@@ -36,6 +38,7 @@ Use `/caveman` compression for all agent, skill, rule file edits — drop articl
   - Any cross-plugin usage **must** check availability first
   - Degrade gracefully if dependency plugin absent
   - Unchecked cross-plugin call = broken UX for users without that plugin
+- **Prose references too**: any mention of `/plugin:skill` in `<notes>`, follow-up chains, or documentation prose (not just dispatch calls) must include `(requires \`<plugin>\` plugin)` inline caveat. Check 28c flags unguarded prose refs.
 
 ## Fallback / Resilience Infrastructure
 

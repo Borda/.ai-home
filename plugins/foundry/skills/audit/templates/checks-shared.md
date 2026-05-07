@@ -88,6 +88,8 @@ Use Grep tool (pattern `/Users/|/home/`, glob `{agents/*.md,skills/*/SKILL.md}`,
 
 **Important**: run on every file regardless of prior critical/high findings — path portability orthogonal to other severity classes, must not deprioritize.
 
+Also grep for bare `plugins/<name>/` prefix as primary path in skill/agent bodies — source-tree paths that work during authoring but break post-install. See Check C32 for the full scan.
+
 ## Check 16 — Example value vs. token cost
 
 First, detect whether project has local context files:
@@ -141,6 +143,57 @@ Via model reasoning, compare workflow body of each file against all others in it
 Scattered similarity doesn't count — only contiguous block triggers. **Severity**: **medium** — report only, never auto-fix.
 
 For flagged agent pairs, name canonical owner of duplicated content. If no clear owner because both files describe same role, route pair to Check 20 as `merge-prune` candidate instead of leaving duplication ambiguous.
+
+### Sub-check 17b — Identical bash block in 3+ files (high)
+
+Bash blocks ≥8 lines appearing verbatim in 3 or more skill/agent files indicate missing `_shared/` extraction. Unlike step-overlap (17a), this catches copy-pasted operational blocks before they drift independently.
+
+Model reasoning step — compare bash blocks across all skill files in scope:
+
+1. For each fenced bash block (` ```bash ` … ` ``` `) in every scanned SKILL.md, compute a fingerprint (content stripped of leading/trailing whitespace, comments removed)
+2. Track file-count per fingerprint
+3. Any fingerprint appearing in ≥3 distinct files AND block length ≥8 lines → **[high] 17b**: `Bash block (~N lines) appears verbatim in K files: <file1>, <file2>, … — extract to _shared/<name>.md`
+
+Severity: **high** — duplicated operational blocks drift independently; N fixes required per change instead of 1.
+Fix: extract to `plugins/foundry/skills/_shared/<descriptive-name>.md`; replace in-file copies with `Read $_FOUNDRY_SHARED/<name>.md — execute <block-purpose>`.
+
+| Sub-check | Threshold | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| 17a — consecutive step overlap | ≥40% of steps | medium | no |
+| 17b — identical bash block | ≥8 lines, ≥3 files | high | no |
+
+## Check C32 — Hardcoded source-tree paths (install-path regression)
+
+Plugin skill and agent files must not contain bare `plugins/<name>/` paths as primary references. These resolve in the source tree but break post-install where `plugins/` is absent. Install-path resolution pattern (cache + fallback) is mandatory.
+
+```bash
+RED='\033[1;31m'
+CYN='\033[0;36m'
+GRN='\033[0;32m'
+NC='\033[0m'
+printf "=== Check C32: Hardcoded source-tree paths ===\n"
+# Find bare plugins/ primary paths — not inside comments, not inside fallback guards
+grep -rn ' plugins/[a-z]' plugins/*/skills/*/SKILL.md plugins/*/agents/*.md 2>/dev/null |
+  grep -v '^Binary' |
+  grep -v '^\s*#' |
+  grep -v '&& .*plugins/' |
+  grep -v ':-.*plugins/' |
+  grep -v '"plugins/' | grep -v "'plugins/" | while IFS= read -r hit; do
+    printf "${RED}! BREAKING${NC} C32: %s\n" "$hit"
+    printf "  ${CYN}fix${NC}: replace with installed-path resolution:\n"
+    printf "        VAR=\"\$(ls -td ~/.claude/plugins/cache/borda-ai-rig/<plugin>/*/skills/_shared 2>/dev/null | head -1)\"\n"
+    printf "        [ -z \"\$VAR\" ] && VAR=\"plugins/<plugin>/skills/_shared\"\n"
+done
+printf "${GRN}✓${NC}: Check C32 scan complete\n"  # timeout: 5000
+```
+
+Severity: **high** — skill silently fails for any user who installed via marketplace (primary install path).
+
+| Sub-check | Pattern | Severity | Auto-fix |
+| --- | --- | --- | --- |
+| C32 — source-tree primary path | `plugins/<name>/` not in comment or fallback | high | no |
+
+> **Related**: Check 15 covers `/Users/` and `/home/` hardcoded paths. C32 covers `plugins/` source-tree paths.
 
 ## Check 18 — Rules integrity and efficiency
 

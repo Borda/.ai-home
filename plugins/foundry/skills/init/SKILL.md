@@ -46,18 +46,31 @@ When `APPROVE_ALL=true`, every `AskUserQuestion` below **skipped** — ★ recom
 
 ## Step 1: Locate the installed plugin
 
-Read `~/.claude/plugins/installed_plugins.json` using Read tool. Find entry whose key contains `foundry` (case-insensitive). Extract its `installPath`. If file missing or no foundry entry, fall back to filesystem scan:
+Execute this exact jq command — do not parse the JSON manually:
 
 ```bash
-PLUGIN_ROOT=$(jq -r 'to_entries[] | select(.key | ascii_downcase | contains("foundry")) | .value.installPath // empty' \
-    "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | head -1)  # timeout: 5000
+# Primary: registry lookup — sort by installedAt desc, pick latest install path
+PLUGIN_ROOT=$(jq -r '
+    .plugins
+    | to_entries[]
+    | select(.key | ascii_downcase | contains("foundry"))
+    | .value[]
+    | select(.installPath != null)
+    | [.installedAt, .installPath]
+    | @tsv
+' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null \
+    | sort -rk1 | head -1 | cut -f2)  # timeout: 5000
 
-# Fallback when registry entry is absent (manual cache copies, partial installs)
+# Fallback: filesystem scan — skip orphaned dirs, semver-sort descending, pick latest
 if [ -z "$PLUGIN_ROOT" ]; then
-    PLUGIN_ROOT=$(find ~/.claude/plugins/cache -maxdepth 5 -name "plugin.json" 2>/dev/null \
-            | xargs grep -l 'foundry' 2>/dev/null \
-            | head -1 \
-        | xargs -I{} dirname {})  # timeout: 10000
+    PLUGIN_ROOT=$(/usr/bin/find ~/.claude/plugins/cache -maxdepth 5 -name "plugin.json" 2>/dev/null \
+            | xargs grep -l '"name"[[:space:]]*:[[:space:]]*"foundry"' 2>/dev/null \
+            | while IFS= read -r f; do
+                dir=$(dirname "$(dirname "$f")")
+                [ -f "$dir/.orphaned_at" ] && continue
+                echo "$dir"
+              done \
+            | sort -Vr | head -1)  # timeout: 10000
     [ -n "$PLUGIN_ROOT" ] && printf "  Note: foundry not in installed_plugins.json — using cache scan result; consider reinstalling\n"
 fi
 ```

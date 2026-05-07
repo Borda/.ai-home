@@ -7,6 +7,8 @@ allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Agent, TaskCreate, TaskUpdat
 effort: high
 ---
 
+> **Note:** `disable-model-invocation: true` — `/manage` is user-invoked only and cannot be chained via `Skill()` from orchestrators. When suggesting `/manage` as a follow-up, the invoking skill must present it as a user-run command, not an automatic next step.
+
 <objective>
 
 Manage lifecycle of agents, skills, rules, hooks in `.claude/`. Handles creation with rich domain content, atomic renames with cross-ref propagation, content editing (trivial edits inline; `.md` files → foundry:curator; code files `*.js`/`*.py`/`*.ts` → foundry:sw-engineer; rule edits inline), clean deletion with broken-ref cleanup. Keeps MEMORY.md inventory in sync with disk.
@@ -184,7 +186,7 @@ Extract names inline from Glob results — strip `.claude/agents/` prefix and `.
      Hard cutoff: 15 min of no activity → surface partial results with ⏱
      -->
 
-   - Read returned summary; extract: valid frontmatter fields (`name`, `description`, `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `effort`, `initialPrompt`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `isolation`), current model shorthands, new fields
+   - Read returned summary; extract: valid frontmatter fields (`name`, `description`, `tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `effort`, `initialPrompt`, `skills`, `mcpServers`, `hooks`, `memory`, `background`, `isolation`, `color`), current model shorthands, new fields
    - Note new fields worth including. Adjust template to reflect current schema. If new field broadly useful for agent's role (e.g. `maxTurns` for long-running agents), include with sensible default and inline comment.
 
 2. Pick first unused color from AVAILABLE_COLORS pool (compare against Step 3 colors)
@@ -457,11 +459,11 @@ Adds rule to both `settings.json` and `permissions-guide.md` atomically.
 <!-- Note: python3 is excluded from auto-allow list by design — user will see an approval prompt for this command. -->
 
 ```bash
-python3 -c "  # timeout: 15000
-import json
+RULE_VALUE="<rule>" python3 -c "  # timeout: 15000
+import json, os
 with open('.claude/settings.json') as f:
     d = json.load(f)
-d['permissions']['allow'].append('<rule>')
+d['permissions']['allow'].append(os.environ['RULE_VALUE'])
 with open('.claude/settings.json', 'w') as f:
     json.dump(d, f, indent=2)
     f.write('\n')

@@ -3,7 +3,7 @@ name: calibrate
 description: Calibration testing for agents and skills. Generates synthetic problems with known outcomes (quasi-ground-truth), runs targets against them, and measures recall, precision, and confidence calibration — revealing whether self-reported confidence scores track actual quality.
 when_to_use: Run to measure agent/skill routing accuracy, validate confidence calibration, or A/B test agent changes after editing descriptions or workflows.
 argument-hint: '[<scope>...] [--fast | --full] [--ab-test | --apply] [--skip-gate]'
-allowed-tools: Read, Write, Edit, Bash, Agent, Glob, Grep, TaskCreate, TaskUpdate
+allowed-tools: Read, Write, Edit, Bash, Agent, Glob, Grep, TaskCreate, TaskUpdate, AskUserQuestion
 effort: high
 ---
 
@@ -305,10 +305,14 @@ Stop. `--apply` without pace flag is documented as "skip benchmark, apply propos
 
 **Spawn one `general-purpose` subagent per found target. Issue ALL spawns in single response — no waiting between spawns.**
 
-**`<AGENT_FILE>` resolution**: before spawning, resolve the file path for each target:
-- Agent target (e.g. `sw-engineer`, `curator`): `plugins/foundry/agents/<name>.md`
-- Skill target (e.g. `audit`, `manage`): `plugins/foundry/skills/<name>/SKILL.md`
-- Project-local override: check `.claude/agents/<name>.md` or `.claude/skills/<name>/SKILL.md` first; use if present
+**`<AGENT_FILE>` resolution**: before spawning, resolve the file path for each target. Project-local override first, then plugin cache, then source-tree fallback (plugin-dev only):
+```bash
+# Agent target
+AGENT_FILE=".claude/agents/<name>.md"
+[ -f "$AGENT_FILE" ] || AGENT_FILE="$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/agents/<name>.md 2>/dev/null | head -1)"
+[ -n "$AGENT_FILE" ] && [ -f "$AGENT_FILE" ] || AGENT_FILE="plugins/foundry/agents/<name>.md"
+# Skill target — substitute skills/<name>/SKILL.md in the same pattern
+```
 
 Each subagent receives this self-contained prompt (substitute `<TARGET>`, `<PROPOSAL_PATH>`, `<AGENT_FILE>` — resolved path from above):
 

@@ -120,7 +120,7 @@ created: YYYY-MM-DD
 ```
 
 - Confirm file path to user.
-- End with: "Run @foundry:creator to generate the complete [format] from this outline — foundry:creator is an agent; invoke it with `@foundry:creator` followed by the outline file path."
+- End with: "Spawn `foundry:creator` agent with the outline file path to generate the complete [format] (Claude dispatches via the Agent tool with `subagent_type=\"foundry:creator\"`)."
 - End with a `## Confidence` block per quality-gates.md protocol, scoring based on how well the outline covers the user's stated topic, arc, and audience.
 
 </workflow>

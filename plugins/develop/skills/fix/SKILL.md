@@ -49,21 +49,7 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 
 **Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to populate Step 1 analysis instead of cold codebase exploration. Skip agent feasibility re-check (already done in `/develop:plan`). Store plan path as `PLAN_FILE`.
 
-```bash
-# Extract --plan path from arguments — support both `--plan path` and `--plan=path`
-PLAN_FILE=""
-if [[ "$ARGUMENTS" =~ --plan[[:space:]]+([^[:space:]]+) ]]; then
-  PLAN_FILE="${BASH_REMATCH[1]}"
-elif [[ "$ARGUMENTS" =~ --plan=([^[:space:]]+) ]]; then
-  PLAN_FILE="${BASH_REMATCH[1]}"
-fi
-# Existence guard — fail fast if path supplied but missing
-if [ -n "$PLAN_FILE" ] && [ ! -f "$PLAN_FILE" ]; then
-  echo "! BREAKING — plan file not found: $PLAN_FILE"
-  echo "Fix: pass an existing plan path via --plan <path> or --plan=<path>"
-  exit 1
-fi
-```
+Read `$_DEV_SHARED/preflight-helpers.md` — execute --plan path extraction; sets `$PLAN_FILE`.
 
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4), append `step: N — completed`. On skill start, check for existing `.developments/*/checkpoint.md` — offer resume from last completed step if found.
 
@@ -97,17 +83,7 @@ Diagnosis file format (`.plans/active/debug_<slug>.md`):
 
 **Preflight** — if `CODEMAP_ENABLED=true`:
 
-```bash
-if ! command -v scan-query >/dev/null 2>&1; then
-    printf "! --codemap requested but codemap plugin not installed.\n  Install: claude plugin install codemap@borda-ai-rig\n"; exit 1
-fi
-_PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename)  # timeout: 3000
-if [ ! -f ".cache/scan/${_PROJ}.json" ]; then
-    printf "! --codemap requested but no index found for project '%s'.\n  Build index: /codemap:scan\n" "$_PROJ"; exit 1
-fi
-```
-
-If `SEMBLE_ENABLED=true`: verify `mcp__semble__search` is in your available tools. If not: print `! --semble requested but semble MCP server not configured. Configure: claude mcp add semble -s user -- uvx --from "semble[mcp]" semble` and stop.
+Read `$_DEV_SHARED/preflight-helpers.md` — execute codemap + semble preflight if respective flags set.
 
 ## Step 1: Understand the problem
 
@@ -129,7 +105,7 @@ If error message or pattern provided: use Grep tool (pattern `<error_pattern>`, 
 
 ```bash
 # If failing test: run it to capture the exact failure
-$PYTEST_CMD --tb=long <test_path> -v 2>&1 | tail -40
+$PYTEST_CMD --tb=long <test_path> -v 2>&1 >/tmp/pytest-out.txt; PYTEST_EXIT=$?; tail -40 /tmp/pytest-out.txt; [ $PYTEST_EXIT -ne 0 ] && echo "PYTEST FAILED (exit $PYTEST_EXIT)"
 ```
 
 **If `CODEMAP_ENABLED=true` or `SEMBLE_ENABLED=true`**: read `$_DEV_SHARED/codemap-context.md` and follow the enabled sections (codemap block if `CODEMAP_ENABLED`, semble companion if `SEMBLE_ENABLED`). Skip entirely if both flags are false.
@@ -263,7 +239,7 @@ Use scan to prioritize which criteria below get deepest scrutiny.
 3. Re-run test suite:
 
    ```bash
-   $PYTEST_CMD --tb=short <test_dir> -v 2>&1 | tail -20
+   $PYTEST_CMD --tb=short <test_dir> -v 2>&1 >/tmp/pytest-out.txt; PYTEST_EXIT=$?; tail -20 /tmp/pytest-out.txt; [ $PYTEST_EXIT -ne 0 ] && echo "PYTEST FAILED (exit $PYTEST_EXIT)"
    ```
 
 4. **Adjacent bugs** (observation only): scan for similar patterns; document in Follow-up — do not fix here, avoids scope creep.
@@ -327,16 +303,6 @@ Read `$_FOUNDRY_SHARED/quality-stack.md` (if file not found → skip quality sta
 3. Lead facilitates cross-challenge between competing analyses
 4. Lead synthesizes consensus root cause, then proceeds with Steps 2-4 (regression test, fix, review loop) alone
 
-**Spawn prompt template:**
-
-```markdown
-You are a foundry:sw-engineer teammate debugging: [bug description].
-Read ${HOME}/.claude/TEAM_PROTOCOL.md — use AgentSpeak v2 for inter-agent messages.
-Your hypothesis: [hypothesis N]. Investigate ONLY this root cause.
-Report findings to @lead using deltaT# or epsilonT# codes.
-Compact Instructions: preserve file paths, errors, line numbers. Discard verbose tool output.
-Task tracking: do NOT call TaskCreate or TaskUpdate — the lead owns all task state. Signal your completion in your final delta message: "Status: complete | blocked — <reason>".
-Write your full analysis to .plans/active/fix-hypothesis-[N]-[timestamp].md using the Write tool. Return ONLY compact JSON: {"status":"done","file":"<path>","findings":N,"confidence":0.N}.
-```
+**Spawn prompt template:** read `$_DEV_SHARED/preflight-helpers.md` §Team Spawn Template — replace `[ROLE_PHRASE]` with `[bug description]`, `[FILE_SLUG]` with `fix-hypothesis`.
 
 </workflow>

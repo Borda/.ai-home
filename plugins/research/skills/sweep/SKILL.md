@@ -70,11 +70,13 @@ sweep: plan → <output path> ✓
 
 ### Step S3: Judge + refinement loop
 
+> `$_RESEARCH_SKILLS` resolved in S2 — in scope throughout S3–S5.
+
 Initialize `REFINE_ITER = 0`, `MAX_REFINE = 3`.
 
 Repeat up to `MAX_REFINE` times:
 
-1. Increment `REFINE_ITER`. Run judge mode (J1–J6 from `plugins/research/skills/judge/SKILL.md`) against program file.
+1. Increment `REFINE_ITER`. Run judge mode (J1–J6 from `$_RESEARCH_SKILLS/judge/SKILL.md`) against program file.
 
    - Pass `--skip-validation` if user provided it; else include validation (J4).
    - Capture J6 verdict and judge report path (`JUDGE_REPORT`).
@@ -88,11 +90,10 @@ Repeat up to `MAX_REFINE` times:
 5. **If `NEEDS-REVISION`**:
 
    - If `REFINE_ITER < MAX_REFINE`:
-     - Run judge mode (J1–J6 from `$_RESEARCH_SKILLS/judge/SKILL.md`) against program file.
      - Read `JUDGE_REPORT`. Extract `### Required Changes` section.
      - Apply each fix to program file via Edit tool. Count as `N_FIXES`.
      - Print: `sweep: applied N_FIXES fix(es) to <program path> — re-judging`
-     - Continue next iteration.
+     - Continue next iteration (loop item #1 will re-judge).
    - If `REFINE_ITER == MAX_REFINE` — exit loop, outcome `unresolved`.
 
 > **Safety net**: `.bak` from S2 is undo path — loop edits modify `program.md` in place.

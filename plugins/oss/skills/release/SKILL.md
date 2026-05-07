@@ -221,17 +221,17 @@ Section order (fixed — never reorder): 🚀 Added → ⚠️ Breaking Changes 
 | Category | Output section | What goes here |
 | --- | --- | --- |
 | **New Features** | 🚀 Added | User-visible additions |
-| **Breaking Changes** | ⚠️ Breaking Changes | Existing code **stops working immediately** after upgrade — API removed, signature changed incompatibly, behavior changed with no fallback. Must be 100% certain it no longer works. |
+| **Breaking Changes** | ⚠️ Breaking Changes | Existing code **stops working immediately** after upgrade — API removed or signature changed with **no prior deprecation period**. If the API was marked deprecated in a prior release, classify as ❌ Removed instead. Must be 100% certain it no longer works and users had no warning. |
 | **Improvements** | 🚀 Added or 🌱 Changed | Enhancements to existing behavior |
 | **Performance** | 🚀 Added or 🔧 Fixed or 🌱 Changed | Speed or memory improvements. Use 🔧 Fixed if it corrects a regression, use 🚀 Added if it's a new optimization feature, use 🌱 Changed if it's a refactor for efficiency. **Quantitative claims** ("2× faster", "50% less memory") require evidence from PR body or benchmark artifacts — unsubstantiated claims from commit subjects alone → rewrite to "improved performance" without the number (see `guidelines/numbers-reference.md`). |
 | **Deprecations** | 🗑️ Deprecated | Old API **still works** this release but is scheduled for removal — emits a warning, replacement exists |
-| **Removals** | ❌ Removed | Previously deprecated API now gone (this is what becomes a Breaking Change in the next cycle) |
+| **Removals** | ❌ Removed | Previously deprecated API now gone — was marked 🗑️ Deprecated in a prior release, users had fair warning. Not classified as ⚠️ Breaking Changes. |
 | **Bug Fixes** | 🔧 Fixed | Correctness fixes |
 | **Security** | 🔒 Security | Security fixes and vulnerability patches — omit CVE numbers in public notes; link to advisory if public |
 | **Internal** | *(omit)* | Refactors, CI/tooling, deps, code cleanup, developer-facing housekeeping — omit unless directly user-impacting |
 | **Reverted** | 🔄 Reverted | Introduced AND reverted within range (REVERT_SET pairs) — net effect zero; list as "Reverted: <original description>"; do NOT classify original change in any other section; omit from highlights, demo, and migration guide |
 
-**Breaking vs Deprecated**: old call still works (even with warning) → Deprecated, never Breaking. Breaking = upgrade causes immediate failures, no compat period.
+**Breaking vs Deprecated vs Removed**: old call still works (even with warning) → Deprecated, never Breaking. API was deprecated in prior release and now removed → Removed, never Breaking — users had fair warning. Breaking = upgrade causes immediate failures with **no prior deprecation period** between two consecutive versions.
 
 Filter out: merge commits, minor dep bumps, CI/tooling config, comment typos, internal refactors, code cleanup, internal-only dep bumps, developer housekeeping, no-user-impact changes. **Never include internal staff names or internal maintenance details in public-facing output.** Always include: breaking changes, behavior changes, new API surface.
 
@@ -297,7 +297,7 @@ From Classify each change, identify top 3–5 most significant changes for relea
 
 ## Draft migration guide
 
-Always produce migration guide section. If no breaking changes exist: single line "No breaking changes in this release." If deprecations or removals exist: show before→after code examples for each. Note: releases should not introduce breaking changes unless API was deprecated in prior release — state this rule in guide preamble.
+Always produce migration guide section. If no breaking changes exist: single line "No breaking changes in this release." If deprecations or removals exist: show before→after code examples for each. Note: releases should not introduce ⚠️ Breaking Changes without a prior deprecation period. API deprecated in prior release and now removed → classify as ❌ Removed (not Breaking) — state this distinction in guide preamble.
 
 ## Generate release demo
 
@@ -451,7 +451,7 @@ Shepherd review policy (applies when `$SHEPHERD_AVAILABLE == 1`):
 - **`--summary`** (if set): no shepherd (internal audience) → Draft executive summary already saved to `.temp/output-release-summary-$BRANCH-$DATE.md` — confirm written. Notify: `→ saved to .temp/output-release-summary-<branch>-<date>.md`
 - **`--migration`** (if set): shepherd review (public-facing) → save to `.temp/output-release-migration-$BRANCH-$DATE.md`. Notify: `→ saved to .temp/output-release-migration-<branch>-<date>.md`
 
-**Human gate** — stop and hand off to user after writing files: GitHub release must be created with project-level tooling (`gh release create`). See `oss:shepherd` agent `<release_checklist>` section for exact command.
+**Human gate** — stop and hand off to user after writing files: GitHub release must be created with project-level tooling (`gh release create`). See `$_OSS_SHARED/release-checklist.md` for exact release steps.
 
 End response with `## Confidence` block per CLAUDE.md output standards.
 

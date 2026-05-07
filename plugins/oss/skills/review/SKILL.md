@@ -48,6 +48,8 @@ EXTENSION=300          # one +5 min extension if output file explains delay
 
 <workflow>
 
+<!-- Shared pattern with develop:review — coordinate on agent spawn logic, file-handoff, consolidation changes -->
+
 <!-- Agent Resolution: canonical table at plugins/oss/skills/_shared/agent-resolution.md -->
 
 ## Agent Resolution
@@ -259,7 +261,7 @@ CODEX_OUT="$RUN_DIR/foundry--codex.md"
 Agent(subagent_type="codex:codex-rescue", prompt="Adversarial review: look for bugs, missed edge cases, incorrect logic, and inconsistencies with existing code patterns. Read-only: do not apply fixes. Write findings to $RUN_DIR/foundry--codex.md.")
 ```
 
-After Codex writes `$RUN_DIR/foundry--codex.md`, extract seed list (≤10 items, `[{"loc":"file:line","note":"..."}]`) to inject into Step 3 agent prompts as pre-flagged issues. Codex skipped or empty → proceed with empty seed.
+After Codex writes `$RUN_DIR/foundry--codex.md`, extract seed list (≤10 items, `[{"loc":"file:line","note":"..."}]`) to inject into Step 3 agent prompts as pre-flagged issues. If Codex returned ≥10 findings, note in the consolidator report header: `Codex: first 10 items seeded; full list in $RUN_DIR/foundry--codex.md (N total).` Codex skipped or empty → proceed with empty seed.
 
 ## Step 3: Spawn sub-agents in parallel
 
@@ -271,7 +273,7 @@ REVIEW_SKILL_DIR="$(find ~/.claude/plugins -path "*/oss/skills/review" -type d 2
 
 **File-based handoff**: read `$FOUNDRY_SHARED/file-handoff-protocol.md`. File absent → warn the user: "file-handoff protocol not found — verify foundry plugin installed (`claude plugin list`); continuing without it." Then continue without it. Run dir from Step 2 (`$RUN_DIR`).
 
-**IMPORTANT**: Replace `$RUN_DIR` with its actual literal computed value (e.g. `.reports/review/2026-04-30T17-21-36Z`) in every Agent spawn prompt below. Do NOT pass `$RUN_DIR` as a shell variable — agents receive text, not shell context. Un-expanded `$RUN_DIR` creates a directory literally named `$RUN_DIR` in the project root.
+**IMPORTANT**: Replace `$RUN_DIR`, `$REVIEW_SKILL_DIR`, `$BRANCH`, and `$DATE` with their actual literal computed values in every Agent spawn prompt below. Do NOT pass these as shell variables — agents receive text, not shell context. Un-expanded `$RUN_DIR` creates a directory literally named `$RUN_DIR` in the project root.
 
 Launch agents simultaneously. Security augmentation folded into Agent 1. Agent 6 optional. Every agent prompt must end with:
 
@@ -395,7 +397,7 @@ Spawn verifier agent per critical/blocking finding. Agent reads the relevant fin
 
 ## Step 6: Consolidate findings
 
-Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` `YYYY=$(date +%Y); MM=$(date +%m); DATE=$(date +%Y-%m-%d)`
+Before output path, extract: `BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-' || echo 'main')` `DATE=$(date +%Y-%m-%d)`
 
 Spawn a **foundry:sw-engineer** consolidator agent with this prompt:
 

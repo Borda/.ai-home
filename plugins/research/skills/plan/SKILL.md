@@ -24,7 +24,7 @@ NOT for: running experiments (use `/research:run`); methodology validation (use 
 ```bash
 # Locate research plugin shared dir — installed first, local workspace fallback
 _RESEARCH_SHARED=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/research/*/skills/_shared 2>/dev/null | head -1)
-[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="plugins/research/skills/_shared"
+[ -z "$_RESEARCH_SHARED" ] && _RESEARCH_SHARED="$(git rev-parse --show-toplevel 2>/dev/null)/plugins/research/skills/_shared"
 ```
 
 Read `$_RESEARCH_SHARED/agent-resolution.md`. Contains: foundry check + fallback table. If foundry not installed: use table to substitute each `foundry:X` with `general-purpose`. Agents this skill uses: `foundry:solution-architect`, `foundry:perf-optimizer`.
@@ -218,7 +218,7 @@ Next steps:
 ### Step P-P4: --team flag
 
 `--team` detected in `$ARGUMENTS`:
-1. Complete Steps 1–3 as normal — produce `program.md` with full single-researcher structure.
+1. Complete Steps P-P0–P-P3 as normal — produce `program.md` with full single-researcher structure.
 2. Append a `## Team Mode Notes` section to `program.md`:
    - Number of distinct method families found (used to determine team size at run step)
    - Whether SOTA consensus exists — if clear winner, note team mode may not add value
@@ -234,3 +234,11 @@ Next steps:
    Read `$_RESEARCH_RUN_MODES/team.md`.
 
 </workflow>
+
+<notes>
+
+- **Scope boundary**: plan writes `program.md` only — methodology validation = `/research:judge`; execution = `/research:run`; full pipeline = `/research:sweep`.
+- **`--team` note**: `--team` applies at the run step, not the plan step. Plan produces a standard `program.md`; the team flag is passed through when invoking `/research:run <program.md> --team`.
+- **TTL exemption**: plan run directories (`.experiments/plan-<timestamp>/`) don't write `result.jsonl` — exempt from automated 30-day TTL cleanup per `.claude/rules/artifact-lifecycle.md (installed via /foundry:init)`; remove manually when no longer needed.
+
+</notes>

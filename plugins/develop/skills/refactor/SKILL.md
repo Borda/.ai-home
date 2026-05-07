@@ -56,21 +56,7 @@ Read `$_DEV_SHARED/runner-detection.md` — sets `$TEST_CMD` (full suite) and `$
 
 **Optional `--plan <path>`**: if `$ARGUMENTS` ends with `--plan <path>`, read the plan file first. Extract `Affected files`, `Risks`, `Suggested approach` — use these to inform Step 1 scope analysis. Skip redundant codebase exploration for already-classified files. Store plan path as `PLAN_FILE`.
 
-```bash
-# Extract --plan path from arguments — support both `--plan path` and `--plan=path`
-PLAN_FILE=""
-if [[ "$ARGUMENTS" =~ --plan[[:space:]]+([^[:space:]]+) ]]; then
-  PLAN_FILE="${BASH_REMATCH[1]}"
-elif [[ "$ARGUMENTS" =~ --plan=([^[:space:]]+) ]]; then
-  PLAN_FILE="${BASH_REMATCH[1]}"
-fi
-# Existence guard — fail fast if path supplied but missing
-if [ -n "$PLAN_FILE" ] && [ ! -f "$PLAN_FILE" ]; then
-  echo "! BREAKING — plan file not found: $PLAN_FILE"
-  echo "Fix: pass an existing plan path via --plan <path> or --plan=<path>"
-  exit 1
-fi
-```
+Read `$_DEV_SHARED/preflight-helpers.md` — execute --plan path extraction; sets `$PLAN_FILE`.
 
 **Checkpoint init**: create `.developments/<TS>/checkpoint.md` (where `TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)`). After each major step (1, 2, 3, 4, 5), append `step: N — completed`. On skill start, check for existing `.developments/*/checkpoint.md` — offer resume from last completed step if found.
 
@@ -92,17 +78,7 @@ Increment `TOTAL_CYCLES` each time a Step 4 change-test cycle completes. Check a
 
 **Preflight** — if `CODEMAP_ENABLED=true`:
 
-```bash
-if ! command -v scan-query >/dev/null 2>&1; then
-    printf "! --codemap requested but codemap plugin not installed.\n  Install: claude plugin install codemap@borda-ai-rig\n"; exit 1
-fi
-_PROJ=$(git rev-parse --show-toplevel 2>/dev/null | xargs basename)  # timeout: 3000
-if [ ! -f ".cache/scan/${_PROJ}.json" ]; then
-    printf "! --codemap requested but no index found for project '%s'.\n  Build index: /codemap:scan\n" "$_PROJ"; exit 1
-fi
-```
-
-If `SEMBLE_ENABLED=true`: verify `mcp__semble__search` is in your available tools. If not: print `! --semble requested but semble MCP server not configured. Configure: claude mcp add semble -s user -- uvx --from "semble[mcp]" semble` and stop.
+Read `$_DEV_SHARED/preflight-helpers.md` — execute codemap + semble preflight if respective flags set.
 
 ## Step 1: Scope and understand
 

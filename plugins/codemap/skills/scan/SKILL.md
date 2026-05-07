@@ -8,7 +8,7 @@ allowed-tools: Bash
 
 <objective>
 
-**Python only** — uses `ast.parse` to extract import graph and symbol metadata across all `.py` files; non-Python files not indexed. Writes `.cache/scan/<project>.json`. No external deps required.
+**Python only** — uses `ast.parse` to extract import graph and symbol metadata across all `.py` files; non-Python files not indexed. Writes `.cache/scan/<project>.json`. No external deps required. Zero-Python project (no `.py` files): index writes successfully but is empty — downstream queries return no results.
 
 Index captures per module: import graph, blast-radius metrics, and **symbol list** (classes, functions, methods with line ranges). Symbol data enables `scan-query symbol` / `find-symbol` to return just the target function source instead of full file reads.
 
@@ -22,13 +22,21 @@ NOT for: querying existing index (use `/codemap:query`).
 
 ## Step 1: Run the scanner
 
-Parse `$ARGUMENTS` to build the invocation. Pass `--root <path>` if provided; pass `--incremental` if provided. Then run once:
+Parse `$ARGUMENTS` to build the invocation. Pass `--root <path>` if provided; pass `--incremental` if provided. Construct args conditionally — never pass the literal placeholder strings:
 
 ```bash
 # timeout: 360000
-# Example with both flags: ${CLAUDE_PLUGIN_ROOT}/bin/scan-index --root /path/to/project --incremental
-# scan-index handles v2→v3 fallback internally — exits 0 on either path
-${CLAUDE_PLUGIN_ROOT}/bin/scan-index [--root <path>] [--incremental]
+# scan-index handles v2→v3 fallback internally
+# NOTE: if --incremental is passed but no existing index found, falls back to full scan silently — no user warning
+SCAN_BIN="${CLAUDE_PLUGIN_ROOT}/bin/scan-index"
+SCAN_ARGS=()
+if echo "$ARGUMENTS" | grep -q -- '--root'; then
+    # Extract --root value; handle single-quoted, double-quoted, and unquoted paths (space-safe)
+    ROOT_VAL=$(echo "$ARGUMENTS" | sed "s/.*--root[[:space:]]\+'\\([^']*\\)'.*/\\1/;t;s/.*--root[[:space:]]\\+\"\\([^\"]*\\)\".*/\\1/;t;s/.*--root[[:space:]]\\+\\([^[:space:]]*\\).*/\\1/")
+    SCAN_ARGS+=(--root "$ROOT_VAL")
+fi
+echo "$ARGUMENTS" | grep -q -- '--incremental' && SCAN_ARGS+=(--incremental)
+"$SCAN_BIN" "${SCAN_ARGS[@]}"
 ```
 
 Scanner writes to `<root>/.cache/scan/<project>.json` and prints summary line:
@@ -43,13 +51,16 @@ Scanner writes to `<root>/.cache/scan/<project>.json` and prints summary line:
 After scan completes, read index and report compact summary:
 
 ```bash
-# IMPORTANT: pass $ARGUMENTS via env var — never interpolate into script path or args.
+# Pass $ARGUMENTS via env var — never interpolate into script path or args.
+# SCAN_ARGS provides root-path context for stats script to resolve relative module paths.
 # CLAUDE_PLUGIN_ROOT is set automatically by Claude Code when plugin is active.
 # timeout: 15000
 SCAN_ARGS="$ARGUMENTS" python3 "${CLAUDE_PLUGIN_ROOT}/bin/scan-stats.py"
 ```
 
 Degraded files exist: list with reason. Not failure — index still useful.
+
+If `--incremental` was passed and scan-stats reports 0 modules indexed (or the summary line shows the same count as before), note: `--incremental` is a no-op when no existing index exists — a full scan ran instead.
 
 ## Step 3: Suggest next step
 

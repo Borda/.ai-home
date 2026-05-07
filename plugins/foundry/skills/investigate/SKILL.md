@@ -104,13 +104,12 @@ Common categories:
 
 ## Step 4: Auxiliary review (optional)
 
-If `$CODEX_OK` is non-empty (set below) AND top hypothesis has weak/circumstantial evidence (no direct confirming signal), request adversarial review:
+**Skip this step entirely** when `--fast` flag passed, when both Codex and foundry:challenger unavailable, or when top hypothesis already has strong direct evidence. Skip → proceed to Step 5.
+
+Otherwise, set up adversarial review:
 
 ```bash
 CODEX_OK=$(claude plugin list 2>/dev/null | grep -q 'codex@openai-codex' && echo "available" || echo "")  # timeout: 5000
-```
-
-```bash
 INVESTIGATE_RUN=".investigate/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 mkdir -p "$INVESTIGATE_RUN"  # timeout: 5000
 CODEX_OUT="$INVESTIGATE_RUN/codex-review.md"
@@ -131,12 +130,6 @@ Agent(subagent_type="foundry:challenger", prompt="Adversarial review of hypothes
 - Add any challenger alternative hypotheses as new rows in Step 3 table
 - Re-rank if challenger provides stronger evidence for lower-ranked candidate
 - If challenger identifies category not in common list, add it
-
-**Skip when** (set `CODEX_OK=""` or do not spawn):
-
-- Top hypothesis already has strong direct evidence (confidence clearly high)
-- Both Codex and foundry:challenger are unavailable
-- User requested speed or `/investigate --fast` specified
 
 ## Step 5: Probe top hypotheses
 

@@ -480,7 +480,7 @@ Print changed files. Run `git diff HEAD -- <files>` and show output. Surface unr
   - Security findings appearing in reviews for non-auth code → suggests qa-specialist teammate scope is too broad; narrow it
   - Model tier mismatches (e.g., heavy analysis assigned to `sonnet` teammates) → flag for tier adjustment
 
-- **`external` mode calibration**: two concrete GT fixture cases defined in the calibrate skills mode file — find it via `ls ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/calibrate/modes/skills.md 2>/dev/null | sort -V | tail -1` with fallback to `plugins/foundry/skills/calibrate/modes/skills.md`:
+- **`external` mode calibration**: two concrete GT fixture cases defined in the calibrate skills mode file — find it via `ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/calibrate/modes/skills.md 2>/dev/null | head -1` with fallback to `plugins/foundry/skills/calibrate/modes/skills.md`:
   - **caveman plugin** — narrow, self-contained communication mode, no local structural overlap → GT: install-as-is recommended, Group A empty or thin
   - **Karpathy autoresearch** — research automation tool, strong overlap with `research:` plugin structure → GT: Group A candidates map to research plugin, digest recommended, install-as-is not triggered
   - Ground truth = static snapshot of each tool's agent/skill/rule files (no live fetch needed); score adoption-table lane assignments against GT outcomes

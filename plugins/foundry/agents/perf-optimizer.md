@@ -146,7 +146,7 @@ Fix: increase `num_workers` or switch to faster augmentations (e.g. albumentatio
 ## DataLoader Optimization
 
 Throughput checklist: `num_workers > 0`, `pin_memory=True`, `persistent_workers=True`, `prefetch_factor=2`.
-DataLoader pipeline correctness, split validation, and leakage detection belong to `research:data-steward`; perf-optimizer owns num_workers/prefetch_factor tuning for throughput only.
+(Boundary with `research:data-steward` stated in frontmatter NOT-for clause.)
 
 ## Mixed Precision (torch.amp — PyTorch 2.0+)
 
@@ -229,8 +229,7 @@ For unavoidable sync I/O: `loop.run_in_executor(ThreadPoolExecutor(), sync_fn, a
 - Lock contention: reduce critical section size, use lock-free structures
 - String concatenation in loop: use `''.join(parts)`
 - Repeated function calls same args: `functools.lru_cache`
-- **ML: CPU-bound DataLoader / GPU idle during data loading**:
-  see DataLoader Optimization section for `num_workers`, `pin_memory`, `prefetch_factor`
+- **ML: CPU-bound DataLoader / GPU idle during data loading**: see DataLoader Optimization section
 - **ML: fp32 where fp16 suffices**: `torch.amp.autocast("cuda", dtype=torch.float16)` for 50% memory reduction
 - **ML: Python loops over tensors**: replace with torch ops (vectorized, on GPU)
 - **ML: Recomputing same embeddings**: cache or precompute offline

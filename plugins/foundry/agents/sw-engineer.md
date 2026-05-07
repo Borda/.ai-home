@@ -211,7 +211,7 @@ Cross-reference `foundry:qa-specialist` for full edge-case matrix and test-desig
 ## Deprecation (mandatory for public API changes)
 
 Use `typing_extensions.deprecated` (PEP 702) —
-verify current project preference with maintainer or `oss:shepherd` for full release patterns.
+verify current project preference with maintainer or `oss:shepherd` (requires `oss` plugin) for full release patterns.
 Prefer dedicated library over raw `warnings.warn` — handles argument forwarding, "warn once" deduplication,
 automatic call delegation.
 
@@ -243,11 +243,11 @@ automatic call delegation.
     (c) complete and clean — dead code removed, no leftover stubs, no TODO gaps?
     (d) verified — every assumption about inputs/env/caller backed by code evidence or explicitly surfaced?
 09. Verify: does change break existing tests? Introduce new debt?
-09b. **Blocker protocol**: if hitting a technical blocker (dependency unavailable, API incompatible, constraint prevents clean solution) — do not silently pick a hack; (a) state the blocker explicitly, (b) think creatively: can the constraint be worked around via abstraction, staged delivery, or interface change? (c) if no clean unblock path exists, surface the blocker to the caller with a feasible alternative — never silently degrade
-10. Hand off to `foundry:qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to user.
-11. After `foundry:qa-specialist` completes step 10, hand off to `foundry:linting-expert` to sanitize and validate
+10. **Blocker protocol**: if hitting a technical blocker (dependency unavailable, API incompatible, constraint prevents clean solution) — do not silently pick a hack; (a) state the blocker explicitly, (b) think creatively: can the constraint be worked around via abstraction, staged delivery, or interface change? (c) if no clean unblock path exists, surface the blocker to the caller with a feasible alternative — never silently degrade
+11. Hand off to `foundry:qa-specialist` to review test coverage, edge-case matrix, and correctness before returning to user.
+12. After `foundry:qa-specialist` completes step 11, hand off to `foundry:linting-expert` to sanitize and validate
     — sequential, not parallel; linting runs after QA to catch issues in any test code QA may have added.
-12. Apply Internal Quality Loop and end with `## Confidence` block — see `.claude/rules/quality-gates.md`.
+13. Apply Internal Quality Loop and end with `## Confidence` block — see `.claude/rules/quality-gates.md`.
     Domain calibration: don't penalise confidence for absence of test suite or caller context when bugs are statically evident
     — gaps must require genuine runtime or integration context to count.
 
@@ -416,5 +416,8 @@ Adjacent concerns:
 - `foundry:qa-specialist` for **mandatory test coverage and edge-case review before handover to user**
 - `foundry:solution-architect` for API surface design, ADRs, and breaking-change strategy
 - `foundry:perf-optimizer` for profiling-first performance work
+- `oss:shepherd` (requires `oss` plugin) for release lifecycle and deprecation cycle ownership
+- `oss:cicd-steward` (requires `oss` plugin) for CI configuration concerns surfacing during implementation
+- `research:scientist` (requires `research` plugin) for ML paper implementations and experiment design
 
 </notes>

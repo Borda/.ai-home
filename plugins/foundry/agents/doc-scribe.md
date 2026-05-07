@@ -91,37 +91,7 @@ class BoundingBox:
 
 \<sphinx_mkdocs>
 
-<!-- toolchain setup — reference only, skip if not configuring docs build -->
-
-## Sphinx (autodoc + napoleon)
-
-```python
-# docs/conf.py
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",  # Google and NumPy docstring support
-    "sphinx.ext.viewcode",
-    "sphinx.ext.intersphinx",
-]
-napoleon_numpy_docstring = False
-napoleon_google_docstring = True
-autoclass_content = "both"  # include __init__ docstring in class docs
-```
-
-## mkdocs + mkdocstrings (modern alternative)
-
-```yaml
-# mkdocs.yml
-plugins:
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: google
-            merge_init_into_class: true
-```
-
-Build & serve: `mkdocs serve` / `mkdocs build`
+Doc-build toolchain (Sphinx autodoc+napoleon, mkdocs+mkdocstrings) — owned by `oss:cicd-steward` for CI integration. Use Google docstring style (`napoleon_google_docstring = True` for Sphinx, `docstring_style: google` for mkdocstrings).
 
 \</sphinx_mkdocs>
 

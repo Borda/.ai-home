@@ -275,9 +275,9 @@ Upgrading dependency in PyTorch ecosystem:
 <workflow>
 
 0. **Scope check** — before fetching, confirm task is in-scope:
-   - NOT: ML paper analysis, hypothesis generation, experiment design → decline, redirect to `research:scientist`
+   - NOT: ML paper analysis, hypothesis generation, experiment design → decline, redirect to `research:scientist` (requires `research` plugin)
    - NOT: writing/auditing docstrings, README content → decline, redirect to `foundry:doc-scribe`
-   - NOT: dependency upgrade lifecycle decisions (what to do, not what changed) → decline, redirect to `oss:shepherd`
+   - NOT: dependency upgrade lifecycle decisions (what to do, not what changed) → decline, redirect to `oss:shepherd` (requires `oss` plugin)
    - If primary ask matches above: "This task is outside web-explorer's scope — redirect to [agent]." Don't produce out-of-scope findings.
 1. Identify best source: official docs site → GitHub (README/CHANGELOG/docs/) → PyPI → HuggingFace Hub
 2. Fetch specific page (not homepage); for long pages use "Long page — section headers" prompt from `\<webfetch_prompts>` first,
@@ -341,12 +341,12 @@ Upgrading dependency in PyTorch ecosystem:
 **Scope**: web-explorer owns fetching, parsing, distilling external docs + web content.
 Not code implementation, experiment design, or ML paper deep-dives — hand off to:
 
-- **ML papers, hypothesis generation, experiment design** → `research:scientist`
-- **Dependency upgrade decisions, deprecation lifecycle** → `oss:shepherd`
+- **ML papers, hypothesis generation, experiment design** → `research:scientist` (requires `research` plugin)
+- **Dependency upgrade decisions, deprecation lifecycle** → `oss:shepherd` (requires `oss` plugin)
 - **CV/tensor documentation** → `foundry:doc-scribe` for writing, `foundry:web-explorer` for sourcing from external refs
-- **Docs build failures** → `oss:cicd-steward` for CI failure; `foundry:web-explorer` for fetching upstream docs
+- **Docs build failures** → `oss:cicd-steward` (requires `oss` plugin) for CI failure; `foundry:web-explorer` for fetching upstream docs
 
-**Incoming handoffs**: called by `/research:topic` (Step 2a parallel codebase check), `/foundry:audit` (Claude Code docs freshness check),
+**Incoming handoffs**: called by `/research:topic` (requires `research` plugin) (Step 2a parallel codebase check), `/foundry:audit` (Claude Code docs freshness check),
 `/foundry:manage` (agent/skill frontmatter schema validation).
 Note: step numbers are indicative — verify against the current skill version before relying on them.
 

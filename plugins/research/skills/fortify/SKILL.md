@@ -415,7 +415,7 @@ Next: run /research:fortify without --skip-run to execute ablations
 - **Judge prerequisite** — fortify refuses to run without an APPROVED judge verdict. This prevents ablation studies on unapproved methodologies.
 - **`--skip-run` for planning** — generates candidate list without running ablations. Useful for reviewing what would be ablated before committing compute.
 - **`--skip-run` scope**: this flag skips ablation *execution* only — the source run (`research:run`) must already be complete before invoking fortify with `--skip-run`. It does not affect the source run.
-- **Fortify run directories** don't write `result.jsonl` — exempt from automated 30-day TTL cleanup (exempt per `.claude/rules/artifact-lifecycle.md` TTL policy — no `result.jsonl` = cleanup skipped); remove manually when no longer needed (`rm -rf .experiments/fortify-*/`)
+- **Fortify run directories** don't write `result.jsonl` — exempt from automated 30-day TTL cleanup (exempt per `.claude/rules/artifact-lifecycle.md (installed via /foundry:init)` TTL policy — no `result.jsonl` = cleanup skipped); remove manually when no longer needed (`rm -rf .experiments/fortify-*/`)
 - **Compute mode**: local execution only. `--compute` and `--colab` passthrough not implemented — contributions welcome. Until then, fortify runs `metric_cmd`/`guard_cmd` directly in each worktree on the local machine.
 - **Revert conflicts expected** — when commits are interleaved (component A's commit touches same lines as component B's), revert may conflict. This is recorded as `revert-conflict` and reported, not treated as an error.
 

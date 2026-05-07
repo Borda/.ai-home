@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Sync local plugin changes to ~/.claude/ and/or ~/.codex/
-# Run from the project root: bash sync.sh [claude] [codex] [--clean]
+# Run from the project root: bash sync.sh [claude] [codex] [--no-clean]
 #
 # Arguments (order-independent):
 #   claude   — sync Claude plugins + foundry:init (default: both)
 #   codex    — sync .codex/ configs to ~/.codex/   (default: both)
-#   --clean  — uninstall Claude plugins before reinstalling (requires claude scope)
+#   --no-clean — skip uninstall before reinstalling (default: uninstall first)
 #
 # After this script completes, run /foundry:init inside Claude Code
 # to merge settings.json and refresh symlinks.
@@ -14,13 +14,13 @@ set -e
 
 SYNC_CLAUDE=false
 SYNC_CODEX=false
-CLEAN=false
+CLEAN=true
 
 for arg in "$@"; do
     case "$arg" in
-        claude)  SYNC_CLAUDE=true ;;
-        codex)   SYNC_CODEX=true ;;
-        --clean) CLEAN=true ;;
+        claude)     SYNC_CLAUDE=true ;;
+        codex)      SYNC_CODEX=true ;;
+        --no-clean) CLEAN=false ;;
     esac
 done
 

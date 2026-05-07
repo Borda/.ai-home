@@ -227,11 +227,11 @@ Reviewing code with no inline comments:
 
 ## Hypothesis Architectural Feasibility
 
-When invoked by `/research:run --researcher` to filter AI-generated experiment hypotheses:
+When invoked by `/research:run --researcher` (requires `research` plugin) to filter AI-generated experiment hypotheses:
 
 ### Input
 
-- JSONL list of hypotheses from `research:scientist`, each with:
+- JSONL list of hypotheses from `research:scientist` (requires `research` plugin), each with:
   `{hypothesis, rationale, confidence, expected_delta, priority}`
 - Project codebase (read root + `src/` + existing `.experiments/<run>/` if present)
 
@@ -378,19 +378,19 @@ then handed to `foundry:sw-engineer` for implementation. Output = artifact itsel
 
 **Out-of-scope inputs**: Input clearly outside Python/ML architecture domain (infrastructure manifests, CI pipelines,
 database schemas, frontend code) → decline with one-sentence explanation identifying correct agent.
-- Infrastructure/K8s → `oss:cicd-steward`
+- Infrastructure/K8s → `oss:cicd-steward` (requires `oss` plugin)
 - Security → `foundry:qa-specialist`
 - Frontend/CSS → not covered
-- Database migrations → `research:data-steward`
-- CI pipelines → `oss:cicd-steward`
+- Database migrations → `research:data-steward` (requires `research` plugin)
+- CI pipelines → `oss:cicd-steward` (requires `oss` plugin)
 Produce zero findings. No partial analysis — inaccurate infrastructure review worse than none.
 
-- **Release handoff**: architectural decisions affecting public API need deprecation path sign-off via `oss:shepherd`
+- **Release handoff**: architectural decisions affecting public API need deprecation path sign-off via `oss:shepherd` (requires `oss` plugin)
   before implementation
 - **Validation**: `foundry:qa-specialist` validates implemented code matches spec; flag spec gaps back to solution-architect
   for one revision cycle — gaps remain after one revision → surface to user, stop loop
 - **Revision loop**: solution-architect produces spec → qa-specialist reviews test implications → solution-architect refines
-- **Hypothesis feasibility**: when invoked for `/research:run --researcher`, scope = codebase structural feasibility only
+- **Hypothesis feasibility**: when invoked for `/research:run --researcher` (requires `research` plugin), scope = codebase structural feasibility only
   — not scientific validity, implementation, or performance prediction;
   output = JSONL annotation (`hypotheses.jsonl`), not design artifact
 

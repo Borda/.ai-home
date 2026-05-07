@@ -71,7 +71,7 @@ BATCH_SIZE=5           # max files per foundry:curator spawn in Step 3; keep sma
 - Phase 2: per-file audit (Step 3) → mark in_progress when agents launch, completed when all reports received
 - Phase 3: system-wide checks (Step 4) → mark in_progress when checks start, completed when all checks done
 - **Phases 2 and 3 launch simultaneously** — mark both in_progress in the same update; they are independent and must not be serialized
-- Phase 4: aggregate + fix (Steps 5–10) → mark in_progress, then completed when fixes land
+- Phase 4: aggregate + fix (Steps 5–10) → mark in_progress, then completed when fixes land; **do NOT mark completed until EITHER: (a) follow-up gate fires (Step 7) AND fixes applied or user chose skip; OR (b) `--skip-gate` mode active — gate is suppressed, complete after Step 5 aggregation; completing Step 5 aggregation alone does NOT complete Phase 4 in normal mode**
 - Phase 5: final report (Step 11) → mark in_progress, then completed before output
 - On loop retry or scope change → create a new task; do not reuse the completed task
 
@@ -133,6 +133,12 @@ else
     printf "${YEL}⚠ MISSING${NC}: node not found — Check 10 (RTK hook parsing) and upgrade hook syntax check will be skipped\n"
     NODE_AVAILABLE=false
 fi
+
+# AUDIT_TPL path resolution — needed by Step 3 (curator-prompt.md) and Step 4 (scope check files)
+# .claude/skills/audit/templates/ is populated by plugin system; if absent, fall back to plugin cache
+AUDIT_TPL=".claude/skills/audit/templates"
+[ -d "$AUDIT_TPL" ] || AUDIT_TPL="$(find ${HOME}/.claude/plugins/cache -path "*/audit/templates" -type d 2>/dev/null | head -1)" # timeout: 5000
+[ -d "$AUDIT_TPL" ] || { printf "! BREAKING: audit/templates not found — run /foundry:init first\n"; exit 1; }
 ```
 
 If `.claude/` is missing, abort immediately. Missing `jq` is a warning — the audit continues with Check 4 skipped.
@@ -228,14 +234,7 @@ Every `$MONITOR_INTERVAL` seconds, run `find $RUN_DIR -newer "$AUDIT_CHECKPOINT"
 
 ## Step 4: System-wide checks
 
-> **Template path resolution**: `.claude/skills/audit/templates/` is populated by plugin system; if absent, fall back to plugin cache:
-> ```bash
-> AUDIT_TPL=".claude/skills/audit/templates"
-> [ -d "$AUDIT_TPL" ] || AUDIT_TPL="$(find ${HOME}/.claude/plugins/cache -path "*/audit/templates" -type d 2>/dev/null | head -1)" # timeout: 5000
-> [ -d "$AUDIT_TPL" ] || { printf "! BREAKING: audit/templates not found — run /foundry:init first\n"; exit 1; }
-> ```
-
-> **Full implementation instructions** are split across 4 scope files in `$AUDIT_TPL/`. Read only the file(s) for the active scope at the start of this step — do not read all 4 files unless running a full sweep.
+> **Full implementation instructions** are split across 4 scope files in `$AUDIT_TPL/` (resolved in Pre-flight). Read only the file(s) for the active scope at the start of this step — do not read all 4 files unless running a full sweep.
 >
 > | Scope | File(s) to read |
 > | --- | --- |
@@ -341,7 +340,7 @@ After all checks complete: collect all `⚠` lines, write the full details to `$
 
 **Delegate aggregation to a consolidator agent** to avoid flooding the main context with all agent findings. Spawn a **foundry:curator** consolidator agent with this prompt:
 
-> "Read all finding files in `<RUN_DIR>/` (\*.md files from Steps 3–4, including `docs-freshness.md` if present). Apply the severity classification from `$AUDIT_TPL/severity-table.md`. Antipatterns that indicate severity under-classification are also in that file. Group all findings by severity (critical, high, medium, low). Apply the one-finding-per-issue rule: when a single location has multiple distinct problems at different severities, emit one finding entry per problem. Write the aggregated severity table to `<RUN_DIR>/aggregate.md` using the Write tool. Also write `<RUN_DIR>/summary.jsonl` — one compact JSON object per line, one line per finding: `{"file":"<basename>","sev":"high|medium|low","id":"H1","one_line":"<finding description>"}`. This file is what the orchestrator will read; aggregate.md is for human review only. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"<RUN_DIR>/aggregate.md\",\"findings\":N,\"severity\":{\"critical\":N,\"high\":N,\"medium\":N,\"low\":N},\"confidence\":0.N,\"summary\":\"N findings total: C critical, H high, M medium, L low\"}`"
+> "Read all finding files in `<RUN_DIR>/` (\*.md files from Steps 3–4, including `docs-freshness.md` if present). Apply the severity classification from `plugins/foundry/skills/audit/severity-table.md`. Antipatterns that indicate severity under-classification are also in that file. Group all findings by severity (critical, high, medium, low). Apply the one-finding-per-issue rule: when a single location has multiple distinct problems at different severities, emit one finding entry per problem. Write the aggregated severity table to `<RUN_DIR>/aggregate.md` using the Write tool. Also write `<RUN_DIR>/summary.jsonl` — one compact JSON object per line, one line per finding: `{"file":"<basename>","sev":"high|medium|low","id":"H1","one_line":"<finding description>"}`. This file is what the orchestrator will read; aggregate.md is for human review only. Return ONLY a compact JSON envelope on your final line — nothing else after it: `{\"status\":\"done\",\"file\":\"<RUN_DIR>/aggregate.md\",\"findings\":N,\"severity\":{\"critical\":N,\"high\":N,\"medium\":N,\"low\":N},\"confidence\":0.N,\"summary\":\"N findings total: C critical, H high, M medium, L low\"}`"
 
 Main context receives only that one-liner. The orchestrator MUST NOT read `aggregate.md` in full — it is 200–600 lines and would overflow context on large audits. Instead, use `$RUN_DIR/summary.jsonl` for all dispatch decisions in Steps 7 and 8.
 
@@ -420,7 +419,7 @@ Each subagent prompt template: Read the fix prompt template from `$AUDIT_TPL/fix
 
 <!-- Canonical multi-file orchestration template — intentionally inline; NOT derived from fix-prompt.md (per-file only). Keep both in sync when changing shared audit-fix behavior. -->
 
-When the finding count exceeds 10 or the user picked "Fix all" from the gate, spawn a dedicated **audit-fix** sub-agent that handles all of Steps 8–10 in isolation:
+After the gate fires (Step 7): if finding count > 10 or user picked "Fix all", use the audit-fix sub-agent pattern below (handles Steps 8–10 in isolation); otherwise use the inline batched pattern at the end of this step. Spawn a dedicated **audit-fix** sub-agent:
 
 ```markdown
 Read `<RUN_DIR>/summary.jsonl` — this is the findings list (one JSON object per line).
@@ -566,8 +565,8 @@ Run `/foundry:init` to propagate clean config to ~/.claude/
 **Trigger**: `/audit --upgrade`
 
 ```bash
-UPGRADE_MD=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/audit/ 2>/dev/null | head -1)/upgrade.md  # timeout: 5000
-[ -f "$UPGRADE_MD" ] || UPGRADE_MD="plugins/foundry/skills/audit/upgrade.md"
+UPGRADE_MD=$(ls -td ~/.claude/plugins/cache/borda-ai-rig/foundry/*/skills/audit/ 2>/dev/null | head -1)/modes/upgrade.md  # timeout: 5000
+[ -f "$UPGRADE_MD" ] || UPGRADE_MD="plugins/foundry/skills/audit/modes/upgrade.md"
 ```
 
 Read and execute `$UPGRADE_MD`.
@@ -661,7 +660,7 @@ After completing `--upgrade` or `--adversarial` mode: also fire this gate (omit 
 - Follow-up chains:
   - Audit clean → pick `/foundry:init` from gate to propagate verified config to `~/.claude/`
   - Audit found structural issues → review flagged files manually before syncing; pick fix level from gate
-  - Audit found many low items → pick "Fix all" from gate, or run `/develop:refactor` for targeted cleanup
+  - Audit found many low items → pick "Fix all" from gate, or run `/develop:refactor` (requires `develop` plugin) for targeted cleanup
   - After fixing agent instructions (from audit gate) → `/calibrate <agent>` to verify fix improved recall and confidence calibration
   - Audit Check 20 found description overlap → `/calibrate routing` to verify behavioral routing impact; update descriptions for confused pairs based on the routing report
   - Audit surfaced upgrade proposals → pick `/audit --upgrade` from gate to apply with correctness checks and calibrate A/B evidence for capability changes

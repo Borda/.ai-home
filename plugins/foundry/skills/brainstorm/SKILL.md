@@ -323,15 +323,7 @@ Show tree file path and compact tree summary (same format as Step 3). Then call 
 
 **Gate**: do not exit until user approves.
 
-```bash
-# Initialize approval counter at Step 5 entry
-# Note: approval-cycle limit is prose-enforced (LLM context), not shell-enforced
-APPROVAL_CYCLES=${APPROVAL_CYCLES:-0}
-APPROVAL_CYCLES=$((APPROVAL_CYCLES + 1))
-[ "$APPROVAL_CYCLES" -gt 3 ] && echo "⚠ 3 approval cycles reached with no convergence — surfacing unresolved concerns:"
-```
-
-On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles — counter tracked above.)
+On (b): return to Step 3 with existing tree state — add requested branches or close specified ones, then loop back to Step 5. Use reduced cap of **3 additional operations** for this re-entry (not fresh full budget reset); cap resets only at start of Step 3, not on re-entry. On (c): loop back to Step 2. (Max 3 approval cycles as a guideline — track in context; if 3 cycles pass without convergence, surface unresolved concerns to the user.)
 
 On approval, suggest: `/brainstorm breakdown .plans/blueprint/<file>` to distill tree into spec.
 
@@ -439,7 +431,7 @@ After all sections approved: write to `.plans/blueprint/YYYY-MM-DD-<slug>.md` (n
 After writing spec, suggest:
 
 - **Spec targets `.claude/` config**: `/manage update <name> .plans/blueprint/<spec-file>` or `/manage create <type> <name> "description"`
-- **Spec targets application code or mixed changes**: `/brainstorm breakdown .plans/blueprint/<spec-file>` to generate action plan
+- **Spec targets application code or mixed changes**: `/brainstorm breakdown .plans/blueprint/<spec-file>` to generate action plan (action plan may emit `/develop:feature` and `/develop:fix` invocations — these require the `develop` plugin)
 
 ### Action plan mode (Status: draft)
 
@@ -459,6 +451,8 @@ For each blocking question: call `AskUserQuestion` — one at a time, in order. 
    - Documentation → `/develop:feature "<doc goal>"`
    - Verification/testing → `/develop:feature "<test goal>"` or manual check command
 3. Output ordered task table:
+
+> *Note: `/develop:feature` and `/develop:fix` require the `develop` plugin. If not installed, replace those commands with the appropriate manual workflow.*
 
 ```markdown
 ## Action Plan: <spec title>

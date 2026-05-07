@@ -30,7 +30,7 @@ Query codemap structural index for import-graph analysis, symbol-level source ex
 
 Use `module::function` format for qname, e.g. `mypackage.auth::validate_token`. Requires v3 index — if index is v2, commands return a clear upgrade prompt.
 
-NOT for: building or rebuilding index (use `/codemap:scan`).
+NOT for: building or rebuilding index (use `/codemap:scan`). If subcommand roster expands significantly, run `/foundry:calibrate routing` to verify no routing collisions introduced.
 
 </objective>
 
@@ -49,9 +49,7 @@ NOT for: building or rebuilding index (use `/codemap:scan`).
 | "what does X import?" | `deps X` | forward deps |
 | "dependencies of X" | `deps X` | forward deps |
 
-**Common mistake**: tasks asking "which modules need updating if X changes?" mean `rdeps` (callers), NOT `deps` (what X imports). `deps` returns the wrong direction and gives 0% recall.
-
-**Query budget**: max 3 calls per task. Stop after 3 even if not exhaustive — report what you found.
+**Common mistake — direction matters**: "which modules need updating if X changes?" = `rdeps` (callers), NOT `deps`. `deps` returns the wrong direction — 0% recall.
 
 Run `scan-query` via Bash:
 
@@ -82,26 +80,31 @@ Replace `<QUERY_ARGS>`:
 
 Symbol names accept: bare name (`authenticate`), qualified name (`MyClass.authenticate`), or case-insensitive substring fallback. Function qnames use `module::function` format (e.g. `mypackage.auth::validate_token`). Index must be current — re-run `/codemap:scan` if stale warning appears.
 
+## Budget and stop rules
+
+**Query budget**: max 3 calls per task. Stop after 3 even if not exhaustive — report what you found. Exception: for explicit exhaustive multi-target analysis requests, state exhaustive intent before the first call — budget extends to 6.
+
+**exhaustive: true — STOP ALL TOOL CALLS:** When `rdeps` or `deps` result contains `"exhaustive": true`, the list is complete and authoritative for the **unfiltered** index. Note: if `--exclude-tests` was used, exhaustive reflects unfiltered coverage — filtered results may omit callers; state this caveat if relevant. Write your answer immediately. Do NOT call codemap again. Do NOT run grep, bash, or Glob passes to verify or extend it. No exceptions.
+
+**Non-exhaustive result — convergence rule**: if after budget calls the result is still non-exhaustive, stop and report what you have. Do NOT switch to grep/bash to continue — the index covers what it covers.
+
 ## Step 2: Parse JSON output and format
 
-`scan-query` always emits a JSON object — parse it before rendering. Also capture stderr: if it contains `[stale]` or `⚠ codemap index stale`, surface the warning to the user. Check `index.degraded` in the result; if `> 0`, caveat that some modules were unparsable.
+`scan-query` always emits a JSON object — parse it before rendering. Stale-index detection has two channels: (1) stderr: if it contains `[stale]` or `⚠ codemap index stale` — surface the warning; (2) JSON field `index.stale` (boolean) — check `result.index.stale`; if `true`, warn user to re-run `/codemap:scan`. Check `index.degraded` in the result; if `> 0`, caveat that some modules were unparsable.
 
 | Command | JSON key to use | Render as |
 | --- | --- | --- |
 | `rdeps` / `deps` | `imported_by` / `direct_imports` | list modules, one per line |
 | `central` / `coupled` | `central` / `coupled` array | list name + count with brief note |
-| `path` | `path` array (or `null`) | chain `A → B → C → D`; if `null` → "No import path found." |
+| `path` | `path` array (or `null`) | chain `A → B → C → D`; if `null` → "No import path found." (`--exclude-tests` not supported on `path`) |
 | `symbol` | `symbols[].source` | fenced code block; caption = module + line range |
 | `symbols` | `symbols` array | `type name (lines start–end)`, one per line |
 | `find-symbol` | `matches` array | `module:qualified_name (type)`, one per line |
 | `list` | `modules` array | `module (path)`, one per line |
 | `fn-deps` / `fn-rdeps` | `calls` / `called_by` | `module::function (resolution)`, one per line |
 | `fn-central` | `fn_central` array | `count module::function`, one per line |
-| `fn-blast` | `blast_radius` array | `depth module::function`, sorted by depth then name |
-
-**exhaustive: true — STOP ALL TOOL CALLS:** When `rdeps` or `deps` result contains `"exhaustive": true`, the list is complete and authoritative. Write your answer immediately. Do NOT call codemap again. Do NOT run grep, bash, or Glob passes to verify or extend it. No exceptions.
-
-**Non-exhaustive result — convergence rule**: if after 3 calls the result is still non-exhaustive, stop and report what you have. Do NOT switch to grep/bash to continue — the index covers what it covers.
+| `fn-blast` | `blast_radius` array | `depth module::function` (if depth key present), sorted by depth then name |
+| stale check | `index.stale` (boolean) | if true → warn "index stale — run /codemap:scan" |
 
 `{"error": "..."}`: surface error, suggest re-running `/codemap:scan`.
 

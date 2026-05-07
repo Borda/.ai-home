@@ -160,7 +160,12 @@ Ensure log directory exists:
 mkdir -p .claude/logs # timeout: 5000
 ```
 
-Append one-line JSON entry: If the archive file does not exist: create it with Write tool. If it already exists: append using Edit tool — add new session entry at the end of the file. Entry format: `{"ts":"<ISO8601-UTC>","item":"<name>","action":"archived"}`
+Append one-line JSON entry atomically with bash redirection. Entry format: `{"ts":"<ISO8601-UTC>","item":"<name>","action":"archived"}`
+
+```bash
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+printf '{"ts":"%s","item":"%s","action":"archived"}\n' "$TS" "$ITEM_NAME" >> .claude/logs/session-archive.jsonl  # timeout: 5000
+```
 
 ### Step 5: Confirm to user
 
